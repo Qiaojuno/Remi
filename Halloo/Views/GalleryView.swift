@@ -303,14 +303,18 @@ extension GalleryView {
     // Filter events based on selected filter
     // PHASE 4: Read from AppState (single source of truth) instead of ViewModel
     private var filteredEvents: [GalleryHistoryEvent] {
+        let events: [GalleryHistoryEvent]
         switch selectedFilter {
         case .all:
-            return appState.galleryEvents
+            events = appState.galleryEvents
         case .photos:
-            return appState.galleryEvents.filter { $0.photoData != nil }
+            events = appState.galleryEvents.filter { $0.photoData != nil }
         case .sms:
-            return appState.galleryEvents.filter { $0.hasTextResponse }
+            events = appState.galleryEvents.filter { $0.hasTextResponse }
         }
+        print("🔍 [GalleryView] filteredEvents computed: \(events.count) events from AppState (filter: \(selectedFilter))")
+        print("🔍 [GalleryView] AppState.galleryEvents has \(appState.galleryEvents.count) total events")
+        return events
     }
     
     // Format date for section headers
