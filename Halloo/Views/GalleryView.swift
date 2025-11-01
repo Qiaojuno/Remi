@@ -10,7 +10,6 @@ struct GalleryView: View {
 
     // PHASE 3: Single source of truth for shared state
     @EnvironmentObject private var appState: AppState
-    @StateObject private var viewModel: GalleryViewModel
     @EnvironmentObject private var profileViewModel: ProfileViewModel
     @EnvironmentObject private var dashboardViewModel: DashboardViewModel
 
@@ -30,12 +29,6 @@ struct GalleryView: View {
     init(selectedTab: Binding<Int>, showHeader: Bool = true) {
         self._selectedTab = selectedTab
         self.showHeader = showHeader
-        // Initialize with placeholder - will be properly set in onAppear
-        let container = Container.shared
-        _viewModel = StateObject(wrappedValue: GalleryViewModel(
-            databaseService: container.resolve(DatabaseServiceProtocol.self),
-            authService: container.resolve(AuthenticationServiceProtocol.self)
-        ))
     }
     
     var body: some View {
@@ -76,7 +69,8 @@ struct GalleryView: View {
             .background(Color(hex: "f9f9f9")) // Light gray app background
         }
         .onAppear {
-            initializeViewModel()
+            print("📸 [GalleryView] onAppear called - AppState has \(appState.galleryEvents.count) gallery events")
+            print("📸 [GalleryView] Event IDs: \(appState.galleryEvents.map { $0.id })")
         }
         .fullScreenCover(item: $selectedEventForDetail) { event in
             // PHASE 4: Read from AppState instead of ViewModel
@@ -103,18 +97,9 @@ struct GalleryView: View {
             .transition(.identity) // No transition effect for gallery detail
         }
     }
-    
-    // Rest of implementation continues...
-    private func initializeViewModel() {
-        // Initialize ViewModel with container services
-        viewModel.updateServices(
-            databaseService: container.resolve(DatabaseServiceProtocol.self),
-            authService: container.resolve(AuthenticationServiceProtocol.self)
-        )
 
-        // Gallery data will be loaded when view appears
-    }
-    
+    // MARK: - Navigation Helpers
+
     private func navigateToPrevious(from currentEvent: GalleryHistoryEvent) {
         // PHASE 4: Read from AppState instead of ViewModel
         guard let currentIndex = appState.galleryEvents.firstIndex(where: { $0.id == currentEvent.id }),

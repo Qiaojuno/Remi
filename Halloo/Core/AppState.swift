@@ -233,6 +233,8 @@ final class AppState: ObservableObject {
             self.galleryEvents = try await galleryEventsTask
 
             print("✅ [AppState] Loaded data: \(profiles.count) profiles, \(tasks.count) tasks, \(galleryEvents.count) gallery events")
+            print("📊 [AppState] Gallery events IDs: \(galleryEvents.map { $0.id })")
+            print("📊 [AppState] Gallery events types: \(galleryEvents.map { $0.eventType.rawValue })")
 
             // Refresh expired photo URLs with fresh download tokens BEFORE caching
             print("🔄 [AppState] Refreshing profile photo URLs with fresh tokens...")

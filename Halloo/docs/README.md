@@ -1,5 +1,7 @@
 # 📚 Halloo/Remi Documentation
 
+IMPORTANT NEXT FEATURE: time safety limit (30mins) between tasks!
+
 Complete documentation for the Halloo iOS app development.
 
 ---

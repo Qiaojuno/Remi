@@ -134,15 +134,14 @@ struct ContentView: View {
 
             // LAYER 1-10: Transitioning content (animated with asymmetric slide)
             if let dashboardVM = dashboardViewModel,
-               let profileVM = profileViewModel,
-               let galleryVM = galleryViewModel {
+               let profileVM = profileViewModel {
 
                 ZStack {
                     // Dashboard Tab - LEFTMOST
                     dashboardTabView(dashboardVM: dashboardVM, profileVM: profileVM)
 
                     // Gallery Tab - MIDDLE
-                    galleryTabView(galleryVM: galleryVM, profileVM: profileVM, dashboardVM: dashboardVM)
+                    galleryTabView(profileVM: profileVM, dashboardVM: dashboardVM)
 
                     // Habits Tab - RIGHTMOST
                     habitsTabView(dashboardVM: dashboardVM, profileVM: profileVM)
@@ -415,9 +414,8 @@ struct ContentView: View {
 
     /// Gallery tab with all environment objects and modifiers
     @ViewBuilder
-    private func galleryTabView(galleryVM: GalleryViewModel, profileVM: ProfileViewModel, dashboardVM: DashboardViewModel) -> some View {
+    private func galleryTabView(profileVM: ProfileViewModel, dashboardVM: DashboardViewModel) -> some View {
         GalleryView(selectedTab: $selectedTab, showHeader: false)
-            .environmentObject(galleryVM)
             .environmentObject(profileVM)
             .environmentObject(dashboardVM)
             .environmentObject(appState)
