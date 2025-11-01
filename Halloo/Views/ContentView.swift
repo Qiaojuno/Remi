@@ -138,45 +138,14 @@ struct ContentView: View {
                let galleryVM = galleryViewModel {
 
                 ZStack {
-                    // Dashboard Tab - Home screen (content only) - LEFTMOST
-                    DashboardView(
-                        selectedTab: $selectedTab,
-                        showHeader: false,
-                        showingCreateActionSheet: $showingCreateActionSheet,
-                        showingDirectOnboarding: $showingDirectOnboarding,
-                        showingTaskCreation: $showingTaskCreation
-                    )
-                        .environmentObject(dashboardVM)
-                        .environmentObject(profileVM)
-                        .environmentObject(appState)  // PHASE 1: Inject AppState for read-only access
-                        .environment(\.isScrollDisabled, isHorizontalDragging)
-                        .environment(\.isDragging, dragOffset != 0)
-                        .offset(x: tabOffset(for: 0))
-                        .zIndex(selectedTab == 0 ? 1 : 0)
-                        .id("dashboard-\(appState.currentUser?.id ?? "no-user")") // Force recreation on login/logout
+                    // Dashboard Tab - LEFTMOST
+                    dashboardTabView(dashboardVM: dashboardVM, profileVM: profileVM)
 
-                    // Gallery Tab - Archive of completed habits with photos (content only) - MIDDLE
-                    GalleryView(selectedTab: $selectedTab, showHeader: false)
-                        .environmentObject(galleryVM) // Use real Firebase services!
-                        .environmentObject(profileVM)
-                        .environmentObject(dashboardVM) // Needed for GalleryDetailView
-                        .environmentObject(appState)  // PHASE 1: Inject AppState for read-only access
-                        .environment(\.isScrollDisabled, isHorizontalDragging)
-                        .environment(\.isDragging, dragOffset != 0)
-                        .offset(x: tabOffset(for: 1))
-                        .zIndex(selectedTab == 1 ? 1 : 0)
-                        .id("gallery-\(appState.currentUser?.id ?? "no-user")") // Force recreation on login/logout
+                    // Gallery Tab - MIDDLE
+                    galleryTabView(galleryVM: galleryVM, profileVM: profileVM, dashboardVM: dashboardVM)
 
-                    // Habits Tab - Habit management screen (content only) - RIGHTMOST
-                    HabitsView(selectedTab: $selectedTab, showHeader: false)
-                        .environmentObject(dashboardVM) // Share same instance for real-time data sync
-                        .environmentObject(profileVM)
-                        .environmentObject(appState)  // PHASE 1: Inject AppState for read-only access
-                        .environment(\.isScrollDisabled, isHorizontalDragging)
-                        .environment(\.isDragging, dragOffset != 0)
-                        .offset(x: tabOffset(for: 2))
-                        .zIndex(selectedTab == 2 ? 1 : 0)
-                        .id("habits-\(appState.currentUser?.id ?? "no-user")") // Force recreation on login/logout
+                    // Habits Tab - RIGHTMOST
+                    habitsTabView(dashboardVM: dashboardVM, profileVM: profileVM)
 }
                 .onChange(of: selectedTab) { oldValue, newValue in
                     // Lock transitions
@@ -421,6 +390,56 @@ struct ContentView: View {
                     .foregroundColor(.white)
             }
         }
+    }
+
+    // MARK: - Tab View Helpers
+    /// Dashboard tab with all environment objects and modifiers
+    @ViewBuilder
+    private func dashboardTabView(dashboardVM: DashboardViewModel, profileVM: ProfileViewModel) -> some View {
+        DashboardView(
+            selectedTab: $selectedTab,
+            showHeader: false,
+            showingCreateActionSheet: $showingCreateActionSheet,
+            showingDirectOnboarding: $showingDirectOnboarding,
+            showingTaskCreation: $showingTaskCreation
+        )
+        .environmentObject(dashboardVM)
+        .environmentObject(profileVM)
+        .environmentObject(appState)
+        .environment(\.isScrollDisabled, isHorizontalDragging)
+        .environment(\.isDragging, dragOffset != 0)
+        .offset(x: tabOffset(for: 0))
+        .zIndex(selectedTab == 0 ? 1 : 0)
+        .id("dashboard-\(appState.currentUser?.uid ?? "no-user")")
+    }
+
+    /// Gallery tab with all environment objects and modifiers
+    @ViewBuilder
+    private func galleryTabView(galleryVM: GalleryViewModel, profileVM: ProfileViewModel, dashboardVM: DashboardViewModel) -> some View {
+        GalleryView(selectedTab: $selectedTab, showHeader: false)
+            .environmentObject(galleryVM)
+            .environmentObject(profileVM)
+            .environmentObject(dashboardVM)
+            .environmentObject(appState)
+            .environment(\.isScrollDisabled, isHorizontalDragging)
+            .environment(\.isDragging, dragOffset != 0)
+            .offset(x: tabOffset(for: 1))
+            .zIndex(selectedTab == 1 ? 1 : 0)
+            .id("gallery-\(appState.currentUser?.uid ?? "no-user")")
+    }
+
+    /// Habits tab with all environment objects and modifiers
+    @ViewBuilder
+    private func habitsTabView(dashboardVM: DashboardViewModel, profileVM: ProfileViewModel) -> some View {
+        HabitsView(selectedTab: $selectedTab, showHeader: false)
+            .environmentObject(dashboardVM)
+            .environmentObject(profileVM)
+            .environmentObject(appState)
+            .environment(\.isScrollDisabled, isHorizontalDragging)
+            .environment(\.isDragging, dragOffset != 0)
+            .offset(x: tabOffset(for: 2))
+            .zIndex(selectedTab == 2 ? 1 : 0)
+            .id("habits-\(appState.currentUser?.uid ?? "no-user")")
     }
 
     // MARK: - Offset Helper
