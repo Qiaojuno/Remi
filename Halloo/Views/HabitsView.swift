@@ -778,11 +778,26 @@ struct HabitRowViewSimple: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var profileViewModel: ProfileViewModel
 
+    // Pastel colors matching profile colors
+    private let habitColors: [Color] = [
+        Color(hex: "B9E3FF"),   // Light blue
+        Color.red.opacity(0.6), // Red
+        Color.green.opacity(0.6), // Green
+        Color.purple.opacity(0.6), // Purple
+        Color.orange.opacity(0.6)  // Orange
+    ]
+
     var body: some View {
         HStack(spacing: 12) {
-            // Emoji (photo/text icon based on confirmation method)
-            Text(getHabitEmoji(habit))
-                .font(.system(size: 24)) // Reduced from 32 to be less overwhelming
+            // Emoji with colored circle background
+            ZStack {
+                Circle()
+                    .fill(habitColor)
+                    .frame(width: 40, height: 40)
+
+                Text(getHabitEmoji(habit))
+                    .font(.system(size: 20)) // Slightly smaller to fit in circle
+            }
 
             // Title + Frequency
             VStack(alignment: .leading, spacing: 4) {
@@ -804,6 +819,16 @@ struct HabitRowViewSimple: View {
                 .foregroundColor(.black)
         }
         .frame(height: 60)
+    }
+
+    // MARK: - Computed Properties
+
+    /// Returns consistent color for this habit based on its ID
+    private var habitColor: Color {
+        // Use hash of habit ID to pick consistent color
+        let hash = abs(habit.id.hashValue)
+        let colorIndex = hash % habitColors.count
+        return habitColors[colorIndex]
     }
 
     // MARK: - Helper Functions
