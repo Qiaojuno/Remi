@@ -162,11 +162,8 @@ struct GalleryView: View {
                 profileSlot: getProfileSlot(for: event.profileId)
             )
         case .profileCreated:
-            GalleryPhotoView.profilePhoto(
-                event: event,
-                profileInitial: getProfileInitial(for: event.profileId),
-                profileSlot: getProfileSlot(for: event.profileId)
-            )
+            // Use ProfileGalleryItemView for profile creation events
+            ProfileGalleryItemView(event: event)
         }
     }
 }

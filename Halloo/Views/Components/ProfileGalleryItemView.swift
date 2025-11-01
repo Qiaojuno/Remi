@@ -2,8 +2,10 @@ import SwiftUI
 
 // MARK: - Profile Gallery Item View
 struct ProfileGalleryItemView: View {
+    @EnvironmentObject private var appState: AppState
+
     let event: GalleryHistoryEvent
-    
+
     // Use the same profile colors from DashboardView
     private let profileColors: [Color] = [
         Color(hex: "B9E3FF"),         // Profile slot 0 - default light blue
@@ -57,20 +59,31 @@ struct ProfileGalleryItemView: View {
             
             // Profile image or emoji
             if let photoURL = event.photoURL {
-                AsyncImage(url: URL(string: photoURL)) { image in
-                    image
+                // Try cache first to avoid AsyncImage flicker
+                if let cachedImage = appState.imageCache.getCachedImage(for: photoURL) {
+                    // Use cached image directly - synchronous, no placeholder
+                    Image(uiImage: cachedImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(profileBackgroundColor)
-                        .overlay(
-                            Text(profileEmoji)
-                                .font(.system(size: 16))
-                        )
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                } else {
+                    // Fallback to AsyncImage for first load or cache miss
+                    AsyncImage(url: URL(string: photoURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Circle()
+                            .fill(profileBackgroundColor)
+                            .overlay(
+                                Text(profileEmoji)
+                                    .font(.system(size: 16))
+                            )
+                    }
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
                 }
-                .frame(width: 40, height: 40)
-                .clipShape(Circle())
             } else {
                 // Emoji placeholder
                 Circle()

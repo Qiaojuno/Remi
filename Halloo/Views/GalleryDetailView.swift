@@ -369,12 +369,14 @@ struct GalleryDetailView: View {
                             .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width)
                             .clipped()
                     } placeholder: {
+                        // Profile color background + initial letter during loading
                         Rectangle()
-                            .fill(Color(hex: "f0f0f0"))
+                            .fill(profileColor.opacity(0.3))
                             .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width)
                             .overlay(
-                                ProgressView()
-                                    .tint(Color(hex: "9f9f9f"))
+                                Text(profileInitial)
+                                    .font(.system(size: 80, weight: .bold))
+                                    .foregroundColor(.black)
                             )
                     }
                 }
@@ -415,7 +417,11 @@ struct GalleryDetailView: View {
         let emojiIndex = (event.profileSlot + abs(event.profileName.hashValue)) % emojis.count
         return emojis[emojiIndex]
     }
-    
+
+    private var profileInitial: String {
+        String(event.profileName.prefix(1)).uppercased()
+    }
+
     // MARK: - Helper Functions
     
     private func formatEventTime(_ date: Date) -> String {

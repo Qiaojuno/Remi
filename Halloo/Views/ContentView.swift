@@ -153,6 +153,7 @@ struct ContentView: View {
                         .environment(\.isDragging, dragOffset != 0)
                         .offset(x: tabOffset(for: 0))
                         .zIndex(selectedTab == 0 ? 1 : 0)
+                        .id("dashboard-\(appState.currentUser?.id ?? "no-user")") // Force recreation on login/logout
 
                     // Gallery Tab - Archive of completed habits with photos (content only) - MIDDLE
                     GalleryView(selectedTab: $selectedTab, showHeader: false)
@@ -164,6 +165,7 @@ struct ContentView: View {
                         .environment(\.isDragging, dragOffset != 0)
                         .offset(x: tabOffset(for: 1))
                         .zIndex(selectedTab == 1 ? 1 : 0)
+                        .id("gallery-\(appState.currentUser?.id ?? "no-user")") // Force recreation on login/logout
 
                     // Habits Tab - Habit management screen (content only) - RIGHTMOST
                     HabitsView(selectedTab: $selectedTab, showHeader: false)
@@ -174,6 +176,7 @@ struct ContentView: View {
                         .environment(\.isDragging, dragOffset != 0)
                         .offset(x: tabOffset(for: 2))
                         .zIndex(selectedTab == 2 ? 1 : 0)
+                        .id("habits-\(appState.currentUser?.id ?? "no-user")") // Force recreation on login/logout
 }
                 .onChange(of: selectedTab) { oldValue, newValue in
                     // Lock transitions

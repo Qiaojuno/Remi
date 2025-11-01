@@ -874,25 +874,33 @@ struct ConfirmationOption: View {
 
 // MARK: - Task Row Component
 struct TaskRow: View {
+    @EnvironmentObject private var appState: AppState
+
     let task: Task
     let profile: ElderlyProfile?
     let showViewButton: Bool
     let onViewTapped: (() -> Void)?
-    
+
     init(task: Task, profile: ElderlyProfile? = nil, showViewButton: Bool = false, onViewTapped: (() -> Void)? = nil) {
         self.task = task
         self.profile = profile
         self.showViewButton = showViewButton
         self.onViewTapped = onViewTapped
     }
-    
+
     var body: some View {
         HStack(spacing: 16) {
             // Profile image if provided
-            if let profile = profile {
-                ProfileImageSmall(profile: profile)
+            if let profile = profile,
+               let profileSlot = appState.profiles.firstIndex(where: { $0.id == profile.id }) {
+                ProfileImageView.custom(
+                    profile: profile,
+                    profileSlot: profileSlot,
+                    isSelected: false,
+                    size: 32
+                )
             }
-            
+
             // Task details
             VStack(alignment: .leading, spacing: 4) {
                 if let profile = profile {
@@ -929,29 +937,6 @@ struct TaskRow: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
-    }
-}
-
-// MARK: - Small Profile Image Component
-struct ProfileImageSmall: View {
-    let profile: ElderlyProfile
-    
-    var body: some View {
-        AsyncImage(url: URL(string: profile.photoURL ?? "")) { image in
-            image
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } placeholder: {
-            Circle()
-                .fill(Color.gray.opacity(0.3))
-                .overlay(
-                    Text(String(profile.name.prefix(1)).uppercased())
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                )
-        }
-        .frame(width: 32, height: 32)
-        .clipShape(Circle())
     }
 }
 

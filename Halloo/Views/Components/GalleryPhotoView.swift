@@ -20,7 +20,6 @@ struct GalleryPhotoView: View {
     // MARK: - Photo Display Types
     enum PhotoDisplayType {
         case taskResponse    // Task response photos with overlay
-        case profilePhoto    // Profile photos (clean, no overlay)
         case preview         // Mock/preview photos for development
     }
 
@@ -29,11 +28,6 @@ struct GalleryPhotoView: View {
     /// Task response photo display with optional profile initial and color
     static func taskResponse(event: GalleryHistoryEvent, profileInitial: String? = nil, profileSlot: Int? = nil) -> GalleryPhotoView {
         GalleryPhotoView(event: event, mockPhoto: nil, type: .taskResponse, profileInitial: profileInitial, profileSlot: profileSlot)
-    }
-    
-    /// Profile photo display with optional profile initial and color
-    static func profilePhoto(event: GalleryHistoryEvent, profileInitial: String? = nil, profileSlot: Int? = nil) -> GalleryPhotoView {
-        GalleryPhotoView(event: event, mockPhoto: nil, type: .profilePhoto, profileInitial: profileInitial, profileSlot: profileSlot)
     }
 
     /// Preview/mock photo display
@@ -86,8 +80,6 @@ struct GalleryPhotoView: View {
         switch type {
         case .taskResponse:
             taskResponsePhotoContent
-        case .profilePhoto:
-            profilePhotoContent
         case .preview:
             previewPhotoContent
         }
@@ -109,39 +101,6 @@ struct GalleryPhotoView: View {
                 .clipped()
             } else {
                 placeholderPhoto
-            }
-        } else {
-            placeholderPhoto
-        }
-    }
-    
-    @ViewBuilder
-    private var profilePhotoContent: some View {
-        if let event = event {
-            if let photoURL = event.photoURL, !photoURL.isEmpty {
-                // Try cache first to avoid AsyncImage flicker
-                if let cachedImage = appState.imageCache.getCachedImage(for: photoURL) {
-                    // Use cached image directly - synchronous, no placeholder
-                    Image(uiImage: cachedImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: photoSize, height: photoSize)
-                        .clipped()
-                } else {
-                    // Fallback to AsyncImage for first load or cache miss
-                    AsyncImage(url: URL(string: photoURL)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: photoSize, height: photoSize)
-                            .clipped()
-                    } placeholder: {
-                        loadingPlaceholder
-                    }
-                }
-            } else {
-                // Initial letter fallback for profile photos
-                initialPlaceholder(for: event)
             }
         } else {
             placeholderPhoto
@@ -267,26 +226,65 @@ struct GalleryPhotoView: View {
         }
     }
     
+    @ViewBuilder
     private func profileAvatarOverlay(for event: GalleryHistoryEvent) -> some View {
         // Small profile avatar overlay (20x20) in bottom-right corner
-        // Use provided profileInitial if available, otherwise use first letter of profileId
-        let initial: String
-        if let profileInitial = profileInitial {
-            initial = profileInitial
-        } else {
-            // Fallback: Skip non-letter characters in profileId (e.g., "+" in phone numbers)
-            let letters = event.profileId.filter { $0.isLetter }
-            initial = String(letters.prefix(1)).uppercased()
-        }
+        // Shows actual profile photo if available, otherwise initial letter
 
-        return Circle()
-            .fill(profileColor) // Use profile color with full opacity
-            .frame(width: 20, height: 20)
-            .overlay(
-                Text(initial.isEmpty ? "?" : initial)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.black)
-            )
+        // Look up the profile from appState
+        if let profile = appState.profiles.first(where: { $0.id == event.profileId }) {
+            // Try to display actual profile photo
+            if let photoURL = profile.photoURL, !photoURL.isEmpty {
+                // Check cache first
+                if let cachedImage = appState.imageCache.getCachedImage(for: photoURL) {
+                    // Use cached profile photo
+                    Image(uiImage: cachedImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 20, height: 20)
+                        .clipShape(Circle())
+                } else {
+                    // Fallback to AsyncImage if not cached
+                    AsyncImage(url: URL(string: photoURL)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        // Show initial while loading
+                        Circle()
+                            .fill(profileColor)
+                            .overlay(
+                                Text(String(profile.name.prefix(1)).uppercased())
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.black)
+                            )
+                    }
+                    .frame(width: 20, height: 20)
+                    .clipShape(Circle())
+                }
+            } else {
+                // No photo URL - show initial letter
+                Circle()
+                    .fill(profileColor)
+                    .frame(width: 20, height: 20)
+                    .overlay(
+                        Text(String(profile.name.prefix(1)).uppercased())
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.black)
+                    )
+            }
+        } else {
+            // Profile not found - show fallback initial from profileInitial or event
+            let initial = profileInitial ?? String(event.profileId.filter { $0.isLetter }.prefix(1)).uppercased()
+            Circle()
+                .fill(profileColor)
+                .frame(width: 20, height: 20)
+                .overlay(
+                    Text(initial.isEmpty ? "?" : initial)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.black)
+                )
+        }
     }
 }
 
@@ -415,13 +413,12 @@ struct MockPhoto {
     
     VStack(spacing: 20) {
         HStack(spacing: 15) {
-            // Task Response Examples
+            // Task Response and Preview Examples
             GalleryPhotoView.taskResponse(event: mockEvent)
-            GalleryPhotoView.profilePhoto(event: mockEvent)
             GalleryPhotoView.preview(mockPhoto: mockPhoto)
         }
-        
-        Text("Gallery Photo View - Unified Component")
+
+        Text("Gallery Photo View - Task Response & Preview")
             .font(.caption)
             .foregroundColor(.secondary)
     }
