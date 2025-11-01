@@ -190,8 +190,14 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             .order(by: "createdAt", descending: true)
             .getDocuments()
 
-        return try snapshot.documents.compactMap { doc in
-            try doc.data(as: GalleryHistoryEvent.self)
+        // Use compactMap with do-catch to skip corrupted events instead of failing entire load
+        return snapshot.documents.compactMap { doc in
+            do {
+                return try doc.data(as: GalleryHistoryEvent.self)
+            } catch {
+                print("⚠️ [FirebaseDatabaseService] Skipping corrupted gallery event \(doc.documentID): \(error.localizedDescription)")
+                return nil
+            }
         }
     }
     
