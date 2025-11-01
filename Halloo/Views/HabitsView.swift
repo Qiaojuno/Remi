@@ -144,17 +144,13 @@ struct HabitsView: View {
                                 .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
                         }
 
-                        // 📋 HABITS MANAGEMENT: Week filter + habits list merged (iOS Clock app style)
+                        // 📋 HABITS MANAGEMENT: Week filter + habits list + delete button merged (iOS Clock app style)
                         // Spacing above merged card (previously occupied by section title)
                         Spacer()
                             .frame(height: 8)
 
                         // Edge-to-edge design (no horizontal padding)
                         mergedHabitsCard
-
-                        // 🗑️ DELETE PROFILE BUTTON: Remove profile and all associated habits
-                        deleteProfileButton
-                            .padding(.horizontal, geometry.size.width * 0.04)
 
                         // Bottom padding to prevent content from hiding behind navigation
                         Spacer(minLength: 100)
@@ -286,7 +282,7 @@ struct HabitsView: View {
 
 
     // MARK: - 📋 Merged Habits Card (iOS Clock App Style)
-    /// Single edge-to-edge card containing week filter + habits list
+    /// Single edge-to-edge card containing week filter + habits list + delete button
     /// Matches native iOS list patterns (Clock, Reminders, Settings)
     private var mergedHabitsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -298,8 +294,14 @@ struct HabitsView: View {
 
             // Habits list below (no divider - seamless transition)
             habitsListSection
+
+            // Delete profile button at the very bottom
+            deleteProfileButtonContent
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
         }
         .background(Color.white)
+        .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
     }
     
     // MARK: - Week Selector Component (3-letter abbreviations with depth effect)
@@ -316,6 +318,12 @@ struct HabitsView: View {
                         .background(
                             Circle()
                                 .fill(isSelected ? Color.white : Color(hex: "E8E8E8")) // White (raised) when selected, dark grey (divot) when not
+                                .frame(width: 39, height: 39)
+                        )
+                        .overlay(
+                            // Subtle light grey stroke when selected
+                            Circle()
+                                .stroke(isSelected ? Color(hex: "E8E8E8") : Color.clear, lineWidth: 1)
                                 .frame(width: 39, height: 39)
                         )
                         .contentShape(Circle())
@@ -595,15 +603,15 @@ struct HabitsView: View {
         )
     }
     
-    // MARK: - 🗑️ Delete Profile Button
+    // MARK: - 🗑️ Delete Profile Button Content
     /**
      * DELETE PROFILE BUTTON: Removes selected profile and all habits
      *
      * PURPOSE: Allow users to delete profiles to test Twilio SMS integration
-     * Displays at bottom of habits list
+     * Displays at bottom of merged card
      * Shows profile name and habit count in confirmation dialog
      */
-    private var deleteProfileButton: some View {
+    private var deleteProfileButtonContent: some View {
         Button(action: {
             guard !isDeleteButtonCoolingDown else {
                 return
@@ -615,28 +623,13 @@ struct HabitsView: View {
             showingProfileDeleteConfirmation = true
         }) {
             HStack {
-                if isDeleteButtonCoolingDown {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "9f9f9f")))
-                        .scaleEffect(0.8)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.red)
-                }
-
                 Text("Delete Profile")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(isDeleteButtonCoolingDown ? Color(hex: "9f9f9f") : .red)
+                    .foregroundColor(.red)
 
                 Spacer()  // Push content to the left
             }
             .frame(maxWidth: .infinity, minHeight: 47)
-            .padding(.horizontal, 16)  // Add horizontal padding for left alignment
-            .background(Color.white)
-            .cornerRadius(10)
-            .opacity(isDeleteButtonCoolingDown ? 0.6 : 1.0)
         }
         .disabled(isDeleteButtonCoolingDown)
         .alert("Delete Profile", isPresented: $showingProfileDeleteConfirmation) {
