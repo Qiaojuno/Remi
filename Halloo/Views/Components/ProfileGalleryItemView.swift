@@ -27,19 +27,19 @@ struct ProfileGalleryItemView: View {
                 .fill(Color(hex: "f0f0f0"))
                 .frame(width: 112, height: 112) // Match existing photo dimensions
                 .cornerRadius(3) // Match existing corner radius
-            
+
             // Profile creation content
             VStack(spacing: 8) {
                 // Profile picture with thick stroke
                 profileImageWithStroke
-                
+
                 // Profile name text
                 Text(profileName)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: "6f6f6f"))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                
+
                 // "Profile Created" label
                 Text("Profile Created")
                     .font(.system(size: 8, weight: .regular))
@@ -47,6 +47,9 @@ struct ProfileGalleryItemView: View {
                     .lineLimit(1)
             }
         }
+        .frame(width: 112, height: 112) // Enforce fixed size
+        .clipped() // Clip any content extending beyond bounds
+        .contentShape(Rectangle()) // Restrict tap area to visible bounds
     }
     
     // MARK: - Profile Image with Thick Stroke

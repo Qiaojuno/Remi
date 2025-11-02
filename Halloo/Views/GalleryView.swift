@@ -40,6 +40,7 @@ struct GalleryView: View {
                     // Header with Remi logo and settings (no profile selection needed for Gallery) (conditionally rendered)
                     if showHeader {
                         galleryHeaderSection
+                            .padding(.horizontal, UIScreen.main.bounds.width * 0.04) // Header gets padding
                     }
 
                     // Gallery card - match spacing ratio with DashboardView profiles

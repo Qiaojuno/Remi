@@ -64,13 +64,15 @@ struct GalleryPhotoView: View {
         ZStack {
             // Main photo content
             photoContent
-            
+
             // Overlay content (only for task responses)
             if type == .taskResponse {
                 overlayContent
             }
         }
         .frame(width: photoSize, height: photoSize)
+        .clipped() // Clip any content extending beyond bounds
+        .contentShape(Rectangle()) // Restrict tap area to visible bounds
         .cornerRadius(cornerRadius)
     }
     
