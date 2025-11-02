@@ -415,7 +415,7 @@ struct ContentView: View {
     /// Gallery tab with all environment objects and modifiers
     @ViewBuilder
     private func galleryTabView(profileVM: ProfileViewModel, dashboardVM: DashboardViewModel) -> some View {
-        GalleryView(selectedTab: $selectedTab, showHeader: false)
+        GalleryView(selectedTab: $selectedTab, showingCreateActionSheet: $showingCreateActionSheet, showHeader: false)
             .environmentObject(profileVM)
             .environmentObject(dashboardVM)
             .environmentObject(appState)

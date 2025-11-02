@@ -122,6 +122,19 @@ struct HabitsView: View {
                 .environmentObject(appState)
                 .environmentObject(profileViewModel)
             )
+            .overlay(
+                // Create Action Card (choose between profile or habit)
+                CreateActionCard(
+                    isPresented: $showingCreateActionSheet,
+                    onCreateHabit: {
+                        showingTaskCreation = true
+                    },
+                    onCreateProfile: {
+                        profileViewModel.startProfileOnboarding()
+                        showingDirectOnboarding = true
+                    }
+                )
+            )
     }
     
     private var habitsContent: some View {
@@ -137,20 +150,26 @@ struct HabitsView: View {
                                 .padding(.horizontal, geometry.size.width * 0.04)
                         }
 
-                        // 👤 PROFILE CARD: Selected profile info with edit capability
-                        if let profile = selectedProfile {
-                            profileCardSection(profile: profile)
-                                .padding(.horizontal, geometry.size.width * 0.04)
-                                .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
+                        // Empty state when no profiles exist
+                        if appState.profiles.isEmpty {
+                            emptyStateNoProfiles
+                                .padding(.top, showHeader ? 20 : 120)
+                        } else {
+                            // 👤 PROFILE CARD: Selected profile info with edit capability
+                            if let profile = selectedProfile {
+                                profileCardSection(profile: profile)
+                                    .padding(.horizontal, geometry.size.width * 0.04)
+                                    .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
+                            }
+
+                            // 📋 HABITS MANAGEMENT: Week filter + habits list + delete button merged (iOS Clock app style)
+                            // Spacing above merged card (previously occupied by section title)
+                            Spacer()
+                                .frame(height: 8)
+
+                            // Edge-to-edge design (no horizontal padding)
+                            mergedHabitsCard
                         }
-
-                        // 📋 HABITS MANAGEMENT: Week filter + habits list + delete button merged (iOS Clock app style)
-                        // Spacing above merged card (previously occupied by section title)
-                        Spacer()
-                            .frame(height: 8)
-
-                        // Edge-to-edge design (no horizontal padding)
-                        mergedHabitsCard
 
                         // Bottom padding to prevent content from hiding behind navigation
                         Spacer(minLength: 100)
@@ -280,6 +299,60 @@ struct HabitsView: View {
         }
     }
 
+
+    // MARK: - 🌟 Empty State - No Profiles
+    /// Displayed when user has not created any profiles yet
+    /// Guides user to create their first profile with arrow pointing to + button
+    private var emptyStateNoProfiles: some View {
+        VStack(spacing: 16) {
+            Spacer()
+
+            // Light blue circle with grandpa emoji (matching create flow)
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "B9E3FF"))
+                    .frame(width: 120, height: 120)
+
+                Text("👴")
+                    .font(.system(size: 60))
+            }
+
+            // Bold headline
+            Text("Create your first profile")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.black)
+
+            // Subtext
+            Text("Add a loved one to start sending reminders")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(Color(hex: "9f9f9f"))
+                .multilineTextAlignment(.center)
+
+            // Create button pill
+            Button(action: {
+                HapticFeedback.medium()
+                showingCreateActionSheet = true
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Create")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.black)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(Color.white)
+                .cornerRadius(25)
+                .shadow(color: Color(hex: "6f6f6f").opacity(0.15), radius: 4, x: 0, y: 2)
+            }
+            .padding(.top, 8)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 500)
+    }
 
     // MARK: - 📋 Merged Habits Card (iOS Clock App Style)
     /// Single edge-to-edge card containing week filter + habits list + delete button

@@ -17,6 +17,9 @@ struct GalleryView: View {
     /// Tab selection binding from parent ContentView for floating pill navigation
     @Binding var selectedTab: Int
 
+    /// Binding to ContentView's create action sheet state
+    @Binding var showingCreateActionSheet: Bool
+
     /// Controls whether to show header (false when rendered in ContentView's layered architecture)
     var showHeader: Bool = true
 
@@ -26,8 +29,9 @@ struct GalleryView: View {
     @State private var showingAccountSettings = false
 
     // MARK: - Initialization
-    init(selectedTab: Binding<Int>, showHeader: Bool = true) {
+    init(selectedTab: Binding<Int>, showingCreateActionSheet: Binding<Bool>, showHeader: Bool = true) {
         self._selectedTab = selectedTab
+        self._showingCreateActionSheet = showingCreateActionSheet
         self.showHeader = showHeader
     }
     
@@ -57,7 +61,7 @@ struct GalleryView: View {
                                 .animation(.easeInOut(duration: 0.3), value: selectedFilter)
                         }
                         .cornerRadius(10) // Round all corners
-                        .shadow(color: Color(hex: "6f6f6f").opacity(0.15), radius: 4, x: 0, y: 2) // Dark gray shadow
+                        .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2) // Subtle shadow matching DashboardView
                     }
                     .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
 
@@ -221,33 +225,55 @@ extension GalleryView {
     private var photoGridContent: some View {
         LazyVStack(spacing: 16) {
             if groupedEventsByDate.isEmpty {
-                // Empty state: Black card in first grid position [content][empty][empty]
-                LazyVGrid(columns: gridColumns, spacing: 4) {
-                    // First column: Empty state card
-                    VStack(spacing: 8) {
-                        Spacer()
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 28, weight: .light))
-                            .foregroundColor(.white)
-                        Text("Make your first\nreminder ~")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(2)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
-                    .background(Color(red: 0.08, green: 0.08, blue: 0.08))
-                    .cornerRadius(3)
+                // Empty state: Centered content directly on card background
+                VStack(spacing: 16) {
+                    Spacer()
 
-                    // Second and third columns: Empty (invisible placeholders)
-                    Color.clear
-                        .aspectRatio(1, contentMode: .fit)
-                    Color.clear
-                        .aspectRatio(1, contentMode: .fit)
+                    // Light blue rounded square with salad emoji
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: "B9E3FF"))
+                            .frame(width: 120, height: 120)
+
+                        Text("🥗")
+                            .font(.system(size: 60))
+                    }
+
+                    // Bold headline
+                    Text("Make your first habit")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.black)
+
+                    // Subtext
+                    Text("Start saving messages from your loved ones")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(Color(hex: "9f9f9f"))
+                        .multilineTextAlignment(.center)
+
+                    // Create button pill
+                    Button(action: {
+                        HapticFeedback.medium()
+                        showingCreateActionSheet = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Create")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.white)
+                        .cornerRadius(25)
+                        .shadow(color: Color(hex: "6f6f6f").opacity(0.15), radius: 4, x: 0, y: 2)
+                    }
+                    .padding(.top, 8)
+
+                    Spacer()
                 }
-                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 500) // Taller height to get closer to nav bar
             } else {
                 ForEach(groupedEventsByDate, id: \.date) { dateGroup in
                     VStack(alignment: .leading, spacing: 8) {

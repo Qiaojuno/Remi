@@ -52,36 +52,60 @@ struct CardStackView: View {
     }
     
     private var emptyCard: some View {
-        VStack(spacing: 0) {
-            Spacer()
-                .frame(height: 20) // Even less top spacer to push icon higher
+        // Dark card matching textCardView style
+        let cardColor = Color(red: 0.08, green: 0.08, blue: 0.08)
 
-            // Hero icon - prominent focal point with layered bounce animation on tap
-            Image(systemName: "rectangle.portrait.on.rectangle.portrait.angled.fill")
-                .font(.system(size: 300, weight: .thin))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(
-                    Color(hex: "d0d0d0"),  // Front card: light grey
-                    .black                  // Back card: black
-                )
-                .symbolEffect(.bounce.byLayer, value: triggerBounce)
-                .onTapGesture {
-                    triggerBounce.toggle()
+        return ZStack {
+            cardColor
+
+            VStack {
+                // Header with card counter
+                HStack {
+                    Text("1/1")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.5))
+                        )
+                        .padding(.leading, 16)
+                        .padding(.top, 16)
+                    Spacer()
                 }
-                .padding(.bottom, -10) // Negative padding to pull text closer
 
-            // Subtle supporting text (two rows)
-            Text("Your loved one's moments will appear\nhere as beautiful cards")
-                .font(.custom("Poppins-Regular", size: 13))
-                .foregroundColor(Color(hex: "8a8a8a"))
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .padding(.horizontal, 20)
-                .fixedSize(horizontal: false, vertical: true) // Allow text to take needed space
+                Spacer()
 
-            Spacer()
+                // Bottom banner with waiting message
+                HStack(spacing: 12) {
+                    // Placeholder profile circle
+                    Circle()
+                        .fill(Color.gray.opacity(0.5))
+                        .frame(width: 45, height: 45)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.white.opacity(0.4))
+                        )
+
+                    // Waiting message
+                    Text("Waiting for messages!")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    Color.black.opacity(0.3)
+                )
+            }
         }
         .frame(width: cardWidth, height: cardHeight)
+        .cornerRadius(10)
     }
     
     private var cardStack: some View {
