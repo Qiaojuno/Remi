@@ -30,6 +30,9 @@ struct HabitsView: View {
     // MARK: - Navigation State
     @Binding var selectedTab: Int
 
+    /// Binding to ContentView's create action sheet state
+    @Binding var showingCreateActionSheet: Bool
+
     /// Controls whether to show header (false when rendered in ContentView's layered architecture)
     var showHeader: Bool = true
 
@@ -42,9 +45,6 @@ struct HabitsView: View {
 
     /// Controls direct ProfileOnboardingFlow presentation
     @State private var showingDirectOnboarding = false
-
-    /// Controls action sheet for unified create button
-    @State private var showingCreateActionSheet = false
 
     /// Controls delete confirmation alert for habits
     @State private var showingDeleteConfirmation = false
@@ -121,19 +121,6 @@ struct HabitsView: View {
                 )
                 .environmentObject(appState)
                 .environmentObject(profileViewModel)
-            )
-            .overlay(
-                // Create Action Card (choose between profile or habit)
-                CreateActionCard(
-                    isPresented: $showingCreateActionSheet,
-                    onCreateHabit: {
-                        showingTaskCreation = true
-                    },
-                    onCreateProfile: {
-                        profileViewModel.startProfileOnboarding()
-                        showingDirectOnboarding = true
-                    }
-                )
             )
     }
     

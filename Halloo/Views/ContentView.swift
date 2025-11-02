@@ -429,7 +429,7 @@ struct ContentView: View {
     /// Habits tab with all environment objects and modifiers
     @ViewBuilder
     private func habitsTabView(dashboardVM: DashboardViewModel, profileVM: ProfileViewModel) -> some View {
-        HabitsView(selectedTab: $selectedTab, showHeader: false)
+        HabitsView(selectedTab: $selectedTab, showingCreateActionSheet: $showingCreateActionSheet, showHeader: false)
             .environmentObject(dashboardVM)
             .environmentObject(profileVM)
             .environmentObject(appState)
