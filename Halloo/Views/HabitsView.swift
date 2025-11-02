@@ -499,7 +499,7 @@ struct HabitsView: View {
         do {
             // Upload photo to Firebase Storage
             let databaseService = container.resolve(DatabaseServiceProtocol.self)
-            let photoURL = try await databaseService.uploadProfilePhoto(imageData, for: profile.id)
+            let photoURL = try await databaseService.uploadProfilePhoto(imageData, for: profile.id, userId: profile.userId)
 
             print("✅ [HabitsView] Photo uploaded successfully: \(photoURL)")
 

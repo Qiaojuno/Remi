@@ -434,9 +434,10 @@ protocol DatabaseServiceProtocol {
     ///
     /// - Parameter photoData: JPEG image data to upload
     /// - Parameter profileId: Unique identifier for the elderly profile
+    /// - Parameter userId: User ID to scope storage path (prevents cross-user conflicts)
     /// - Returns: Public download URL for the uploaded photo
     /// - Throws: DatabaseError if photo upload fails
-    func uploadProfilePhoto(_ photoData: Data, for profileId: String) async throws -> String
+    func uploadProfilePhoto(_ photoData: Data, for profileId: String, userId: String) async throws -> String
 
     /// Deletes photo from Firebase Storage
     ///
@@ -452,9 +453,10 @@ protocol DatabaseServiceProtocol {
     /// the download URL. Useful for restoring missing photoURL references.
     ///
     /// - Parameter profileId: Unique identifier for the elderly profile
+    /// - Parameter userId: User ID to scope storage path (prevents cross-user conflicts)
     /// - Returns: Download URL if photo exists, nil otherwise
     /// - Throws: DatabaseError if storage access fails
-    func getProfilePhotoURL(for profileId: String) async throws -> String?
+    func getProfilePhotoURL(for profileId: String, userId: String) async throws -> String?
 
     // MARK: - Analytics and Reporting
     func getTaskCompletionStats(for userId: String, from startDate: Date, to endDate: Date) async throws -> TaskCompletionStats

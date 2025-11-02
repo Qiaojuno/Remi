@@ -538,9 +538,9 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
         return downloadURL.absoluteString
     }
 
-    func uploadProfilePhoto(_ photoData: Data, for profileId: String) async throws -> String {
+    func uploadProfilePhoto(_ photoData: Data, for profileId: String, userId: String) async throws -> String {
         let storageRef = storage.reference()
-        let photoRef = storageRef.child("profiles/\(profileId)/photo.jpg")
+        let photoRef = storageRef.child("users/\(userId)/profiles/\(profileId)/photo.jpg")
 
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"
@@ -568,9 +568,9 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
     /// Checks if a profile photo exists in Storage and returns the download URL
     /// Used to restore missing photoURL references in Firestore
-    func getProfilePhotoURL(for profileId: String) async throws -> String? {
+    func getProfilePhotoURL(for profileId: String, userId: String) async throws -> String? {
         let storageRef = storage.reference()
-        let photoRef = storageRef.child("profiles/\(profileId)/photo.jpg")
+        let photoRef = storageRef.child("users/\(userId)/profiles/\(profileId)/photo.jpg")
 
         do {
             let downloadURL = try await photoRef.downloadURL()

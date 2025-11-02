@@ -590,7 +590,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             var photoURLString: String? = nil
             if let photoData = selectedPhotoData {
                 do {
-                    photoURLString = try await databaseService.uploadProfilePhoto(photoData, for: profileId)
+                    photoURLString = try await databaseService.uploadProfilePhoto(photoData, for: profileId, userId: userId)
                 } catch {
                     print("❌ [AsyncTask] Failed to upload profile photo - profileId: \(profileId), error: \(error.localizedDescription)")
                     // Continue without photo - it will fall back to initial letter
@@ -839,7 +839,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             }
 
             // Check if photo exists in Storage
-            if let photoURL = try? await databaseService.getProfilePhotoURL(for: profile.id) {
+            if let photoURL = try? await databaseService.getProfilePhotoURL(for: profile.id, userId: profile.userId) {
                 print("✅ [ProfileViewModel] Restored photoURL for '\(profile.name)'")
 
                 // Create updated profile with restored photoURL
@@ -881,7 +881,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             }
 
             // Get fresh download URL from Storage
-            if let freshPhotoURL = try? await databaseService.getProfilePhotoURL(for: profile.id) {
+            if let freshPhotoURL = try? await databaseService.getProfilePhotoURL(for: profile.id, userId: profile.userId) {
                 // Only update if URL changed
                 if freshPhotoURL != profile.photoURL {
                     print("🔄 [ProfileViewModel] Refreshing photoURL for '\(profile.name)'")

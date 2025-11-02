@@ -423,7 +423,7 @@ final class AppState: ObservableObject {
 
             do {
                 // Get fresh download URL from Firebase Storage
-                guard let freshPhotoURL = try await databaseService.getProfilePhotoURL(for: profile.id) else {
+                guard let freshPhotoURL = try await databaseService.getProfilePhotoURL(for: profile.id, userId: profile.userId) else {
                     print("⚠️ [AppState] No photo found in Storage for '\(profile.name)'")
                     continue
                 }
