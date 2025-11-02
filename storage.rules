@@ -29,15 +29,25 @@ service firebase.storage {
       allow delete: if isAuthenticated();
     }
     
-    // Profile photos - users can upload/read photos for profiles they created
+    // Profile photos (legacy path - kept for backward compatibility)
     match /profiles/{profileId}/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && 
-                   isImageFile() && 
+      allow write: if isAuthenticated() &&
+                   isImageFile() &&
                    isValidFileSize();
       allow delete: if isAuthenticated();
     }
-    
+
+    // Profile photos (user-scoped path - prevents cross-account conflicts)
+    match /users/{userId}/profiles/{profileId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() &&
+                   isOwner(userId) &&
+                   isImageFile() &&
+                   isValidFileSize();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
     // User avatars
     match /users/{userId}/{fileName} {
       allow read: if isAuthenticated();
