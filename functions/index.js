@@ -369,7 +369,8 @@ exports.twilioWebhook = onRequest(
         taskId: habitDoc.id,
         textResponse: messageBody,
         responseType: 'text',  // Will be updated if photo exists
-        taskTitle: habit.title
+        taskTitle: habit.title,
+        sentMessage: habit.lastSentMessage || null  // Include the original sent message for gallery display
       };
 
       // Download MMS photo if attached
@@ -939,7 +940,8 @@ exports.sendScheduledTaskReminders = onSchedule({
             async () => {
               await habitDoc.ref.update({
                 nextScheduledDate: admin.firestore.Timestamp.fromDate(nextOccurrence),
-                lastSMSSentAt: admin.firestore.FieldValue.serverTimestamp()
+                lastSMSSentAt: admin.firestore.FieldValue.serverTimestamp(),
+                lastSentMessage: message  // Store sent message for gallery display
               });
             },
             `Update nextScheduledDate for habit ${habit.id} ("${habit.title}")`
@@ -1340,25 +1342,84 @@ function calculateNextOccurrence(habit) {
 
 /**
  * Helper: Generate task reminder message for elderly user
+ * Now with randomized friendly variations for warmth and engagement
  *
  * @param {Object} habit - Habit document data
  * @param {Object} profile - Profile document data
  * @returns {string} - Formatted SMS message
  */
 function getTaskReminderMessage(habit, profile) {
-  let instructions = '';
+  // Randomized greetings
+  const greetings = [
+    `Hi ${profile.name}!`,
+    `Hey ${profile.name},`,
+    `Hello ${profile.name} 🌞`,
+    `Good day ${profile.name}!`,
+    `Hi ${profile.name}! Hope you're doing well.`
+  ];
 
+  // Randomized prompts
+  const prompts = [
+    "Time to",
+    "A gentle reminder to",
+    "Just a little nudge to",
+    "Hope your day's going well! Don't forget to",
+    "Thinking of you — remember to",
+    "It's that moment again to"
+  ];
+
+  // Photo + Text required
+  const photoAndTextInstructions = [
+    "When you're all done, send a quick photo and a little note — I'd love to see 😊",
+    "Snap a photo and share how it went when you finish 📸💬",
+    "All set? Send a photo and a short message — can't wait to hear from you 🌞",
+    "Once you're finished, share a picture and a few words about it 💛"
+  ];
+
+  // Photo only
+  const photoInstructions = [
+    "When you're done, send a photo — I'd love to see your progress 📸",
+    "Snap a quick photo when you finish — it always brightens the day 🌿",
+    "Once you're done, share a picture — it'll make me smile 😊",
+    "Take a little photo when you're done, if you'd like 🌸"
+  ];
+
+  // Text only
+  const textInstructions = [
+    "Text back a quick note when you're finished — I'd love to hear 💬",
+    "When you're done, send a little message to let me know 🌷",
+    "Once you finish, reply with a quick hello — it always makes my day ☀️",
+    "You can text back a few words when you're done — no rush 🌿"
+  ];
+
+  // Flexible / no specific requirement
+  const flexibleInstructions = [
+    "You can reply whenever you're done — I'm cheering you on 💛",
+    "Take your time and send a little message if you'd like 🌸",
+    "Whenever you finish, feel free to reply — I'll be happy to hear from you 😊",
+    "No rush at all — reply when you're done, or just take a nice deep breath 🌿"
+  ];
+
+  // Pick random variations
+  const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+  const prompt = prompts[Math.floor(Math.random() * prompts.length)];
+
+  // Determine instructions based on requirements
+  let instructionsArray;
   if (habit.requiresPhoto && habit.requiresText) {
-    instructions = 'Reply with a photo and text when done.';
+    instructionsArray = photoAndTextInstructions;
   } else if (habit.requiresPhoto) {
-    instructions = 'Reply with a photo when done.';
+    instructionsArray = photoInstructions;
   } else if (habit.requiresText) {
-    instructions = 'Reply DONE when complete.';
+    instructionsArray = textInstructions;
   } else {
-    instructions = 'Reply when done.';
+    instructionsArray = flexibleInstructions;
   }
 
-  return `Hi ${profile.name}! Time to: ${habit.title}\n\n${instructions}`;
+  const instructions = instructionsArray[Math.floor(Math.random() * instructionsArray.length)];
+
+  // Build final message
+  return `${greeting} ${prompt} ${habit.title}\n\n${instructions}`;
 }
 
 /**

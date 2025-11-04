@@ -184,23 +184,77 @@ class TwilioSMSService: SMSServiceProtocol {
     }
 
     func getTaskReminderMessage(for task: Task, profile: ElderlyProfile) -> String {
-        // Dynamic instructions based on response requirements
-        let instructions: String
+        // Randomized greetings
+        let greetings = [
+            "Hi \(profile.name)!",
+            "Hey \(profile.name),",
+            "Hello \(profile.name) 🌞",
+            "Good day \(profile.name)!",
+            "Hi \(profile.name)! Hope you're doing well."
+        ]
+
+        // Randomized prompts
+        let prompts = [
+            "Time to",
+            "A gentle reminder to",
+            "Just a little nudge to",
+            "Hope your day's going well! Don't forget to",
+            "Thinking of you — remember to",
+            "It's that moment again to"
+        ]
+
+        // Photo + Text required
+        let photoAndTextInstructions = [
+            "When you're all done, send a quick photo and a little note — I'd love to see 😊",
+            "Snap a photo and share how it went when you finish 📸💬",
+            "All set? Send a photo and a short message — can't wait to hear from you 🌞",
+            "Once you're finished, share a picture and a few words about it 💛"
+        ]
+
+        // Photo only
+        let photoInstructions = [
+            "When you're done, send a photo — I'd love to see your progress 📸",
+            "Snap a quick photo when you finish — it always brightens the day 🌿",
+            "Once you're done, share a picture — it'll make me smile 😊",
+            "Take a little photo when you're done, if you'd like 🌸"
+        ]
+
+        // Text only
+        let textInstructions = [
+            "Text back a quick note when you're finished — I'd love to hear 💬",
+            "When you're done, send a little message to let me know 🌷",
+            "Once you finish, reply with a quick hello — it always makes my day ☀️",
+            "You can text back a few words when you're done — no rush 🌿"
+        ]
+
+        // Flexible / no specific requirement
+        let flexibleInstructions = [
+            "You can reply whenever you're done — I'm cheering you on 💛",
+            "Take your time and send a little message if you'd like 🌸",
+            "Whenever you finish, feel free to reply — I'll be happy to hear from you 😊",
+            "No rush at all — reply when you're done, or just take a nice deep breath 🌿"
+        ]
+
+        // Pick random variations
+        let greeting = greetings.randomElement()!
+        let prompt = prompts.randomElement()!
+
+        // Determine instructions based on requirements
+        let instructionsArray: [String]
         if task.requiresPhoto && task.requiresText {
-            instructions = "Reply with a photo and text when done."
+            instructionsArray = photoAndTextInstructions
         } else if task.requiresPhoto {
-            instructions = "Reply with a photo when done."
+            instructionsArray = photoInstructions
         } else if task.requiresText {
-            instructions = "Reply DONE when complete."
+            instructionsArray = textInstructions
         } else {
-            instructions = "Reply when done."
+            instructionsArray = flexibleInstructions
         }
 
-        return """
-        Hi \(profile.name)! Time to: \(task.title)
+        let instructions = instructionsArray.randomElement()!
 
-        \(instructions)
-        """
+        // Build final message
+        return "\(greeting) \(prompt) \(task.title)\n\n\(instructions)"
     }
 
     func getFollowUpMessage(for task: Task, profile: ElderlyProfile) -> String {

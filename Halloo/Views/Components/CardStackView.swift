@@ -380,7 +380,7 @@ struct CardStackView: View {
                     HStack {
                         Spacer(minLength: 0)
                         SpeechBubbleView(
-                            text: "Reminder: \(event.title). Please confirm when completed.",
+                            text: event.sentMessage ?? "Reminder: \(event.title). Please confirm when completed.",
                             isOutgoing: true,
                             backgroundColor: Color.blue,
                             textColor: .white,

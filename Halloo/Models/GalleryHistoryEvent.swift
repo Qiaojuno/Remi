@@ -61,32 +61,36 @@ enum GalleryEventData: Codable, Hashable {
         let photoData: Data?
         let responseType: String // Store as String to avoid enum issues
         let taskTitle: String?
-        
+        let sentMessage: String? // The original sent message from family to elderly
+
         init(from smsResponse: SMSResponse) {
             self.taskId = smsResponse.taskId
             self.textResponse = smsResponse.textResponse
             self.photoData = smsResponse.photoData
             self.responseType = smsResponse.responseType.rawValue
             self.taskTitle = smsResponse.taskTitle
+            self.sentMessage = nil // SMS responses don't have sent message
         }
-        
-        init(taskId: String?, textResponse: String?, photoData: Data?, responseType: String, taskTitle: String?) {
+
+        init(taskId: String?, textResponse: String?, photoData: Data?, responseType: String, taskTitle: String?, sentMessage: String? = nil) {
             self.taskId = taskId
             self.textResponse = textResponse
             self.photoData = photoData
             self.responseType = responseType
             self.taskTitle = taskTitle
+            self.sentMessage = sentMessage
         }
-        
+
         // Implement Equatable
         static func == (lhs: SMSResponseData, rhs: SMSResponseData) -> Bool {
             return lhs.taskId == rhs.taskId &&
                    lhs.textResponse == rhs.textResponse &&
                    lhs.photoData == rhs.photoData &&
                    lhs.responseType == rhs.responseType &&
-                   lhs.taskTitle == rhs.taskTitle
+                   lhs.taskTitle == rhs.taskTitle &&
+                   lhs.sentMessage == rhs.sentMessage
         }
-        
+
         // Implement Hashable
         func hash(into hasher: inout Hasher) {
             hasher.combine(taskId)
@@ -94,6 +98,7 @@ enum GalleryEventData: Codable, Hashable {
             hasher.combine(photoData)
             hasher.combine(responseType)
             hasher.combine(taskTitle)
+            hasher.combine(sentMessage)
         }
     }
     
@@ -167,7 +172,16 @@ extension GalleryHistoryEvent {
             return nil
         }
     }
-    
+
+    var sentMessage: String? {
+        switch eventData {
+        case .taskResponse(let data):
+            return data.sentMessage
+        case .profileCreated(_):
+            return nil
+        }
+    }
+
     var originalTaskTitle: String {
         switch eventData {
         case .taskResponse(let data):
