@@ -104,6 +104,7 @@ struct CustomHabitCreationFlow: View {
                     selectedTimes: $selectedTimes,
                     showingTimePicker: $showingTimePicker,
                     tempSelectedTime: $tempSelectedTime,
+                    timeError: viewModel.timeError,
                     onNext: { currentStep = 2 },
                     onDismiss: onDismiss,
                     onButtonWidthCapture: { width in
@@ -138,6 +139,7 @@ struct Step1_HabitForm: View {
     @Binding var selectedTimes: [Date]
     @Binding var showingTimePicker: Bool
     @Binding var tempSelectedTime: Date
+    let timeError: String? // Pass error message from parent
     let onNext: () -> Void
     let onDismiss: () -> Void
     let onButtonWidthCapture: (CGFloat) -> Void
@@ -259,6 +261,26 @@ struct Step1_HabitForm: View {
                                         isTextFieldFocused = false
                                     }
                                 )
+
+                            // Error message display (30-minute validation)
+                            if let error = timeError {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.red)
+
+                                    Text(error)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.red)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(8)
+                            }
                         }
                         .padding(.horizontal, 18) // Reduced internal padding to fix visual conflict with Step 2
                         .padding(.vertical, 24) // More top/bottom padding

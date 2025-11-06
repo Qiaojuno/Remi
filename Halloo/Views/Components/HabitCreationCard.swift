@@ -411,6 +411,26 @@ struct HabitCreationCard: View {
                     .cornerRadius(10)
                 }
             }
+
+            // Error message display (30-minute validation)
+            if let timeError = taskViewModel.timeError {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+
+                    Text(timeError)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(8)
+            }
         }
     }
 
