@@ -350,7 +350,57 @@ exports.twilioWebhook = onRequest(
 
       console.log(`📋 Found recent habit: ${habit.title}`);
 
-      // Mark habit as completed
+      // ✅ VALIDATE: Check if response matches habit requirements
+      const hasPhoto = parseInt(numMedia) > 0;
+      const hasText = messageBody && messageBody.trim().length > 0;
+
+      const requiresPhoto = habit.requiresPhoto || false;
+      const requiresText = habit.requiresText || false;
+
+      // Determine if response is valid
+      let isValidResponse = true;
+      let validationMessage = null;
+
+      console.log(`🔍 Validation check:`);
+      console.log(`   Requires: photo=${requiresPhoto}, text=${requiresText}`);
+      console.log(`   Received: photo=${hasPhoto}, text=${hasText}`);
+
+      if (requiresPhoto && !hasPhoto) {
+        isValidResponse = false;
+        validationMessage = "Please send a photo to complete this task.";
+      } else if (requiresText && !hasText) {
+        isValidResponse = false;
+        validationMessage = "Please send a message to complete this task.";
+      } else if (requiresPhoto && requiresText && (!hasPhoto || !hasText)) {
+        isValidResponse = false;
+        validationMessage = "Please send both a photo and a message to complete this task.";
+      }
+
+      // Only proceed if response is valid
+      if (!isValidResponse) {
+        console.log(`❌ Invalid response type - sending correction message`);
+
+        // Send validation message to user
+        try {
+          const twilioClient = twilio(twilioAccountSid.value(), twilioAuthToken.value());
+
+          await twilioClient.messages.create({
+            body: validationMessage,
+            from: twilioPhoneNumber.value(),
+            to: fromPhone
+          });
+
+          console.log(`📤 Sent validation message: "${validationMessage}"`);
+        } catch (smsError) {
+          console.error(`❌ Failed to send validation SMS:`, smsError);
+        }
+
+        // Do NOT mark as completed, do NOT create gallery event
+        res.status(200).send('OK');
+        return;
+      }
+
+      // ✅ Valid response - mark habit as completed
       await habitDoc.ref.update({
         lastCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
         completionCount: admin.firestore.FieldValue.increment(1)
@@ -441,6 +491,31 @@ exports.twilioWebhook = onRequest(
       });
 
       console.log(`✅ Created gallery event for habit: ${habit.title}`);
+
+      // ✅ Send simple thank you message for valid response
+      try {
+        const thankYouMessages = [
+          `Thanks! 💙`,
+          `Got it! ✨`,
+          `Perfect! 😊`,
+          `Great! 🌟`,
+          `Awesome! 🎉`
+        ];
+
+        const thankYou = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
+        const twilioClient = twilio(twilioAccountSid.value(), twilioAuthToken.value());
+
+        await twilioClient.messages.create({
+          body: thankYou,
+          from: twilioPhoneNumber.value(),
+          to: fromPhone
+        });
+
+        console.log(`✅ Sent thank you message: "${thankYou}"`);
+      } catch (smsError) {
+        console.error(`❌ Failed to send thank you SMS:`, smsError);
+        // Don't throw - webhook should still return 200 OK
+      }
     } else {
       console.log(`⚠️ No recent habit found for this reply`);
     }
