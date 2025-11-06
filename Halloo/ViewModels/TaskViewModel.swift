@@ -1027,10 +1027,10 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
             timeError = "Please select at least one time"
             return
         }
-        
+
         let now = Date()
         let calendar = Calendar.current
-        
+
         if frequency == .daily || frequency == .weekdays {
             // For recurring tasks, just check if times are reasonable
             for time in times {
@@ -1040,7 +1040,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                     return
                 }
             }
-            timeError = nil
         } else {
             // For one-time tasks, check if times are in the future
             for time in times {
@@ -1049,8 +1048,122 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                     return
                 }
             }
-            timeError = nil
         }
+
+        // NEW: Check 30-minute gap with existing habits on the same profile
+        guard let profile = selectedProfile else {
+            timeError = nil
+            return
+        }
+
+        // Get all active habits for the selected profile
+        let existingHabits = tasks.filter { task in
+            task.profileId == profile.id &&
+            task.status == .active &&
+            // Exclude the task being edited (if any)
+            task.id != selectedTask?.id
+        }
+
+        // Check each new scheduled time against existing habits
+        for newTime in times {
+            for existingHabit in existingHabits {
+                // Check if habits occur on overlapping days
+                if !doHabitsOverlapDays(
+                    newTime: newTime,
+                    newFrequency: frequency,
+                    newCustomDays: customDays,
+                    existingTask: existingHabit
+                ) {
+                    // Different days - no conflict
+                    continue
+                }
+
+                // Calculate time difference (only considering time of day, not date)
+                let newTimeComponents = calendar.dateComponents([.hour, .minute], from: newTime)
+                let existingTimeComponents = calendar.dateComponents([.hour, .minute], from: existingHabit.scheduledTime)
+
+                guard let newHour = newTimeComponents.hour,
+                      let newMinute = newTimeComponents.minute,
+                      let existingHour = existingTimeComponents.hour,
+                      let existingMinute = existingTimeComponents.minute else {
+                    continue
+                }
+
+                let newMinutes = newHour * 60 + newMinute
+                let existingMinutes = existingHour * 60 + existingMinute
+
+                // FIX #1: Handle midnight wraparound correctly
+                // Example: 11:50 PM (1430 min) vs 12:10 AM (10 min)
+                // Direct difference: |1430 - 10| = 1420 minutes (wrong!)
+                // Wraparound difference: 1440 - 1420 = 20 minutes (correct!)
+                let directDifference = abs(newMinutes - existingMinutes)
+                let wraparoundDifference = 1440 - directDifference // 1440 minutes in 24 hours
+                let minutesDifference = min(directDifference, wraparoundDifference)
+
+                // Enforce 30-minute minimum gap
+                if minutesDifference < 30 {
+                    let formatter = DateFormatter()
+                    formatter.timeStyle = .short
+
+                    timeError = "Too close to existing habit '\(existingHabit.title)' at \(formatter.string(from: existingHabit.scheduledTime)). Please choose a time at least 30 minutes apart."
+                    return
+                }
+            }
+        }
+
+        timeError = nil
+    }
+
+    /// Check if two habits occur on overlapping days based on their frequency
+    private func doHabitsOverlapDays(
+        newTime: Date,
+        newFrequency: TaskFrequency,
+        newCustomDays: Set<Weekday>,
+        existingTask: Task
+    ) -> Bool {
+        let calendar = Calendar.current
+
+        // Helper to get all active weekdays for a frequency
+        func getActiveDays(frequency: TaskFrequency, customDays: Set<Weekday>, scheduledTime: Date) -> Set<Weekday> {
+            switch frequency {
+            case .daily:
+                return Set(Weekday.allCases)
+
+            case .weekly:
+                // FIX #2: Extract which day of week this weekly task repeats on
+                let weekdayNumber = calendar.component(.weekday, from: scheduledTime)
+                let weekday = Weekday.from(weekday: weekdayNumber)
+                return Set([weekday])
+
+            case .weekdays:
+                return Set([.monday, .tuesday, .wednesday, .thursday, .friday])
+
+            case .custom:
+                return customDays
+
+            case .once:
+                // FIX #3: One-time tasks - only overlap if same calendar date
+                // Don't assume overlap for different dates
+                return Set([Weekday.from(weekday: calendar.component(.weekday, from: scheduledTime))])
+            }
+        }
+
+        let newDays = getActiveDays(frequency: newFrequency, customDays: newCustomDays, scheduledTime: newTime)
+        let existingDays = getActiveDays(frequency: existingTask.frequency, customDays: Set(existingTask.customDays), scheduledTime: existingTask.scheduledTime)
+
+        // For one-time tasks, also check if they're on the same calendar date
+        if newFrequency == .once || existingTask.frequency == .once {
+            let newDate = calendar.startOfDay(for: newTime)
+            let existingDate = calendar.startOfDay(for: existingTask.scheduledTime)
+
+            // One-time tasks only conflict if on the exact same date
+            if !calendar.isDate(newDate, inSameDayAs: existingDate) {
+                return false // Different dates = no overlap
+            }
+        }
+
+        // Check if any days overlap
+        return !newDays.isDisjoint(with: existingDays)
     }
     
     private func validateProfile(_ profile: ElderlyProfile?) {

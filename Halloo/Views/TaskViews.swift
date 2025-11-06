@@ -649,15 +649,26 @@ struct Step2_ConfirmationMethod: View {
         print("🐛 [createHabit] Form data transferred")
         print("🐛 [createHabit] viewModel.scheduledTimes.count: \(viewModel.scheduledTimes.count)")
 
-        // CRITICAL: Clear timeError since validation is debounced and won't complete before createTask
-        if !viewModel.scheduledTimes.isEmpty {
-            viewModel.timeError = nil
-        }
+        // FIX: Wait for validation to complete (300ms debounce + buffer)
+        // Don't bypass validation - it's critical for 30-minute gap enforcement
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            print("🐛 [createHabit] Validation complete, checking form validity")
 
-        print("🐛 [createHabit] Calling createTask()")
-        // Create the task and dismiss on success
-        viewModel.createTask()
-        onDismiss()
+            // Check if validation passed
+            guard viewModel.isValidForm else {
+                print("❌ [createHabit] Form validation failed - NOT creating task")
+                print("   - timeError: \(viewModel.timeError ?? "nil")")
+                print("   - titleError: \(viewModel.titleError ?? "nil")")
+                print("   - profileError: \(viewModel.profileError ?? "nil")")
+                // Don't dismiss - let user see the error message
+                return
+            }
+
+            print("✅ [createHabit] Form validation passed - creating task")
+            // Create the task and dismiss on success
+            viewModel.createTask()
+            onDismiss()
+        }
     }
     
     private func convertDaysToWeekdays(_ days: Set<Int>) -> Set<Weekday> {

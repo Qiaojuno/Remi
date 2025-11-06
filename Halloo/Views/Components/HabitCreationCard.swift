@@ -526,28 +526,36 @@ struct HabitCreationCard: View {
             taskViewModel.requiresText = true
         }
 
-        // Clear time error (debounced validation issue)
-        if !taskViewModel.scheduledTimes.isEmpty {
-            taskViewModel.timeError = nil
-        }
-
-        // Create task
-        taskViewModel.createTask()
-
-        // Small delay before dismissing to show loading state
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            // Reset loading state
-            isCreating = false
-
-            // Dismiss card
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                isPresented = false
+        // FIX: Run validation synchronously before attempting to create task
+        // Don't bypass validation - it's critical for 30-minute gap enforcement
+        // Wait a moment for validation to complete, then check if form is valid
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            // Check if validation passed
+            if !taskViewModel.isValidForm {
+                // Validation failed - show error and reset loading state
+                isCreating = false
+                // Error message is already set by validation
+                return
             }
 
-            // Reset form and call dismiss callback after animation
+            // Validation passed - create task
+            taskViewModel.createTask()
+
+            // Small delay before dismissing to show loading state
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                resetForm()
-                onDismiss()
+                // Reset loading state
+                isCreating = false
+
+                // Dismiss card
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isPresented = false
+                }
+
+                // Reset form and call dismiss callback after animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    resetForm()
+                    onDismiss()
+                }
             }
         }
     }

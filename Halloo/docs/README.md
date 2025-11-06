@@ -1,6 +1,6 @@
 # 📚 Halloo/Remi Documentation
 
-IMPORTANT NEXT FEATURE: time safety limit (30mins) between tasks!
+✅ COMPLETED: time safety limit (30mins) between tasks - enforced in TaskViewModel validation
 
 ALSO IMPORTANT: When phone numbers are already confirmed through twillio, a deletion and remake of account will not require await twilio confirmation
 
