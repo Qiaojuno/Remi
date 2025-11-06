@@ -1259,47 +1259,47 @@ function calculateNextOccurrence(habit) {
   const now = new Date();
   const currentDate = habit.nextScheduledDate.toDate();
 
-  // Extract time components from scheduledTime
+  // Extract time components from scheduledTime (in UTC to avoid timezone issues)
   const scheduledTime = habit.scheduledTime.toDate();
-  const hours = scheduledTime.getHours();
-  const minutes = scheduledTime.getMinutes();
-  const seconds = scheduledTime.getSeconds();
+  const hours = scheduledTime.getUTCHours();
+  const minutes = scheduledTime.getUTCMinutes();
+  const seconds = scheduledTime.getUTCSeconds();
 
   switch (habit.frequency) {
     case 'daily':
-      // Add 1 day to current nextScheduledDate
+      // Add 1 day to current nextScheduledDate using UTC methods
       const nextDaily = new Date(currentDate);
-      nextDaily.setDate(nextDaily.getDate() + 1);
-      nextDaily.setHours(hours, minutes, seconds, 0);
+      nextDaily.setUTCDate(nextDaily.getUTCDate() + 1);
+      nextDaily.setUTCHours(hours, minutes, seconds, 0);
       return nextDaily;
 
     case 'weekdays':
-      // Find next weekday (Monday-Friday)
+      // Find next weekday (Monday-Friday) using UTC methods
       const nextWeekday = new Date(currentDate);
-      nextWeekday.setDate(nextWeekday.getDate() + 1);
-      nextWeekday.setHours(hours, minutes, seconds, 0);
+      nextWeekday.setUTCDate(nextWeekday.getUTCDate() + 1);
+      nextWeekday.setUTCHours(hours, minutes, seconds, 0);
 
-      // Skip weekends (0 = Sunday, 6 = Saturday)
-      while (nextWeekday.getDay() === 0 || nextWeekday.getDay() === 6) {
-        nextWeekday.setDate(nextWeekday.getDate() + 1);
+      // Skip weekends (0 = Sunday, 6 = Saturday) - use UTC day
+      while (nextWeekday.getUTCDay() === 0 || nextWeekday.getUTCDay() === 6) {
+        nextWeekday.setUTCDate(nextWeekday.getUTCDate() + 1);
       }
       return nextWeekday;
 
     case 'weekly':
-      // Add 7 days to current nextScheduledDate
+      // Add 7 days to current nextScheduledDate using UTC methods
       const nextWeekly = new Date(currentDate);
-      nextWeekly.setDate(nextWeekly.getDate() + 7);
-      nextWeekly.setHours(hours, minutes, seconds, 0);
+      nextWeekly.setUTCDate(nextWeekly.getUTCDate() + 7);
+      nextWeekly.setUTCHours(hours, minutes, seconds, 0);
       return nextWeekly;
 
     case 'custom':
-      // Find next day that matches customDays array
+      // Find next day that matches customDays array using UTC methods
       const customDays = habit.customDays || [];
       if (customDays.length === 0) {
         // Fallback to daily if no custom days specified
         const fallback = new Date(currentDate);
-        fallback.setDate(fallback.getDate() + 1);
-        fallback.setHours(hours, minutes, seconds, 0);
+        fallback.setUTCDate(fallback.getUTCDate() + 1);
+        fallback.setUTCHours(hours, minutes, seconds, 0);
         return fallback;
       }
 
@@ -1310,19 +1310,19 @@ function calculateNextOccurrence(habit) {
       };
       const targetDays = customDays.map(day => dayMap[day.toLowerCase()]);
 
-      // Search for next matching day (up to 14 days ahead)
+      // Search for next matching day (up to 14 days ahead) using UTC
       const nextCustom = new Date(currentDate);
       for (let i = 1; i <= 14; i++) {
-        nextCustom.setDate(currentDate.getDate() + i);
-        if (targetDays.includes(nextCustom.getDay())) {
-          nextCustom.setHours(hours, minutes, seconds, 0);
+        nextCustom.setUTCDate(currentDate.getUTCDate() + i);
+        if (targetDays.includes(nextCustom.getUTCDay())) {
+          nextCustom.setUTCHours(hours, minutes, seconds, 0);
           return nextCustom;
         }
       }
 
       // Fallback if no match found
-      nextCustom.setDate(currentDate.getDate() + 1);
-      nextCustom.setHours(hours, minutes, seconds, 0);
+      nextCustom.setUTCDate(currentDate.getUTCDate() + 1);
+      nextCustom.setUTCHours(hours, minutes, seconds, 0);
       return nextCustom;
 
     case 'once':
@@ -1330,10 +1330,10 @@ function calculateNextOccurrence(habit) {
       return currentDate;
 
     default:
-      // Fallback to daily
+      // Fallback to daily using UTC methods
       const defaultNext = new Date(currentDate);
-      defaultNext.setDate(defaultNext.getDate() + 1);
-      defaultNext.setHours(hours, minutes, seconds, 0);
+      defaultNext.setUTCDate(defaultNext.getUTCDate() + 1);
+      defaultNext.setUTCHours(hours, minutes, seconds, 0);
       return defaultNext;
   }
 }
