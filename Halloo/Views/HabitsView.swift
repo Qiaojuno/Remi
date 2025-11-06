@@ -490,8 +490,8 @@ struct HabitsView: View {
     private func updateProfilePhoto(profile: ElderlyProfile, image: UIImage) async {
         print("🖼️ [HabitsView] Updating profile photo for '\(profile.name)'...")
 
-        // Convert UIImage to JPEG data
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+        // Convert UIImage to JPEG data (strip EXIF for privacy)
+        guard let imageData = image.jpegDataWithoutEXIF(compressionQuality: 0.8) else {
             print("❌ [HabitsView] Failed to convert image to JPEG data")
             return
         }

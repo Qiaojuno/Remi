@@ -426,8 +426,8 @@ struct SimplifiedProfileCreationView: View {
             profileViewModel.relationship = "Family Member"
         }
 
-        if let photo = selectedPhoto, let photoData = photo.jpegData(compressionQuality: 0.8) {
-            print("🔨 Converting photo to JPEG data: \(photoData.count) bytes")
+        if let photo = selectedPhoto, let photoData = photo.jpegDataWithoutEXIF(compressionQuality: 0.8) {
+            print("🔨 Converting photo to JPEG data (EXIF stripped): \(photoData.count) bytes")
             profileViewModel.selectedPhotoData = photoData
             print("🔨 Photo data SET on ViewModel: \(profileViewModel.selectedPhotoData?.count ?? 0) bytes")
         } else {
@@ -435,7 +435,7 @@ struct SimplifiedProfileCreationView: View {
             print("🔨   selectedPhoto exists: \(selectedPhoto != nil)")
             if let photo = selectedPhoto {
                 print("🔨   Photo size: \(photo.size)")
-                let jpegData = photo.jpegData(compressionQuality: 0.8)
+                let jpegData = photo.jpegDataWithoutEXIF(compressionQuality: 0.8)
                 print("🔨   JPEG conversion result: \(jpegData?.count ?? 0) bytes")
             }
         }

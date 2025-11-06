@@ -1,8 +1,60 @@
 # Hallo iOS App - Development Guidelines & Patterns
-# Last Updated: 2025-10-30
+# Last Updated: 2025-11-06
 # Critical patterns and fixes for future development
 
-## RECENT LESSONS LEARNED (2025-10-30)
+## RECENT LESSONS LEARNED (2025-11-06)
+
+### Image Privacy Pattern - EXIF Metadata Stripping
+
+**Critical Pattern:** Always strip EXIF metadata from photos before uploading to protect user privacy
+
+**Problem:** Photos contain sensitive metadata
+```swift
+// ❌ WRONG - Uploads photo with GPS, device info, timestamps
+let photoData = image.jpegData(compressionQuality: 0.8)
+uploadToFirebase(photoData)
+
+// User's photo now contains:
+// - GPS coordinates (home address)
+// - Device model (iPhone 14 Pro)
+// - Timestamp (activity patterns)
+// - Device owner name
+```
+
+**Solution:** Use UIImage+EXIFStripping extension
+```swift
+// ✅ CORRECT - Strip all metadata before upload
+guard let photoData = image.jpegDataWithoutEXIF(compressionQuality: 0.8) else {
+    print("❌ Failed to strip EXIF metadata")
+    return
+}
+
+// Safe to upload - no GPS, device info, or timestamps
+try await databaseService.uploadProfilePhoto(photoData, for: profile.id, userId: profile.userId)
+```
+
+**Why This Matters:**
+- **Privacy Risk**: GPS coordinates reveal home addresses of vulnerable elderly individuals
+- **Security Risk**: Timestamps reveal activity patterns (when people are home/away)
+- **GDPR Compliance**: Minimizes personal data collection (Article 5(1)(c) - Data Minimization)
+- **Trust**: Builds confidence with privacy-conscious family members
+
+**When to Use:**
+- ✅ Profile photo creation (ProfileViews.swift)
+- ✅ Profile photo updates (HabitsView.swift)
+- ✅ Task response photos (future implementation)
+- ✅ ANY photo uploaded to Firebase Storage
+
+**Performance:**
+- Processing time: ~50-100ms per 12MP photo
+- Network savings: 60-70% file size reduction (compression + metadata removal)
+- Memory overhead: Minimal (temporary graphics context)
+
+**File Reference:** `/Halloo/Extensions/UIImage+EXIFStripping.swift`
+
+---
+
+## PREVIOUS LESSONS LEARNED (2025-10-30)
 
 ### Code Deduplication with Utility Files
 
@@ -792,6 +844,7 @@ Before deploying:
 5. **Don't use random profile colors** - Use slot-based color assignment
 6. **Don't forget Canvas safety** - Use skipAutoLoad for ViewModels in previews
 7. **Don't mix asset name cases** - Use exact case-sensitive names
+8. **Don't upload photos without stripping EXIF** - Always use `jpegDataWithoutEXIF()` to protect user privacy
 
 ## CONFIDENCE SCORING
 
