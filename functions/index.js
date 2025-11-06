@@ -493,6 +493,7 @@ exports.twilioWebhook = onRequest(
       console.log(`✅ Created gallery event for habit: ${habit.title}`);
 
       // ✅ Send simple thank you message for valid response
+      let thankYou = null;
       try {
         const thankYouMessages = [
           `Thanks! 💙`,
@@ -502,7 +503,7 @@ exports.twilioWebhook = onRequest(
           `Awesome! 🎉`
         ];
 
-        const thankYou = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
+        thankYou = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
         const twilioClient = twilio(twilioAccountSid.value(), twilioAuthToken.value());
 
         await twilioClient.messages.create({
@@ -512,6 +513,13 @@ exports.twilioWebhook = onRequest(
         });
 
         console.log(`✅ Sent thank you message: "${thankYou}"`);
+
+        // Update gallery event with reply message
+        await galleryEventRef.update({
+          'eventData.taskResponse._0.replyMessage': thankYou
+        });
+
+        console.log(`✅ Stored reply message in gallery event`);
       } catch (smsError) {
         console.error(`❌ Failed to send thank you SMS:`, smsError);
         // Don't throw - webhook should still return 200 OK

@@ -400,6 +400,21 @@ struct CardStackView: View {
                         )
                         Spacer(minLength: 0)
                     }
+
+                    // Reply message (thank you)
+                    if let replyMessage = event.replyMessage {
+                        HStack {
+                            Spacer(minLength: 0)
+                            SpeechBubbleView(
+                                text: replyMessage,
+                                isOutgoing: true,
+                                backgroundColor: Color.blue,
+                                textColor: .white,
+                                maxWidth: 287,
+                                scale: 0.85
+                            )
+                        }
+                    }
                 }
                 .padding(.horizontal, 16)
 

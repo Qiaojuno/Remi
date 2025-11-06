@@ -308,12 +308,12 @@ struct GalleryDetailView: View {
             VStack(spacing: 16) {
 
                 // Outgoing message (what we sent) - right aligned, blue
-                // Derive the sent message from the task information
+                // Use actual sent message if available, otherwise reconstruct
                 HStack {
                     Spacer(minLength: UIScreen.main.bounds.width * 0.2) // 20% left margin
 
                     SpeechBubbleView(
-                        text: constructSentMessage(),
+                        text: event.sentMessage ?? constructSentMessage(),
                         isOutgoing: true,
                         backgroundColor: Color(hex: "007AFF"), // iOS blue
                         textColor: .white
@@ -330,6 +330,20 @@ struct GalleryDetailView: View {
                     )
 
                     Spacer(minLength: UIScreen.main.bounds.width * 0.2) // 20% right margin
+                }
+
+                // Reply message (thank you) - right aligned, blue
+                if let replyMessage = event.replyMessage {
+                    HStack {
+                        Spacer(minLength: UIScreen.main.bounds.width * 0.2) // 20% left margin
+
+                        SpeechBubbleView(
+                            text: replyMessage,
+                            isOutgoing: true,
+                            backgroundColor: Color(hex: "007AFF"), // iOS blue
+                            textColor: .white
+                        )
+                    }
                 }
             }
         }
