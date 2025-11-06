@@ -796,7 +796,8 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
         errorMessage = nil
 
         do {
-            try await cancelTaskNotifications(for: task)
+            // Local notifications disabled - SMS handled by Cloud Function
+            // try await cancelTaskNotifications(for: task)
             try await databaseService.deleteTask(task.id, userId: task.userId, profileId: task.profileId)
 
             await MainActor.run {

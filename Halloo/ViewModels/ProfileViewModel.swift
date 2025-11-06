@@ -1238,7 +1238,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         - Remi
         """
 
-        try await smsService.sendSMS(
+        _ = try await smsService.sendSMS(
             to: profile.phoneNumber,
             message: message,
             profileId: profile.id,
@@ -1628,7 +1628,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
                 try await self.databaseService.createGalleryHistoryEvent(galleryEvent)
 
                 // Mark this profile as having a gallery event
-                await MainActor.run {
+                _ = await MainActor.run {
                     self.profilesWithGalleryEvents.insert(profile.id)
                 }
 

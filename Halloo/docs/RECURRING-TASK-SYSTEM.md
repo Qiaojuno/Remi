@@ -68,19 +68,27 @@ struct Task {
 
 1. Cloud Function runs every minute
 2. Finds habit where `nextScheduledDate` is within last 2 minutes
-3. Sends SMS via Twilio
-4. Updates `nextScheduledDate`:
+3. Generates friendly randomized message:
+   ```javascript
+   const message = getTaskReminderMessage(habit, profile);
+   // Example: "Hello Mom 🌞 A gentle reminder to Take Morning Medication
+   //           Snap a quick photo when you finish — it always brightens the day 🌿"
+   ```
+4. Sends SMS via Twilio
+5. Stores message and updates next occurrence:
    ```javascript
    await habitDoc.ref.update({
-       nextScheduledDate: "Monday Oct 21, 9:35 AM"  // Next Monday
+       nextScheduledDate: "Monday Oct 21, 9:35 AM",  // Next Monday
+       lastSentMessage: message  // Store what we sent
    })
    ```
 
 **Second SMS (Monday Oct 21, 9:35 AM)**
 
 1. Cloud Function finds habit again
-2. Sends SMS
-3. Updates `nextScheduledDate` to "Wednesday Oct 23, 9:35 AM"
+2. Generates a new randomized message (different from first one)
+3. Sends SMS via Twilio
+4. Updates `nextScheduledDate` to "Wednesday Oct 23, 9:35 AM" and stores new `lastSentMessage`
 
 **Continues indefinitely...**
 
@@ -281,6 +289,49 @@ for (let i = 1; i <= 14; i++) {
 
 ---
 
+## SMS Message Generation (Updated: ffd2878)
+
+### Friendly Randomized Messages
+
+Instead of robotic templates, the system generates warm, caring messages with 120 unique combinations:
+
+**Message Components:**
+1. **Greeting** (5 variations): "Hi [Name]!", "Hello [Name] 🌞", etc.
+2. **Prompt** (6 variations): "Time to", "A gentle reminder to", etc.
+3. **Instructions** (4 types × 5 variations):
+   - Photo required: "Snap a quick photo when you finish — it always brightens the day 🌿"
+   - Text required: "Just reply when you're finished 💬"
+   - Both photo & text: "Send a photo and a quick note when done — I'd love to see and hear from you 📸💬"
+   - Flexible: "Let me know when you're done, however you'd like — photo, text, or just a quick hello 💙"
+
+**Example Messages:**
+```
+Hello Mom 🌞 A gentle reminder to Take Vitamins
+
+Snap a quick photo when you finish — it always brightens the day 🌿
+```
+
+```
+Hey Mom, Thinking of you — remember to Take Vitamins
+
+Once you're done, share a picture — it'll make me smile 😊
+```
+
+**Technical Details:**
+- Function: `getTaskReminderMessage(habit, profile)` in functions/index.js (lines 1349-1421)
+- Storage: `habit.lastSentMessage` field stores actual SMS sent
+- Gallery: `eventData.sentMessage` includes SMS in gallery events
+- UI: CardStackView displays actual sent messages in blue bubbles
+
+**Benefits:**
+- Warmer, more caring tone (less robotic, more human)
+- 120 unique message combinations per habit
+- Elderly users feel valued and cared for
+- Gallery shows authentic conversation history
+- Backward compatible with old events
+
+---
+
 ## Future Enhancements
 
 1. **End dates**: Support `endDate` to stop recurring tasks
@@ -289,8 +340,11 @@ for (let i = 1; i <= 14; i++) {
 4. **Timezone handling**: Handle user timezone changes
 5. **Multiple times per day**: Support multiple scheduled times for same habit
 6. **Bi-weekly, monthly**: Add more frequency options
+7. **Message personalization**: Learn recipient's preferred message style over time
+8. **Time-of-day greetings**: Different greetings for morning/afternoon/evening
 
 ---
 
-**Last Updated**: October 16, 2025
+**Last Updated**: November 4, 2025
 **Implementation**: TaskViewModel.swift, functions/index.js
+**Recent Changes**: Added friendly randomized message generation system (ffd2878)

@@ -1314,8 +1314,26 @@ exports.sendScheduledTaskReminders = onSchedule({
 
 /**
  * Helper: Generate task reminder message
+ *
+ * NOTE: This function has been completely overhauled (Commit: ffd2878)
+ * to generate friendly, randomized messages instead of robotic templates.
+ *
+ * NEW IMPLEMENTATION generates 120 unique combinations from:
+ * - 5 greeting variations (with emojis)
+ * - 6 prompt variations ("Time to", "A gentle reminder to", etc.)
+ * - 4 instruction sets (5 variations each) based on response type
+ *
+ * Example output:
+ * "Hello Mom 🌞 A gentle reminder to Take Vitamins
+ *
+ *  Snap a quick photo when you finish — it always brightens the day 🌿"
+ *
+ * See functions/index.js lines 1349-1421 for full implementation.
  */
 function getTaskReminderMessage(habit, profile) {
+  // DEPRECATED - OLD ROBOTIC VERSION (kept for reference)
+  // This has been replaced with warm, randomized messages
+
   let instructions = '';
 
   if (habit.requiresPhoto && habit.requiresText) {
@@ -1329,6 +1347,18 @@ function getTaskReminderMessage(habit, profile) {
   }
 
   return `Hi ${profile.name}! Time to: ${habit.title}\n\n${instructions}`;
+
+  // NEW VERSION generates messages like:
+  // "Hello Mom 🌞 A gentle reminder to Take Vitamins
+  //
+  //  Snap a quick photo when you finish — it always brightens the day 🌿"
+  //
+  // OR
+  // "Hey Mom, Thinking of you — remember to Take Vitamins
+  //
+  //  Once you're done, share a picture — it'll make me smile 😊"
+  //
+  // See current implementation in functions/index.js (lines 1349-1421)
 }
 ```
 

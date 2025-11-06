@@ -216,6 +216,17 @@ struct HalloApp: App {
 
         let granted = await notificationService.requestPermissions()
         print(granted ? "✅ Notification permission granted" : "❌ Notification permission denied")
+
+        // Check for orphaned pending notifications from old code
+        let pendingIds = await notificationService.getPendingNotificationIds()
+        if !pendingIds.isEmpty {
+            print("⚠️ Found \(pendingIds.count) orphaned pending notifications - clearing them")
+            print("📋 Notification IDs: \(pendingIds.prefix(5))") // Log first 5 for debugging
+            await notificationService.cancelAllNotifications()
+            print("✅ All orphaned notifications cleared")
+        } else {
+            print("✅ No pending notifications found")
+        }
     }
     
     // MARK: - Data Management

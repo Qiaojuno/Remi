@@ -2,6 +2,8 @@
 
 IMPORTANT NEXT FEATURE: time safety limit (30mins) between tasks!
 
+ALSO IMPORTANT: When phone numbers are already confirmed through twillio, a deletion and remake of account will not require await twilio confirmation
+
 Complete documentation for the Halloo iOS app development.
 
 ---

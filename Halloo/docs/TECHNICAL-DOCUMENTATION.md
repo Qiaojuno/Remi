@@ -906,6 +906,319 @@ if let cachedUIImage = appState.imageCache.getCachedImage(for: profile.photoURL)
 
 ---
 
+# Friendly SMS Message Generation System (Commit: ffd2878)
+
+**Updated:** 2025-11-04
+**Status:** Complete - Replaced robotic templates with warm, randomized messages
+
+## Overview
+
+The SMS reminder system has been completely overhauled to generate friendly, human-like messages instead of robotic templates. Each message is randomly composed from 120 unique combinations, making every reminder feel personal and caring.
+
+## What Changed
+
+### Before (Robotic Template)
+```
+Hi Mom! Time to: Take Vitamins
+
+Reply with a photo when done.
+```
+
+### After (Warm & Randomized)
+```
+Hello Mom 🌞 A gentle reminder to Take Vitamins
+
+Snap a quick photo when you finish — it always brightens the day 🌿
+```
+
+```
+Hey Mom, Thinking of you — remember to Take Vitamins
+
+Once you're done, share a picture — it'll make me smile 😊
+```
+
+```
+Hi Mom! Hope you're doing well. Time to Take Vitamins
+
+When you're done, send a photo — I'd love to see your progress 📸
+```
+
+## Message Structure
+
+Each SMS is composed of three parts that are randomly selected:
+
+### 1. Greeting Variations (5 options)
+- `"Hi [Name]!"`
+- `"Hello [Name] 🌞"`
+- `"Hey [Name],"`
+- `"Hi [Name]! Hope you're doing well."`
+- `"Hey there, [Name]!"`
+
+### 2. Prompt Variations (6 options)
+- `"Time to"`
+- `"A gentle reminder to"`
+- `"Just a friendly nudge to"`
+- `"Don't forget to"`
+- `"Thinking of you — remember to"`
+- `"Quick reminder to"`
+
+### 3. Instruction Variations (4 types based on response requirements)
+
+**Photo Required:**
+- `"Snap a quick photo when you finish — it always brightens the day 🌿"`
+- `"When you're done, send a photo — I'd love to see your progress 📸"`
+- `"Once you're done, share a picture — it'll make me smile 😊"`
+- `"Send a photo when complete — it helps me feel connected to you 💙"`
+- `"Share a photo afterward — seeing it really makes my day ✨"`
+
+**Text Required:**
+- `"Just reply when you're finished 💬"`
+- `"Send a quick message when done — I'd love to hear from you 💌"`
+- `"Reply when complete — it means a lot to me 🤗"`
+- `"Let me know when you're done — it makes my day to hear from you 💙"`
+- `"Drop me a message afterward — I always look forward to it ✨"`
+
+**Both Photo & Text:**
+- `"Send a photo and a quick note when done — I'd love to see and hear from you 📸💬"`
+- `"Share a picture and message when complete — it really brightens my day 🌟"`
+- `"Reply with a photo and a few words when finished — it means so much to me 💙"`
+- `"Send a photo and tell me how it went — I love staying connected with you ✨"`
+- `"Share a picture and a quick update afterward — hearing from you always makes my day 🤗"`
+
+**Flexible (No specific requirement):**
+- `"Let me know when you're done, however you'd like — photo, text, or just a quick hello 💙"`
+- `"Reply in any way when complete — I just love hearing from you ✨"`
+- `"Send a photo, a message, or just say hi when done — whatever feels right 🤗"`
+- `"Share however you'd like when finished — I'm just happy to stay in touch 💌"`
+- `"Reply when you're done — photo, text, or both — whatever works best for you 🌟"`
+
+## Technical Implementation
+
+### Cloud Functions (functions/index.js)
+
+**Updated Function:** `getTaskReminderMessage()` (lines 1349-1421)
+
+```javascript
+function getTaskReminderMessage(habit, profile) {
+  const greetings = [
+    `Hi ${profile.name}!`,
+    `Hello ${profile.name} 🌞`,
+    `Hey ${profile.name},`,
+    `Hi ${profile.name}! Hope you're doing well.`,
+    `Hey there, ${profile.name}!`
+  ];
+
+  const prompts = [
+    "Time to",
+    "A gentle reminder to",
+    "Just a friendly nudge to",
+    "Don't forget to",
+    "Thinking of you — remember to",
+    "Quick reminder to"
+  ];
+
+  // 4 instruction sets (5 variations each) based on response type
+  const instructionsPhoto = [ /* 5 variations */ ];
+  const instructionsText = [ /* 5 variations */ ];
+  const instructionsBoth = [ /* 5 variations */ ];
+  const instructionsFlexible = [ /* 5 variations */ ];
+
+  // Randomly select components
+  const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+  const prompt = prompts[Math.floor(Math.random() * prompts.length)];
+
+  // Select instruction set based on habit requirements
+  let instructions;
+  if (habit.requiresPhoto && habit.requiresText) {
+    instructions = instructionsBoth[Math.floor(Math.random() * instructionsBoth.length)];
+  } else if (habit.requiresPhoto) {
+    instructions = instructionsPhoto[Math.floor(Math.random() * instructionsPhoto.length)];
+  } else if (habit.requiresText) {
+    instructions = instructionsText[Math.floor(Math.random() * instructionsText.length)];
+  } else {
+    instructions = instructionsFlexible[Math.floor(Math.random() * instructionsFlexible.length)];
+  }
+
+  return `${greeting} ${prompt} ${habit.title}\n\n${instructions}`;
+}
+```
+
+**Total Combinations:** 5 greetings × 6 prompts × 4 instruction types × 5 variations = 120 unique messages per habit
+
+### Data Storage
+
+**Habit Document Update (line 943):**
+```javascript
+await habitDoc.ref.update({
+  nextScheduledDate: nextOccurrence,
+  lastSentMessage: message  // Store the actual SMS sent
+});
+```
+
+**Gallery Event Creation (line 373):**
+```javascript
+const galleryEvent = {
+  userId,
+  profileId,
+  eventType: 'taskResponse',
+  eventData: {
+    taskId: habitDoc.id,
+    profileName: profile.name,
+    taskTitle: habit.title,
+    textResponse: responseText,
+    photoData: photoBase64,
+    responseType: 'both',
+    sentMessage: habit.lastSentMessage  // Include in gallery
+  },
+  timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  createdAt: admin.firestore.FieldValue.serverTimestamp()
+};
+```
+
+### Swift Models (iOS)
+
+**GalleryHistoryEvent.swift - SMSResponseData:**
+```swift
+struct SMSResponseData: Codable {
+    let taskId: String
+    let profileName: String
+    let profilePhotoURL: String?
+    let taskTitle: String
+    let textResponse: String?
+    let photoData: String?
+    let responseType: String
+    let sentMessage: String?  // NEW: Actual SMS sent
+}
+```
+
+**GalleryHistoryEvent Extension:**
+```swift
+extension GalleryHistoryEvent {
+    var sentMessage: String? {
+        switch eventData {
+        case .taskResponse(let data):
+            return data.sentMessage
+        case .profileCreated:
+            return nil
+        }
+    }
+}
+```
+
+### CardStackView Display (iOS)
+
+**CardStackView.swift - Blue bubble displays actual message:**
+```swift
+// Blue bubble - What we sent (actual SMS)
+if let sentMessage = event.sentMessage {
+    // Display the actual randomized message
+    Text(sentMessage)
+        .font(.system(size: 14))
+        .foregroundColor(.black)
+        .padding(12)
+        .background(Color(hex: "B9E3FF"))
+        .cornerRadius(16)
+} else {
+    // Fallback for old events without sentMessage
+    Text("Hi \(event.profileName)! Time to: \(event.taskTitle)\n\nReply with a photo when done.")
+        .font(.system(size: 14))
+        .foregroundColor(.black)
+        .padding(12)
+        .background(Color(hex: "B9E3FF"))
+        .cornerRadius(16)
+}
+```
+
+### TwilioSMSService (iOS)
+
+**TwilioSMSService.swift - Matching implementation:**
+The Swift service includes an identical `getTaskReminderMessage()` function for local testing and preview generation.
+
+## Impact & Benefits
+
+### User Experience
+- Messages feel warm, personal, and caring
+- Elderly users feel valued rather than managed
+- Reduces "notification fatigue" with varied wording
+- Emojis add emotional warmth without being overwhelming
+
+### Technical Benefits
+- Gallery displays actual sent messages (not generic templates)
+- CardStack shows authentic conversation history
+- `lastSentMessage` stored for audit trail
+- Backward compatible (old events use fallback text)
+
+### Business Value
+- Differentiates product from competitors
+- Reinforces brand as caring and human-centered
+- Improves user sentiment and engagement
+- Reduces perceived "robot-ness" of automated reminders
+
+## Testing Scenarios
+
+### Scenario 1: Photo Required
+**Habit:** "Take Vitamins" (requiresPhoto: true)
+**Expected Output:** Random combination like:
+```
+Hello Mom 🌞 A gentle reminder to Take Vitamins
+
+Snap a quick photo when you finish — it always brightens the day 🌿
+```
+
+### Scenario 2: Text Required
+**Habit:** "Morning Walk" (requiresText: true)
+**Expected Output:** Random combination like:
+```
+Hey Mom, Don't forget to Morning Walk
+
+Send a quick message when done — I'd love to hear from you 💌
+```
+
+### Scenario 3: Both Photo & Text
+**Habit:** "Lunch" (requiresPhoto: true, requiresText: true)
+**Expected Output:** Random combination like:
+```
+Hi Mom! Time to Lunch
+
+Send a photo and a quick note when done — I'd love to see and hear from you 📸💬
+```
+
+### Scenario 4: Flexible Response
+**Habit:** "Check In" (no requirements)
+**Expected Output:** Random combination like:
+```
+Hey there, Mom! Quick reminder to Check In
+
+Let me know when you're done, however you'd like — photo, text, or just a quick hello 💙
+```
+
+## Related Files
+
+### Backend
+- `/functions/index.js` (lines 1349-1421) - Message generation
+- `/functions/index.js` (line 943) - Store lastSentMessage
+- `/functions/index.js` (line 373) - Gallery event with sentMessage
+
+### iOS
+- `/Halloo/Models/GalleryHistoryEvent.swift` - sentMessage field
+- `/Halloo/Views/Components/CardStackView.swift` - Display sent messages
+- `/Halloo/Services/TwilioSMSService.swift` - Matching Swift implementation
+
+### Documentation
+- `/Halloo/docs/firebase/SCHEMA.md` - Updated schema with lastSentMessage and sentMessage fields
+- `/Halloo/docs/TECHNICAL-DOCUMENTATION.md` - This section
+
+## Future Enhancements
+
+### Potential Improvements
+1. **Localization**: Translate greeting/prompt/instruction arrays to other languages
+2. **Time-of-Day Variations**: Different greetings for morning/afternoon/evening
+3. **Relationship Customization**: Adjust tone based on relationship (parent/spouse/friend)
+4. **Completion Celebrations**: Special messages for streaks or milestones
+5. **AI Personalization**: Learn recipient's preferred message style over time
+
+---
+
 # Build Configuration Updates (2025-10-21)
 
 ## StoreKit Configuration Fix

@@ -21,6 +21,7 @@ import Foundation
 /// // In ViewModel methods:
 /// updateProfile(updatedProfile)  // Instead of: appState?.updateProfile(profile) + logging
 /// ```
+@MainActor
 protocol AppStateViewModel: AnyObject {
     var appState: AppState? { get }
 }

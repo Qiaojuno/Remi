@@ -134,7 +134,8 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
   "lastUpdatedAt": "2025-10-03T12:00:00Z",
   "completionCount": 5,
   "lastCompletedAt": "2025-10-03T09:05:00Z",
-  "nextScheduledDate": "2025-10-04T09:00:00Z"
+  "nextScheduledDate": "2025-10-04T09:00:00Z",
+  "lastSentMessage": "Hello Mom 🌞 A gentle reminder to Take Morning Medication\n\nSnap a quick photo when you finish — it always brightens the day 🌿"  // NEW: Last SMS sent (added ffd2878)
 }
 ```
 
@@ -144,6 +145,7 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 - `profileId` → MUST match parent profile document ID
 - `scheduledTime` → Required
 - `nextScheduledDate` → Required for query optimization
+- `lastSentMessage` → Optional, stores the actual SMS text sent to recipient (randomized friendly message)
 
 ---
 
@@ -181,6 +183,52 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 - `taskId` → Optional, null for profile confirmation messages
 - `receivedAt` → Required
 - `responseType` → Enum: `text`, `photo`, `both`
+
+---
+
+### 5. Gallery Event Subcollection
+**Path:** `/users/{firebaseUID}/gallery_events/{eventId}`
+
+**Document ID Rule:**
+- ✅ Use UUID.uuidString
+- ❌ **NEVER** use timestamp alone (not unique)
+
+**Structure:**
+```json
+{
+  "id": "uuid-event-789",
+  "userId": "firebase-auth-uid-abc123",
+  "profileId": "+15551234567",
+  "eventData": {
+    "taskId": "uuid-habit-123",
+    "profileName": "Grandma Rose",
+    "profilePhotoURL": "https://storage.googleapis.com/...",
+    "taskTitle": "Take Morning Medication",
+    "textResponse": "Done! Feeling great",
+    "photoData": "base64-encoded-image-data",
+    "responseType": "both",
+    "sentMessage": "Hello Mom 🌞 A gentle reminder to Take Morning Medication\n\nSnap a quick photo when you finish — it always brightens the day 🌿"  // NEW: Actual SMS sent (added ffd2878)
+  },
+  "eventType": "taskResponse",               // taskResponse, profileCreated
+  "timestamp": "2025-10-03T09:05:00Z",
+  "createdAt": "2025-10-03T09:05:00Z"
+}
+```
+
+**Field Requirements:**
+- `id` → UUID (unique per event)
+- `userId` → MUST match user document path
+- `profileId` → References the profile this event is for
+- `eventData.sentMessage` → Optional, stores the actual SMS text sent to recipient (for display in gallery)
+- `eventType` → Enum: `taskResponse`, `profileCreated`
+- `timestamp` → Event creation time
+- `responseType` → Enum: `text`, `photo`, `both`, `flexible`
+
+**Event Types:**
+- **taskResponse**: SMS response from elderly user completing a habit
+  - Includes: taskId, taskTitle, textResponse, photoData, sentMessage
+- **profileCreated**: Profile creation confirmation
+  - Includes: profileName, profilePhotoURL
 
 ---
 

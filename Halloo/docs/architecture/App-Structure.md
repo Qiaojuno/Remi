@@ -69,7 +69,7 @@ xcodebuild -scheme Halloo \
 │   ├── 📄 ElderlyProfile.swift ✅ Elderly profile model (name, phone, status)
 │   ├── 📄 Task.swift ✅ Care task model (uses _Concurrency.Task for async)
 │   ├── 📄 User.swift ✅ Family user model
-│   ├── 📄 GalleryHistoryEvent.swift ✅ Gallery timeline events
+│   ├── 📄 GalleryHistoryEvent.swift ✅ Gallery timeline events (includes sentMessage field - ffd2878)
 │   ├── 📄 SMSResponse.swift ✅ SMS response from elderly users
 │   ├── 📄 TaskCategory.swift ✅ Task categories (medication, exercise, social, etc.)
 │   ├── 📄 TaskFrequency.swift ✅ Task frequency options (daily, weekly, custom)
@@ -89,7 +89,7 @@ xcodebuild -scheme Halloo \
 │   ├── 📄 DatabaseServiceProtocol.swift ✅ Database service interface
 │   ├── 📄 FirebaseDatabaseService.swift ✅ Firestore implementation (nested collections)
 │   ├── 📄 SMSServiceProtocol.swift ✅ SMS service interface
-│   ├── 📄 TwilioSMSService.swift ✅ Twilio SMS (E.164 phone format)
+│   ├── 📄 TwilioSMSService.swift ✅ Twilio SMS (E.164 format, friendly randomized messages - ffd2878)
 │   ├── 📄 NotificationServiceProtocol.swift ✅ Notification service interface
 │   ├── 📄 NotificationService.swift ✅ NEW (Phase 2) - Local notifications
 │   └── 📄 ImageCacheService.swift ✅ NEW (2025-10-21) - NSCache-based image caching
@@ -421,7 +421,73 @@ TabView (3 tabs)
 - Device testing for accessibility
 - Multi-device sync testing
 
-## RECENT CRITICAL CHANGES (2025-10-30)
+## RECENT CRITICAL CHANGES (2025-11-04)
+
+### ✅ FRIENDLY SMS MESSAGE SYSTEM - COMPLETE (2025-11-04, Commit: ffd2878)
+
+**Summary:**
+Replaced robotic SMS templates with warm, randomized messages. Each reminder is now composed from 120 unique combinations, making elderly users feel cared for rather than managed.
+
+**Technical Changes:**
+
+1. **Cloud Functions (functions/index.js)**:
+   - Updated `getTaskReminderMessage()` function (lines 1349-1421)
+   - 5 greeting variations with emojis
+   - 6 prompt variations ("Time to", "A gentle reminder to", etc.)
+   - 4 instruction sets based on response type (photo, text, both, flexible)
+   - Each set has 5 variations for warmth and variety
+   - Stores `lastSentMessage` field on habit documents (line 943)
+   - Includes `sentMessage` in gallery events (line 373)
+
+2. **Swift Models**:
+   - `GalleryHistoryEvent.swift`: Added `sentMessage: String?` field to `SMSResponseData`
+   - Added computed property to access sentMessage from event
+
+3. **CardStackView**:
+   - Updated blue bubble to display `event.sentMessage` instead of hardcoded text
+   - Fallback to old template for backward compatibility
+
+4. **TwilioSMSService**:
+   - Updated Swift version of `getTaskReminderMessage()` to match JavaScript
+
+**Message Examples:**
+
+Before (robotic):
+```
+Hi Mom! Time to: Take Vitamins
+
+Reply with a photo when done.
+```
+
+After (warm & randomized):
+```
+Hello Mom 🌞 A gentle reminder to Take Vitamins
+
+Snap a quick photo when you finish — it always brightens the day 🌿
+```
+
+```
+Hey Mom, Thinking of you — remember to Take Vitamins
+
+Once you're done, share a picture — it'll make me smile 😊
+```
+
+**Impact:**
+- 120 unique message combinations per habit
+- Warmer, more caring tone (less robotic, more human)
+- Gallery/CardStack displays actual sent messages
+- Elderly users feel valued and cared for
+- Backward compatible with old events
+
+**Files Modified:**
+- functions/index.js (lines 1349-1421, 943, 373)
+- Halloo/Models/GalleryHistoryEvent.swift
+- Halloo/Views/Components/CardStackView.swift
+- Halloo/Services/TwilioSMSService.swift
+
+---
+
+## PREVIOUS CHANGES (2025-10-30)
 
 ### ✅ HABITSVIEW UI REDESIGN - COMPLETE (2025-10-30)
 
