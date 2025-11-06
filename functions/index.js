@@ -195,7 +195,7 @@ exports.twilioWebhook = onRequest(
     memory: '256MiB',
     timeoutSeconds: 60,
     maxInstances: 10,  // Rate limiting via max concurrent instances
-    secrets: [twilioAccountSid, twilioAuthToken]  // Access to credentials for signature validation and photo download
+    secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber]  // Access to credentials for signature validation, photo download, and sending replies
   },
   async (req, res) => {
     console.log('📱 Twilio webhook received');
@@ -504,6 +504,16 @@ exports.twilioWebhook = onRequest(
         ];
 
         thankYou = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
+
+        // DEBUG: Log Twilio credentials availability
+        console.log(`🔐 Twilio credentials check:`);
+        console.log(`   AccountSid available: ${!!twilioAccountSid.value()}`);
+        console.log(`   AuthToken available: ${!!twilioAuthToken.value()}`);
+        console.log(`   PhoneNumber available: ${!!twilioPhoneNumber.value()}`);
+        console.log(`   From: ${twilioPhoneNumber.value()}`);
+        console.log(`   To: ${fromPhone}`);
+        console.log(`   Message: "${thankYou}"`);
+
         const twilioClient = twilio(twilioAccountSid.value(), twilioAuthToken.value());
 
         await twilioClient.messages.create({
@@ -522,6 +532,12 @@ exports.twilioWebhook = onRequest(
         console.log(`✅ Stored reply message in gallery event`);
       } catch (smsError) {
         console.error(`❌ Failed to send thank you SMS:`, smsError);
+        console.error(`❌ Error details:`, {
+          message: smsError.message,
+          code: smsError.code,
+          status: smsError.status,
+          moreInfo: smsError.moreInfo
+        });
         // Don't throw - webhook should still return 200 OK
       }
     } else {
