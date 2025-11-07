@@ -75,7 +75,14 @@ struct HabitsView: View {
     // Days of the week for display
     private let weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let weekDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    
+
+    // MARK: - Initialization
+    init(selectedTab: Binding<Int>, showingCreateActionSheet: Binding<Bool>, showHeader: Bool = true) {
+        self._selectedTab = selectedTab
+        self._showingCreateActionSheet = showingCreateActionSheet
+        self.showHeader = showHeader
+    }
+
     var body: some View {
         // Show habits view as main content
         habitsContent

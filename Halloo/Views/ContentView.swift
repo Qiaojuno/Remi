@@ -292,8 +292,7 @@ struct ContentView: View {
                     SharedHeaderSection(selectedProfileIndex: $selectedProfileIndex)
                         .environmentObject(dashboardVM)
                         .environmentObject(profileVM)
-                        .environmentObject(appState)  // FIXED: Inject AppState
-                        .background(Color(hex: "f9f9f9").opacity(0)) // Transparent background
+                        .environmentObject(appState)
 
                     Spacer()
 

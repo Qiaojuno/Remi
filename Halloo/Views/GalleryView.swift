@@ -74,8 +74,7 @@ struct GalleryView: View {
             .background(Color(hex: "f9f9f9")) // Light gray app background
         }
         .onAppear {
-            print("📸 [GalleryView] onAppear called - AppState has \(appState.galleryEvents.count) gallery events")
-            print("📸 [GalleryView] Event IDs: \(appState.galleryEvents.map { $0.id })")
+            // View appeared - data is loaded from AppState
         }
         .fullScreenCover(item: $selectedEventForDetail) { event in
             // PHASE 4: Read from AppState instead of ViewModel
@@ -184,6 +183,7 @@ extension GalleryView {
         .padding(.horizontal, 26)
         .padding(.top, 20)
         .padding(.bottom, 10)
+        .background(Color(hex: "f9f9f9")) // Match app background color
         .fullScreenCover(isPresented: $showingAccountSettings) {
             SettingsView()
                 .environmentObject(appState)
@@ -339,8 +339,6 @@ extension GalleryView {
         case .sms:
             events = appState.galleryEvents.filter { $0.hasTextResponse }
         }
-        print("🔍 [GalleryView] filteredEvents computed: \(events.count) events from AppState (filter: \(selectedFilter))")
-        print("🔍 [GalleryView] AppState.galleryEvents has \(appState.galleryEvents.count) total events")
         return events
     }
     

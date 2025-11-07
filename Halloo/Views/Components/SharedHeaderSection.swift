@@ -31,7 +31,7 @@ struct SharedHeaderSection: View {
     init(selectedProfileIndex: Binding<Int>) {
         self._selectedProfileIndex = selectedProfileIndex
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center, spacing: 0) {
@@ -97,6 +97,7 @@ struct SharedHeaderSection: View {
             .padding(.top, 20)
             .padding(.bottom, 10)
         }
+        .background(Color(hex: "f9f9f9")) // Match app background color
         .fullScreenCover(isPresented: $showingAccountSettings) {
             SettingsView()
                 .environmentObject(appState)
