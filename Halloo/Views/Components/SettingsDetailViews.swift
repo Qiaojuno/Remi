@@ -3,7 +3,7 @@ import SuperwallKit
 
 // MARK: - Notifications Settings View
 struct NotificationsSettingsView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
     @State private var pushNotificationsEnabled = true
     @State private var smsRemindersEnabled = true
     @State private var taskRemindersEnabled = true
@@ -15,32 +15,32 @@ struct NotificationsSettingsView: View {
             HStack {
                 Button(action: {
                     HapticFeedback.light()
-                    dismiss()
+                    dismissWithoutAnimation?()
                 }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.leading, 20)
+
+                    Spacer()
+
+                    Text("Notifications")
+                        .font(.custom("Poppins-Medium", size: 20))
+                        .foregroundColor(.black)
+
+                    Spacer()
+
+                    // Invisible spacer for centering
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.black)
+                        .opacity(0)
+                        .padding(.trailing, 20)
                 }
-                .padding(.leading, 20)
+                .frame(height: 60)
+                .background(Color(hex: "f9f9f9"))
 
-                Spacer()
-
-                Text("Notifications")
-                    .font(.custom("Poppins-Medium", size: 20))
-                    .foregroundColor(.black)
-
-                Spacer()
-
-                // Invisible spacer for centering
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .medium))
-                    .opacity(0)
-                    .padding(.trailing, 20)
-            }
-            .frame(height: 60)
-            .background(Color(hex: "f9f9f9"))
-
-            ScrollView {
+                ScrollView {
                 VStack(spacing: 20) {
                     // Notification toggles
                     VStack(spacing: 0) {
@@ -117,7 +117,7 @@ struct NotificationsSettingsView: View {
 
 // MARK: - Manage Subscription View
 struct ManageSubscriptionView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
 
     var body: some View {
         VStack(spacing: 0) {
@@ -125,7 +125,7 @@ struct ManageSubscriptionView: View {
             HStack {
                 Button(action: {
                     HapticFeedback.light()
-                    dismiss()
+                    dismissWithoutAnimation?()
                 }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .medium))
@@ -222,7 +222,7 @@ struct ManageSubscriptionView: View {
 
 // MARK: - FAQs View
 struct FAQsView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
 
     private let faqs: [(question: String, answer: String)] = [
         (
@@ -261,7 +261,7 @@ struct FAQsView: View {
             HStack {
                 Button(action: {
                     HapticFeedback.light()
-                    dismiss()
+                    dismissWithoutAnimation?()
                 }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .medium))
@@ -272,21 +272,21 @@ struct FAQsView: View {
                 Spacer()
 
                 Text("FAQs")
-                    .font(.custom("Poppins-Medium", size: 20))
-                    .foregroundColor(.black)
+                        .font(.custom("Poppins-Medium", size: 20))
+                        .foregroundColor(.black)
 
-                Spacer()
+                    Spacer()
 
-                // Invisible spacer for centering
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .medium))
-                    .opacity(0)
-                    .padding(.trailing, 20)
-            }
-            .frame(height: 60)
-            .background(Color(hex: "f9f9f9"))
+                    // Invisible spacer for centering
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .medium))
+                        .opacity(0)
+                        .padding(.trailing, 20)
+                }
+                .frame(height: 60)
+                .background(Color(hex: "f9f9f9"))
 
-            ScrollView {
+                ScrollView {
                 VStack(spacing: 12) {
                     ForEach(Array(faqs.enumerated()), id: \.offset) { index, faq in
                         VStack(alignment: .leading, spacing: 8) {
@@ -316,7 +316,7 @@ struct FAQsView: View {
 
 // MARK: - Feedback View
 struct FeedbackView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
     @State private var feedbackText = ""
     @State private var feedbackType: FeedbackType = .suggestion
     @State private var showingThankYou = false
@@ -334,32 +334,32 @@ struct FeedbackView: View {
             HStack {
                 Button(action: {
                     HapticFeedback.light()
-                    dismiss()
+                    dismissWithoutAnimation?()
                 }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .padding(.leading, 20)
+
+                    Spacer()
+
+                    Text("Give Feedback")
+                        .font(.custom("Poppins-Medium", size: 20))
+                        .foregroundColor(.black)
+
+                    Spacer()
+
+                    // Invisible spacer for centering
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.black)
+                        .opacity(0)
+                        .padding(.trailing, 20)
                 }
-                .padding(.leading, 20)
+                .frame(height: 60)
+                .background(Color(hex: "f9f9f9"))
 
-                Spacer()
-
-                Text("Give Feedback")
-                    .font(.custom("Poppins-Medium", size: 20))
-                    .foregroundColor(.black)
-
-                Spacer()
-
-                // Invisible spacer for centering
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 20, weight: .medium))
-                    .opacity(0)
-                    .padding(.trailing, 20)
-            }
-            .frame(height: 60)
-            .background(Color(hex: "f9f9f9"))
-
-            ScrollView {
+                ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("We'd love to hear from you!")
@@ -444,7 +444,7 @@ struct FeedbackView: View {
         .background(Color(hex: "f9f9f9"))
         .alert("Thank You!", isPresented: $showingThankYou) {
             Button("OK") {
-                dismiss()
+                dismissWithoutAnimation?()
             }
         } message: {
             Text("We've received your feedback and will review it shortly.")

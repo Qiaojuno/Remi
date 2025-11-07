@@ -173,7 +173,11 @@ extension GalleryView {
 
             Button(action: {
                 HapticFeedback.medium()
-                showingAccountSettings = true
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingAccountSettings = true
+                }
             }) {
                 Image(systemName: "person")
                     .font(.title2)
@@ -184,7 +188,7 @@ extension GalleryView {
         .padding(.top, 20)
         .padding(.bottom, 10)
         .background(Color(hex: "f9f9f9")) // Match app background color
-        .fullScreenCover(isPresented: $showingAccountSettings) {
+        .fullScreenCoverNoAnimation(isPresented: $showingAccountSettings) {
             SettingsView()
                 .environmentObject(appState)
                 .environmentObject(profileViewModel)

@@ -78,10 +78,12 @@ struct SharedHeaderSection: View {
              * Icon: SF Symbol person (outlined torso) for clean appearance
              */
             Button(action: {
-                // Haptic feedback for navigation bar button
                 HapticFeedback.medium()
-
-                showingAccountSettings = true
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingAccountSettings = true
+                }
             }) {
                 Image(systemName: "person")
                     .font(.title2)
@@ -98,7 +100,7 @@ struct SharedHeaderSection: View {
             .padding(.bottom, 10)
         }
         .background(Color(hex: "f9f9f9")) // Match app background color
-        .fullScreenCover(isPresented: $showingAccountSettings) {
+        .fullScreenCoverNoAnimation(isPresented: $showingAccountSettings) {
             SettingsView()
                 .environmentObject(appState)
                 .environmentObject(profileViewModel)
@@ -107,9 +109,56 @@ struct SharedHeaderSection: View {
 
 }
 
+// MARK: - View Extension for Animation-Free Presentations
+extension View {
+    func fullScreenCoverNoAnimation<Content: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        self
+            .onChange(of: isPresented.wrappedValue) { newValue in
+                if newValue {
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { }
+                }
+            }
+            .fullScreenCover(isPresented: isPresented) {
+                content()
+                    .environment(\.dismissWithoutAnimation, DismissActionWithoutAnimation {
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            isPresented.wrappedValue = false
+                        }
+                    })
+            }
+    }
+}
+
+// MARK: - Custom Dismiss Environment Key
+struct DismissActionWithoutAnimation {
+    let action: () -> Void
+
+    func callAsFunction() {
+        action()
+    }
+}
+
+struct DismissWithoutAnimationKey: EnvironmentKey {
+    static let defaultValue: DismissActionWithoutAnimation? = nil
+}
+
+extension EnvironmentValues {
+    var dismissWithoutAnimation: DismissActionWithoutAnimation? {
+        get { self[DismissWithoutAnimationKey.self] }
+        set { self[DismissWithoutAnimationKey.self] = newValue }
+    }
+}
+
 // MARK: - Settings View
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
     @Environment(\.container) private var container
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var profileViewModel: ProfileViewModel
@@ -119,153 +168,156 @@ struct SettingsView: View {
     @State private var showingSubscription = false
     @State private var showingFAQs = false
     @State private var showingFeedback = false
+    @State private var showingPrivacyPolicy = false
+    @State private var showingTerms = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Back button header
-            HStack {
-                Button(action: {
-                    HapticFeedback.light()
-                    dismiss()
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.black)
+        mainContent
+            .alert("Log Out", isPresented: $showingSignOutConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Log Out", role: .destructive) {
+                    performSignOut()
                 }
-                .padding(.leading, 20)
-
-                Spacer()
+            } message: {
+                Text("Are you sure you want to log out?")
             }
-            .frame(height: 60)
-            .background(Color(hex: "f9f9f9"))
+            .fullScreenCoverNoAnimation(isPresented: $showingNotifications) {
+                NotificationsSettingsView()
+            }
+            .fullScreenCoverNoAnimation(isPresented: $showingSubscription) {
+                ManageSubscriptionView()
+            }
+            .fullScreenCoverNoAnimation(isPresented: $showingFAQs) {
+                FAQsView()
+            }
+            .fullScreenCoverNoAnimation(isPresented: $showingFeedback) {
+                FeedbackView()
+            }
+            .fullScreenCoverNoAnimation(isPresented: $showingPrivacyPolicy) {
+                LegalDocumentView(documentType: .privacy)
+            }
+            .fullScreenCoverNoAnimation(isPresented: $showingTerms) {
+                LegalDocumentView(documentType: .terms)
+            }
+    }
+
+    // MARK: - Main Content
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            headerSection
 
             ScrollView {
                 VStack(spacing: 0) {
-                    // Profile Header with photo and name
                     profileHeaderSection
                         .padding(.top, 20)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 30)
 
-                    // Settings List - White card with dividers
-                    VStack(spacing: 0) {
-                        settingsListItem(
-                            icon: "bell",
-                            title: "Notifications",
-                            showChevron: true
-                        ) {
-                            showingNotifications = true
-                        }
-
-                        Divider()
-                            .padding(.leading, 62) // Indent to align with text
-
-                        settingsListItem(
-                            icon: "creditcard",
-                            title: "Manage Subscription",
-                            showChevron: true
-                        ) {
-                            showingSubscription = true
-                        }
-
-                        Divider()
-                            .padding(.leading, 62)
-
-                        settingsListItem(
-                            icon: "questionmark.circle",
-                            title: "FAQs",
-                            showChevron: true
-                        ) {
-                            showingFAQs = true
-                        }
-
-                        Divider()
-                            .padding(.leading, 62)
-
-                        settingsListItem(
-                            icon: "bubble.left",
-                            title: "Give us feedback",
-                            showChevron: true
-                        ) {
-                            showingFeedback = true
-                        }
-
-                        Divider()
-                            .padding(.leading, 62)
-
-                        // Log out (no chevron, no divider after)
-                        settingsListItem(
-                            icon: "rectangle.portrait.and.arrow.right",
-                            title: "Log out",
-                            showChevron: false
-                        ) {
-                            showingSignOutConfirmation = true
-                        }
-                    }
-                    .background(Color.white)
-                    .cornerRadius(12)
-                    .padding(.horizontal, 20)
+                    settingsListCard
                 }
             }
         }
         .background(Color(hex: "f9f9f9"))
-        .alert("Log Out", isPresented: $showingSignOutConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Log Out", role: .destructive) {
-                performSignOut()
+    }
+
+    // MARK: - Header Section
+    private var headerSection: some View {
+        HStack {
+            Button(action: {
+                HapticFeedback.light()
+                dismissWithoutAnimation?()
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.black)
             }
-        } message: {
-            Text("Are you sure you want to log out?")
+            .padding(.leading, 20)
+
+            Spacer()
         }
-        .fullScreenCover(isPresented: $showingNotifications) {
-            NotificationsSettingsView()
+        .frame(height: 60)
+        .background(Color(hex: "f9f9f9"))
+    }
+
+    // MARK: - Settings List Card
+    private var settingsListCard: some View {
+        VStack(spacing: 0) {
+            settingsListItem(icon: "bell", title: "Notifications", showChevron: true) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingNotifications = true
+                }
+            }
+
+            Divider().background(Color(hex: "E0E0E0"))
+
+            settingsListItem(icon: "creditcard", title: "Manage Subscription", showChevron: true) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingSubscription = true
+                }
+            }
+
+            Divider().background(Color(hex: "E0E0E0"))
+
+            settingsListItem(icon: "questionmark.circle", title: "FAQs", showChevron: true) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingFAQs = true
+                }
+            }
+
+            Divider().background(Color(hex: "E0E0E0"))
+
+            settingsListItem(icon: "bubble.left", title: "Give us feedback", showChevron: true) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingFeedback = true
+                }
+            }
+
+            Divider().background(Color(hex: "E0E0E0"))
+
+            settingsListItem(icon: "hand.raised", title: "Privacy Policy", showChevron: true) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingPrivacyPolicy = true
+                }
+            }
+
+            Divider().background(Color(hex: "E0E0E0"))
+
+            settingsListItem(icon: "doc.text", title: "Terms & Conditions", showChevron: true) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showingTerms = true
+                }
+            }
+
+            Divider().background(Color(hex: "E0E0E0"))
+
+            settingsListItem(icon: "rectangle.portrait.and.arrow.right", title: "Log out", showChevron: false) {
+                showingSignOutConfirmation = true
+            }
         }
-        .fullScreenCover(isPresented: $showingSubscription) {
-            ManageSubscriptionView()
-        }
-        .fullScreenCover(isPresented: $showingFAQs) {
-            FAQsView()
-        }
-        .fullScreenCover(isPresented: $showingFeedback) {
-            FeedbackView()
-        }
+        .background(Color.white)
+        .cornerRadius(12)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Profile Header Section
     private var profileHeaderSection: some View {
-        HStack(spacing: 16) {
-            // Gradient circular avatar (empty)
-            Circle()
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color(hex: "5EC4FF"),
-                            Color(hex: "B3E0FF")
-                        ]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: 90, height: 90)
-
+        HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(appState.currentUser?.email ?? "user@example.com")
+                Text("Settings")
                     .font(.custom("Poppins-Medium", size: 20))
                     .foregroundColor(.black)
-
-                Button(action: {
-                    // TODO: Navigate to edit profile
-                }) {
-                    HStack(spacing: 4) {
-                        Text("Edit profile")
-                            .font(.custom("Poppins-Medium", size: 15))
-                            .foregroundColor(Color(hex: "999999"))
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(Color(hex: "999999"))
-                    }
-                }
             }
 
             Spacer()
@@ -279,10 +331,7 @@ struct SettingsView: View {
         showChevron: Bool,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: {
-            HapticFeedback.light()
-            action()
-        }) {
+        Button(action: action) {
             HStack(spacing: 16) {
                 Image(systemName: icon)
                     .font(.system(size: 22))
@@ -313,7 +362,7 @@ struct SettingsView: View {
                 let authService = self.container.resolve(AuthenticationServiceProtocol.self)
                 try await authService.signOut()
                 await MainActor.run {
-                    self.dismiss()
+                    self.dismissWithoutAnimation?()
                 }
             } catch {
                 print("Error signing out: \(error.localizedDescription)")
