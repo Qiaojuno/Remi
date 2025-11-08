@@ -188,6 +188,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
         let snapshot = try await CollectionPath.userGalleryEvents(userId: userId)
             .collection(in: db)
             .order(by: "createdAt", descending: true)
+            .limit(to: 50)  // Limit to 50 most recent events to prevent memory issues
             .getDocuments()
 
         // Use compactMap with do-catch to skip corrupted events instead of failing entire load
@@ -651,54 +652,71 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     func observeUserGalleryEvents(_ userId: String) -> AnyPublisher<[GalleryHistoryEvent], Error> {
         let subject = PassthroughSubject<[GalleryHistoryEvent], Error>()
 
+        print("📸 [FirebaseDatabaseService] Setting up gallery events listener for user: \(userId)")
+
         // Observe gallery_events collection under user
+        // CRITICAL: Use limit() to prevent loading all events into memory
         let listener = CollectionPath.userGalleryEvents(userId: userId)
             .collection(in: db)
             .order(by: "createdAt", descending: true)
+            .limit(to: 50)  // Only load 50 most recent events to prevent memory leak
             .addSnapshotListener { snapshot, error in
                 if let error = error {
+                    print("❌ [FirebaseDatabaseService] Gallery events listener error: \(error.localizedDescription)")
                     subject.send(completion: .failure(error))
                     return
                 }
 
-                guard let documents = snapshot?.documents else {
+                guard let snapshot = snapshot else {
+                    print("⚠️ [FirebaseDatabaseService] Gallery events listener: no snapshot")
                     subject.send([])
                     return
                 }
 
-                // Use compactMap to skip events that fail to decode (old schema, corrupted data)
-                let events = documents.compactMap { document -> GalleryHistoryEvent? in
-                    do {
-                        return try self.decodeFromFirestore(document.data(), as: GalleryHistoryEvent.self)
-                    } catch {
-                        print("❌ [FirebaseDatabaseService] Failed to decode gallery event \(document.documentID) - SKIPPING")
-                        print("📄 Raw Firestore data: \(document.data())")
-                        print("🔍 Decoding error: \(error)")
-                        if let decodingError = error as? DecodingError {
-                            switch decodingError {
-                            case .keyNotFound(let key, let context):
-                                print("   Missing key: \(key.stringValue)")
-                                print("   Context: \(context.debugDescription)")
-                            case .valueNotFound(let type, let context):
-                                print("   Missing value for type: \(type)")
-                                print("   Context: \(context.debugDescription)")
-                            case .typeMismatch(let type, let context):
-                                print("   Type mismatch for: \(type)")
-                                print("   Context: \(context.debugDescription)")
-                            case .dataCorrupted(let context):
-                                print("   Data corrupted: \(context.debugDescription)")
-                            @unknown default:
-                                print("   Unknown decoding error")
+                // CRITICAL: Only process NEW events (documentChanges with type .added)
+                // This prevents sending the entire collection on every change
+                let newEvents = snapshot.documentChanges
+                    .filter { $0.type == .added }  // Only new events
+                    .compactMap { change -> GalleryHistoryEvent? in
+                        do {
+                            let event = try self.decodeFromFirestore(change.document.data(), as: GalleryHistoryEvent.self)
+                            print("📸 [FirebaseDatabaseService] New gallery event detected: \(event.id) (type: \(event.eventType.rawValue))")
+                            return event
+                        } catch {
+                            print("❌ [FirebaseDatabaseService] Failed to decode gallery event \(change.document.documentID) - SKIPPING")
+                            print("📄 Raw Firestore data: \(change.document.data())")
+                            print("🔍 Decoding error: \(error)")
+                            if let decodingError = error as? DecodingError {
+                                switch decodingError {
+                                case .keyNotFound(let key, let context):
+                                    print("   Missing key: \(key.stringValue)")
+                                    print("   Context: \(context.debugDescription)")
+                                case .valueNotFound(let type, let context):
+                                    print("   Missing value for type: \(type)")
+                                    print("   Context: \(context.debugDescription)")
+                                case .typeMismatch(let type, let context):
+                                    print("   Type mismatch for: \(type)")
+                                    print("   Context: \(context.debugDescription)")
+                                case .dataCorrupted(let context):
+                                    print("   Data corrupted: \(context.debugDescription)")
+                                @unknown default:
+                                    print("   Unknown decoding error")
+                                }
                             }
+                            // Return nil to skip this event instead of crashing the listener
+                            return nil
                         }
-                        // Return nil to skip this event instead of crashing the listener
-                        return nil
                     }
+
+                // Only send if we have new events
+                if !newEvents.isEmpty {
+                    print("📸 [FirebaseDatabaseService] Sending \(newEvents.count) new gallery events to subscribers")
+                    subject.send(newEvents)
                 }
-                subject.send(events)
             }
 
         listeners.append(listener)
+        print("✅ [FirebaseDatabaseService] Gallery events listener registered")
         return subject.eraseToAnyPublisher()
     }
 

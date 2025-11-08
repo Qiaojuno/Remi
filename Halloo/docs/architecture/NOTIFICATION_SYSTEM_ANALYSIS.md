@@ -189,7 +189,7 @@ users/{userId}/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         NOTIFICATION CREATION                        │
+│                         NOTIFICATION CREATION                       │
 └─────────────────────────────────────────────────────────────────────┘
 
 Family Member (iOS App)
@@ -217,7 +217,7 @@ Family Member (iOS App)
                 └─ showingCreateTask = false
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    SCHEDULER: SMS REMINDER SENDING                   │
+│                    SCHEDULER: SMS REMINDER SENDING                  │
 └─────────────────────────────────────────────────────────────────────┘
 
 Cloud Scheduler (every 1 minute)
@@ -249,7 +249,7 @@ Cloud Scheduler (every 1 minute)
                 └─ Log summary (count sent, failures)
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                  SMS RESPONSE: ELDERLY USER REPLIES                  │
+│                  SMS RESPONSE: ELDERLY USER REPLIES                 │
 └─────────────────────────────────────────────────────────────────────┘
 
 Elderly User (Feature Phone, SMS)
@@ -287,7 +287,7 @@ Twilio Gateway
                 └─ Broadcast via DataSyncCoordinator.smsResponsesSubject
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│              REAL-TIME SYNC: BROADCAST TO FAMILY                     │
+│              REAL-TIME SYNC: BROADCAST TO FAMILY                    │
 └─────────────────────────────────────────────────────────────────────┘
 
 Firestore Change Event

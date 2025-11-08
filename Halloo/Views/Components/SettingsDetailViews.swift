@@ -458,3 +458,56 @@ struct FeedbackView: View {
         showingThankYou = true
     }
 }
+
+// MARK: - Loading View Preview (DEBUG/TEMPORARY)
+struct LoadingViewPreview: View {
+    @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
+
+    var body: some View {
+        ZStack {
+            // The actual loading screen animation
+            AppLoadingScreen()
+
+            // Back button overlay in top-left
+            VStack {
+                HStack {
+                    Button(action: {
+                        HapticFeedback.light()
+                        dismissWithoutAnimation?()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.black)
+                            .padding(20)
+                            .background(Circle().fill(Color.white.opacity(0.9)))
+                    }
+                    .padding(.leading, 20)
+                    .padding(.top, 60)
+
+                    Spacer()
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
+// Replica of LoadingView from ContentView
+private struct AppLoadingScreen: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            // Remi logo image - static, no animation
+            Image("Remi Logo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 360) // Doubled from 180
+
+            ProgressView()
+                .scaleEffect(1.2)
+                .padding(.top, 20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(hex: "f9f9f9"))
+    }
+}

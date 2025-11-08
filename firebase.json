@@ -10,6 +10,14 @@
     "source": "functions",
     "runtime": "nodejs20"
   },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
   "emulators": {
     "auth": {
       "port": 9099
@@ -22,6 +30,9 @@
     },
     "functions": {
       "port": 5001
+    },
+    "hosting": {
+      "port": 5000
     },
     "ui": {
       "enabled": true,

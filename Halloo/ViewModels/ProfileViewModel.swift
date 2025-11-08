@@ -555,113 +555,152 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     profile creation attempts.
     */
     func createProfileAsync() async {
+        // Step 1: Validate form
         guard isValidForm else {
-            print("❌ VALIDATION FAILED - Exiting createProfileAsync")
-
-            // Show error to user
-            await MainActor.run {
-                self.errorMessage = "Missing: \(missingRequirements.joined(separator: ", "))"
-            }
-
+            await handleValidationError()
             return
         }
 
-        await MainActor.run {
-            self.isLoading = true
-            self.errorMessage = nil
-        }
+        await setLoadingState(true)
 
         do {
-            guard let userId = authService.currentUser?.uid else {
-                print("❌ [AsyncTask] Authentication check failed - no user ID")
-                throw ProfileError.userNotAuthenticated
-            }
+            // Step 2: Check permissions
+            let userId = try checkCreationPermissions()
 
-            // Protective limit: Max 4 profiles per family to prevent SMS overwhelming
-            guard canCreateProfile else {
-                throw ProfileError.maxProfilesReached
-            }
-
-            // Format phone number for SMS delivery compatibility (E.164 format for Twilio)
+            // Step 3: Generate profile ID
             let e164Phone = phoneNumber.e164PhoneNumber
             let profileId = IDGenerator.profileID(phoneNumber: e164Phone)
 
-            // Upload profile photo if provided
-            var photoURLString: String? = nil
-            if let photoData = selectedPhotoData {
-                do {
-                    photoURLString = try await databaseService.uploadProfilePhoto(photoData, for: profileId, userId: userId)
-                } catch {
-                    print("❌ [AsyncTask] Failed to upload profile photo - profileId: \(profileId), error: \(error.localizedDescription)")
-                    // Continue without photo - it will fall back to initial letter
-                }
-            }
+            // Step 4: Upload photo (if provided)
+            let photoURL = await uploadProfilePhotoIfNeeded(profileId: profileId, userId: userId)
 
-            // Create profile with elderly-optimized defaults
-            let profile = ElderlyProfile(
-                id: profileId,
+            // Step 5: Build profile object
+            let profile = buildProfile(
+                profileId: profileId,
                 userId: userId,
-                name: profileName.trimmingCharacters(in: .whitespacesAndNewlines),
                 phoneNumber: e164Phone,
-                relationship: relationship,
-                isEmergencyContact: isEmergencyContact,
-                timeZone: timeZone.identifier, // Critical for proper reminder timing
-                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                photoURL: photoURLString,
-                status: .pendingConfirmation, // Requires SMS confirmation before activation
-                createdAt: Date(),
-                lastActiveAt: Date()
+                photoURL: photoURL
             )
 
-            // Persist with family synchronization
-            do {
-                try await databaseService.createElderlyProfile(profile)
-            } catch {
-                print("❌ [Database] Failed to save profile - profileId: \(profile.id), error: \(error.localizedDescription)")
-                throw error
-            }
+            // Step 6: Persist to database
+            try await persistProfile(profile)
 
-            // Broadcast profile creation to Dashboard and other family members
-            dataSyncCoordinator.broadcastProfileUpdate(profile)
-
-            // Send SMS confirmation immediately (critical step)
-            do {
-                try await sendConfirmationSMS(for: profile)
-            } catch {
-                print("❌ [AsyncTask] Failed to send SMS - profileId: \(profile.id), phoneNumber: \(profile.phoneNumber), error: \(error.localizedDescription)")
-                // Don't throw - profile created, SMS failure is recoverable
-            }
-
-            await MainActor.run {
-
-                // PHASE 2: Update AppState instead of local array
-                // AppState will broadcast via DataSyncCoordinator automatically
-                if let appState = self.appState {
-                    appState.addProfile(profile)
-                    print("✅ [ProfileViewModel] Profile added to AppState: \(profile.name)")
-                } else {
-                    // FALLBACK: Keep old behavior if AppState not injected (Phase 1 compatibility)
-                    print("⚠️ [ProfileViewModel] AppState not available, profile will be added via broadcast")
-                }
-
-                // Update confirmation status and reset form
-                self.confirmationStatus[profile.id] = .sent
-                self.resetForm()
-                self.showingCreateProfile = false
-            }
+            // Step 7: Handle post-creation actions
+            await handleProfileCreationSuccess(profile)
 
         } catch {
-            print("❌ [AsyncTask] Profile creation failed - errorType: \(String(describing: type(of: error))), error: \(error.localizedDescription)")
+            await handleProfileCreationError(error)
+        }
 
-            await MainActor.run {
-                // Provide family-friendly error context
-                self.errorMessage = error.localizedDescription
-                logger.error("Creating elderly family member profile failed: \(error.localizedDescription)")
+        await setLoadingState(false)
+    }
+
+    // MARK: - Profile Creation Helper Methods
+
+    private func handleValidationError() async {
+        print("❌ VALIDATION FAILED - Exiting createProfileAsync")
+        await MainActor.run {
+            self.errorMessage = "Missing: \(missingRequirements.joined(separator: ", "))"
+        }
+    }
+
+    private func setLoadingState(_ isLoading: Bool) async {
+        await MainActor.run {
+            self.isLoading = isLoading
+            if isLoading {
+                self.errorMessage = nil
             }
+        }
+    }
+
+    private func checkCreationPermissions() throws -> String {
+        guard let userId = authService.currentUser?.uid else {
+            print("❌ [AsyncTask] Authentication check failed - no user ID")
+            throw ProfileError.userNotAuthenticated
+        }
+
+        // Protective limit: Max 4 profiles per family to prevent SMS overwhelming
+        guard canCreateProfile else {
+            throw ProfileError.maxProfilesReached
+        }
+
+        return userId
+    }
+
+    private func uploadProfilePhotoIfNeeded(profileId: String, userId: String) async -> String? {
+        guard let photoData = selectedPhotoData else { return nil }
+
+        do {
+            return try await databaseService.uploadProfilePhoto(photoData, for: profileId, userId: userId)
+        } catch {
+            print("❌ [AsyncTask] Failed to upload profile photo - profileId: \(profileId), error: \(error.localizedDescription)")
+            // Continue without photo - it will fall back to initial letter
+            return nil
+        }
+    }
+
+    private func buildProfile(profileId: String, userId: String, phoneNumber: String, photoURL: String?) -> ElderlyProfile {
+        return ElderlyProfile(
+            id: profileId,
+            userId: userId,
+            name: profileName.trimmingCharacters(in: .whitespacesAndNewlines),
+            phoneNumber: phoneNumber,
+            relationship: relationship,
+            isEmergencyContact: isEmergencyContact,
+            timeZone: timeZone.identifier, // Critical for proper reminder timing
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            photoURL: photoURL,
+            status: .pendingConfirmation, // Requires SMS confirmation before activation
+            createdAt: Date(),
+            lastActiveAt: Date()
+        )
+    }
+
+    private func persistProfile(_ profile: ElderlyProfile) async throws {
+        do {
+            try await databaseService.createElderlyProfile(profile)
+        } catch {
+            print("❌ [Database] Failed to save profile - profileId: \(profile.id), error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    private func handleProfileCreationSuccess(_ profile: ElderlyProfile) async {
+        // Broadcast profile creation to Dashboard and other family members
+        dataSyncCoordinator.broadcastProfileUpdate(profile)
+
+        // Send SMS confirmation immediately (critical step)
+        do {
+            try await sendConfirmationSMS(for: profile)
+        } catch {
+            print("❌ [AsyncTask] Failed to send SMS - profileId: \(profile.id), phoneNumber: \(profile.phoneNumber), error: \(error.localizedDescription)")
+            // Don't throw - profile created, SMS failure is recoverable
         }
 
         await MainActor.run {
-            self.isLoading = false
+            // Update AppState
+            if let appState = self.appState {
+                appState.addProfile(profile)
+                print("✅ [ProfileViewModel] Profile added to AppState: \(profile.name)")
+            } else {
+                // FALLBACK: Keep old behavior if AppState not injected (Phase 1 compatibility)
+                print("⚠️ [ProfileViewModel] AppState not available, profile will be added via broadcast")
+            }
+
+            // Update confirmation status and reset form
+            self.confirmationStatus[profile.id] = .sent
+            self.resetForm()
+            self.showingCreateProfile = false
+        }
+    }
+
+    private func handleProfileCreationError(_ error: Error) async {
+        print("❌ [AsyncTask] Profile creation failed - errorType: \(String(describing: type(of: error))), error: \(error.localizedDescription)")
+
+        await MainActor.run {
+            // Provide family-friendly error context
+            self.errorMessage = error.localizedDescription
+            logger.error("Creating elderly family member profile failed: \(error.localizedDescription)")
         }
     }
     

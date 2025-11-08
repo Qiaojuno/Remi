@@ -431,9 +431,12 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
                     }
                 },
                 receiveValue: { [weak self] events in
-                    // Broadcast each event to AppState via publisher
-                    // This triggers AppState.handleGalleryEventUpdate() on all devices
+                    // Broadcast each NEW event to AppState via publisher
+                    // Note: Since listener now uses documentChanges, we only receive NEW events
+                    print("📸 [DataSyncCoordinator] Received \(events.count) new gallery events from listener")
+
                     events.forEach { event in
+                        print("📸 [DataSyncCoordinator] Broadcasting gallery event: \(event.id)")
                         self?.galleryEventUpdatesSubject.send(event)
                     }
                 }

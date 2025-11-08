@@ -26,23 +26,23 @@
           │ Sets nextScheduled │  │ Updates family UIs  │
           │ Date               │  │                     │
           └─────────┬──────────┘  └──────────┬──────────┘
-                    │                         │
-                    └────────┬────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │   FIRESTORE     │
-                    │ ───────────────  │
-                    │ users/{}         │
-                    │ ├─ profiles/{} │
-                    │ │ ├─ habits/{}  │
-                    │ │ │ ├─ title    │
-                    │ │ │ ├─ nextScheduledDate
-                    │ │ │ ├─ lastSMSSentAt
-                    │ │ │ └─ frequency
-                    │ │ ├─ messages/{}│
-                    │ │ └─ responses/ │
-                    │ └─ smsLogs/{}   │
-                    └────────┬────────┘
+                    │                        │
+                    └───────────┬────────────┘
+                                │
+                    ┌───────────▼──────────────┐
+                    │        FIRESTORE         │
+                    │ ───────────────--------- │
+                    │ users/{}                 │
+                    │ ├─ profiles/{}           │
+                    │ │ ├─ habits/{}           │
+                    │ │ │ ├─ title             │
+                    │ │ │ ├─ nextScheduledDate |
+                    │ │ │ ├─ lastSMSSentAt     |
+                    │ │ │ └─ frequency         |
+                    │ │ ├─ messages/{}         │
+                    │ │ └─ responses/          │
+                    │ └─ smsLogs/{}            │
+                    └────────┬────────---------┘
                              │
                     ┌────────▼────────-┐
                     │ 2. SMS SCHEDULER │
@@ -573,7 +573,7 @@ PROTECTION: ✅ Effective at UI level
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│ AUTOMATED RECOVERY FUNCTIONS                                        │
+│ AUTOMATED RECOVERY FUNCTIONS                                       |
 └────────────────────────────────────────────────────────────────────┘
 
 1. sendScheduledTaskReminders()

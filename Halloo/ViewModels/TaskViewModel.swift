@@ -657,9 +657,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                 // Persist with family synchronization
                 try await databaseService.createTask(task)
 
-                // Local notifications disabled - SMS handled by Cloud Function
-                // try await scheduleTaskNotifications(for: task)
-
                 createdTasks.append(task)
             }
 
@@ -750,14 +747,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                                 task.scheduledTime != (scheduledTimes.first ?? Date()) ||
                                 task.customDays != Array(customDays) ||
                                 task.status != updatedTask.status
-
-            // Local notifications disabled - SMS handled by Cloud Function
-            // if scheduleChanged {
-            //     try await cancelTaskNotifications(for: task)
-            //     if updatedTask.status == .active {
-            //         try await scheduleTaskNotifications(for: updatedTask)
-            //     }
-            // }
 
             print("✅ [TaskViewModel] Task updated in Firebase")
 
@@ -851,13 +840,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
         do {
             try await databaseService.updateTask(updatedTask)
 
-            // Local notifications disabled - SMS handled by Cloud Function
-            // if newStatus == .active {
-            //     try await scheduleTaskNotifications(for: updatedTask)
-            // } else {
-            //     try await cancelTaskNotifications(for: task)
-            // }
-
             await MainActor.run {
                 // PHASE 4: AppState is always available - update via AppState
                 self.updateTask(updatedTask)
@@ -876,43 +858,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
         populateForm(with: task)
         taskTitle = "\(task.title) (Copy)"
         showingCreateTask = true
-    }
-    
-    // MARK: - Notification Scheduling
-    private func scheduleTaskNotifications(for task: Task) async throws {
-        guard task.status == .active else { return }
-        
-        let nextScheduledTimes = task.getNextScheduledTimes(count: 30) // Schedule next 30 occurrences
-        
-        for scheduledTime in nextScheduledTimes {
-            let notificationId = "\(task.id)_\(scheduledTime.timeIntervalSince1970)"
-            
-            try await notificationService.scheduleNotification(
-                id: notificationId,
-                title: "Reminder: \(task.title)",
-                body: task.description.isEmpty ? "Time for your \(task.category.displayName.lowercased())" : task.description,
-                scheduledTime: scheduledTime
-            )
-        }
-    }
-    
-    /// Cancels all scheduled notifications for a specific task
-    ///
-    /// Uses selective cancellation to avoid affecting other tasks' notifications.
-    /// Matches the notification ID generation pattern from scheduleTaskNotifications().
-    ///
-    /// - Parameter task: The task whose notifications should be cancelled
-    private func cancelTaskNotifications(for task: Task) async throws {
-        // Get next 30 scheduled occurrences (matches creation logic from line 885)
-        let scheduledTimes = task.getNextScheduledTimes(count: 30)
-
-        // Cancel each notification by ID (selective cancellation)
-        for scheduledTime in scheduledTimes {
-            // Notification ID format MUST match scheduleTaskNotifications() format
-            let notificationId = "\(task.id)_\(scheduledTime.timeIntervalSince1970)"
-
-            await notificationService.cancelNotification(withId: notificationId)
-        }
     }
     
     // MARK: - Manual Task Completion

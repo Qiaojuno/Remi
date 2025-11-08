@@ -64,7 +64,7 @@ struct DashboardView: View {
     /// Tracks which elderly profile is currently selected (0-3 max)
     /// IMPORTANT: This drives task filtering - only selected profile's tasks show
     @State private var selectedProfileIndex: Int = 0
-    
+
     /// Controls upcoming section expand/collapse state
     /// When collapsed: shows summary message, when expanded: shows task list or confirmation
     @State private var isUpcomingExpanded: Bool = false

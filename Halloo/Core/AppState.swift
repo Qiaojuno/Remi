@@ -513,15 +513,21 @@ final class AppState: ObservableObject {
     ///
     /// When webhook creates a new gallery event (task response/profile creation),
     /// add or update it in the gallery events array for real-time UI updates.
+    ///
+    /// Includes deduplication to prevent memory leaks from duplicate events.
     private func handleGalleryEventUpdate(_ event: GalleryHistoryEvent) {
         if let index = galleryEvents.firstIndex(where: { $0.id == event.id }) {
+            // Event already exists - update it
             galleryEvents[index] = event
-            print("🔄 [AppState] Updated gallery event: \(event.id)")
+            print("🔄 [AppState] Updated existing gallery event: \(event.id) (type: \(event.eventType.rawValue))")
+            print("   Total events in memory: \(galleryEvents.count)")
         } else {
+            // New event - add it
             galleryEvents.append(event)
             // Keep sorted by creation date (most recent first)
             galleryEvents.sort { $0.createdAt > $1.createdAt }
-            print("🔄 [AppState] Added new gallery event: \(event.id)")
+            print("✅ [AppState] Added new gallery event: \(event.id) (type: \(event.eventType.rawValue))")
+            print("   Total events in memory: \(galleryEvents.count)")
 
             // Pre-cache new photo for card stack performance
             // This ensures the photo is cached before the user swipes to it

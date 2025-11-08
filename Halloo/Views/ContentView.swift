@@ -664,27 +664,13 @@ enum AuthenticationState {
 
 // MARK: - Loading View
 struct LoadingView: View {
-    @State private var isAnimating = false
-
     var body: some View {
         VStack(spacing: 20) {
-            // Remi logo with animation
-            Text("Remi")
-                .font(.system(size: 60, weight: .medium))
-                .tracking(-3.0)
-                .foregroundColor(.black)
-                .scaleEffect(isAnimating ? 1.05 : 1.0)
-                .animation(
-                    Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true),
-                    value: isAnimating
-                )
-
-            Text("Make sure your loved one never misses another reminder")
-                .font(.system(size: 14, weight: .regular))
-                .foregroundColor(Color(hex: "7A7A7A"))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-                .tracking(-0.3)
+            // Remi logo image - static, no animation
+            Image("Remi Logo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 360) // Doubled from 180
 
             ProgressView()
                 .scaleEffect(1.2)
@@ -692,9 +678,6 @@ struct LoadingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(hex: "f9f9f9")) // Same background as app to prevent black flash
-        .onAppear {
-            isAnimating = true
-        }
     }
 }
 
@@ -748,39 +731,6 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 #endif
-
-// MARK: - Task Creation Wrapper (OLD - DEPRECATED, keeping for reference)
-private struct TaskCreationViewWrapper: View {
-    let container: Container
-    let appState: AppState
-    let preselectedProfileId: String?
-    let profileVM: ProfileViewModel
-    let dismissAction: () -> Void
-
-    @StateObject private var taskVM: TaskViewModel
-
-    init(container: Container, appState: AppState, preselectedProfileId: String?, profileVM: ProfileViewModel, dismissAction: @escaping () -> Void) {
-        self.container = container
-        self.appState = appState
-        self.preselectedProfileId = preselectedProfileId
-        self.profileVM = profileVM
-        self.dismissAction = dismissAction
-
-        let vm = container.makeTaskViewModel()
-        vm.setAppState(appState)
-        _taskVM = StateObject(wrappedValue: vm)
-    }
-
-    var body: some View {
-        TaskCreationView(
-            preselectedProfileId: preselectedProfileId,
-            dismissAction: dismissAction
-        )
-        .environmentObject(taskVM)
-        .environmentObject(profileVM)
-        .environmentObject(appState)
-    }
-}
 
 // MARK: - Habit Creation Card Wrapper
 private struct HabitCreationCardWrapper: View {

@@ -106,6 +106,7 @@ Firebase Services
 - 90-day retention policy
 - Automatic Cloud Storage archival
 - Gallery view with event history
+- EXIF metadata stripping for privacy (GPS, timestamps, device info removed)
 
 ---
 
@@ -219,6 +220,14 @@ See **[RECURRING-TASK-SYSTEM.md](Halloo/docs/RECURRING-TASK-SYSTEM.md)** for com
 
 ## 📝 Recent Updates
 
+### 2025-11-06: EXIF Metadata Stripping for Privacy
+- Added UIImage+EXIFStripping.swift extension to strip all EXIF metadata from photos
+- Removes GPS coordinates, device info, timestamps before upload to Cloud Storage
+- Critical privacy protection for elderly care app (prevents location tracking)
+- Integrated into ProfileViews.swift and HabitsView.swift photo upload flows
+- GDPR compliance: minimizes personal data collection from image metadata
+- See [Privacy Documentation](Halloo/docs/PRIVACY.md) and [Technical Documentation](Halloo/docs/TECHNICAL-DOCUMENTATION.md#exif-metadata-stripping) for details
+
 ### 2025-10-28: ViewModel Extensions Refactoring
 - Created ViewModelExtensions.swift with AppStateViewModel protocol
 - Eliminated 80+ lines of duplicate CRUD boilerplate code across ViewModels
@@ -251,5 +260,5 @@ Proprietary - All rights reserved
 
 ---
 
-**Last Updated:** October 28, 2025
+**Last Updated:** November 6, 2025
 **Version:** MVP (Pre-launch)

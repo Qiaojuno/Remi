@@ -54,7 +54,7 @@ struct StandardTabBar: View {
             HStack(spacing: 0) {
                 // Home Tab
                 TabBarItem(
-                    icon: "house.fill",
+                    iconAsset: "Home button",
                     title: "Home",
                     isSelected: selectedTab == 0
                 ) {
@@ -174,22 +174,52 @@ struct CreateTabItem: View {
  * - Black when selected, light gray (#9f9f9f) when unselected
  * - 26pt icons, 11pt text
  * - 4pt spacing between icon and text
+ * - Supports both SF Symbols (icon) and custom PNG assets (iconAsset)
  */
 struct TabBarItem: View {
-    let icon: String
+    let icon: String?
+    let iconAsset: String?
     let title: String
     let isSelected: Bool
     let action: () -> Void
 
+    // Convenience initializer for SF Symbols
+    init(icon: String, title: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.icon = icon
+        self.iconAsset = nil
+        self.title = title
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    // Convenience initializer for PNG assets
+    init(iconAsset: String, title: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.icon = nil
+        self.iconAsset = iconAsset
+        self.title = title
+        self.isSelected = isSelected
+        self.action = action
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {  // Reduced from 6 to 4 for tighter spacing
-                Image(systemName: icon)
-                    .font(.system(size: 26))  // Increased from 24 to 26 for better visibility
+            VStack(spacing: iconAsset != nil ? -8 : 4) {  // Negative spacing for PNG to pull text up, normal spacing for SF Symbols
+                // Use PNG asset if provided, otherwise use SF Symbol
+                if let iconAsset = iconAsset {
+                    Image(iconAsset)
+                        .renderingMode(.template)  // Enable template rendering for dynamic coloring
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 50, height: 50)  // Custom size for home button
+                } else if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 26))  // Increased from 24 to 26 for better visibility
+                }
 
                 Text(title)
                     .font(.system(size: 11))  // Increased from 10 to 11 for readability
             }
+            .offset(y: iconAsset != nil ? -6 : 0)  // Shift entire stack up for PNG to compensate for text being pulled up
             .foregroundColor(isSelected ? .black : Color(hex: "9f9f9f")) // Black when selected, light gray when not (matches pill navigation)
             .frame(maxWidth: .infinity)
         }
