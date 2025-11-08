@@ -211,7 +211,7 @@ extension GalleryView {
                         .padding(.vertical, 8)
                         .background(
                             selectedFilter == filter ?
-                            Color(hex: "f0f0f0") : Color.clear
+                            Color(hex: "f9f9f9") : Color.clear
                         )
                         .cornerRadius(6)
                 }
@@ -219,7 +219,7 @@ extension GalleryView {
             }
         }
         .padding(3)
-        .background(Color(hex: "f9f9f9"))
+        .background(Color(hex: "f0f0f0"))
         .cornerRadius(8)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
