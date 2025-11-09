@@ -177,8 +177,8 @@ struct GalleryPhotoView: View {
     
     private func textResponsePreview(for event: GalleryHistoryEvent) -> some View {
         ZStack {
-            // Dark background (match card stack empty card)
-            Color(red: 0.08, green: 0.08, blue: 0.08)
+            // Dark background with subtle bluish tint (match card stack night mode aesthetic)
+            Color(red: 0.08, green: 0.08, blue: 0.12)
 
             // Middle aligned vertically
             VStack(spacing: 6) {

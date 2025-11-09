@@ -52,8 +52,9 @@ struct CardStackView: View {
     }
     
     private var emptyCard: some View {
-        // Dark card matching textCardView style
-        let cardColor = Color(red: 0.08, green: 0.08, blue: 0.08)
+        // Dark card with subtle bluish tint (night mode aesthetic)
+        // Original pure black: Color(red: 0.08, green: 0.08, blue: 0.08)
+        let cardColor = Color(red: 0.08, green: 0.08, blue: 0.12)
 
         return ZStack {
             cardColor
@@ -140,21 +141,24 @@ struct CardStackView: View {
             }
             .onEnded { value in
                 isDragging = false
-                
+
                 if abs(value.translation.width) > swipeThreshold && stackedEvents.count > 1 {
+                    // Super light haptic feedback on successful swipe
+                    HapticFeedback.light()
+
                     // Smooth exit animation - continue from current position
                     let targetX = value.translation.width > 0 ? 450 : -450
                     dragOffset = CGSize(
                         width: targetX,
                         height: 0
                     )
-                    
+
                     // Reorder after animation completes
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         // Move top card to back
                         let topCard = stackedEvents.removeFirst()
                         stackedEvents.append(topCard)
-                        
+
                         // Reset drag offset immediately
                         dragOffset = .zero
                     }
@@ -249,8 +253,8 @@ struct CardStackView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
-                    // Photo exists but couldn't be loaded - dark fallback
-                    Color(red: 0.08, green: 0.08, blue: 0.08)
+                    // Photo exists but couldn't be loaded - dark fallback with bluish tint
+                    Color(red: 0.08, green: 0.08, blue: 0.12)
                     Image(systemName: "photo")
                         .font(.system(size: 60, weight: .light))
                         .foregroundColor(.white.opacity(0.6))
@@ -343,13 +347,16 @@ struct CardStackView: View {
     }
 
     private func textCardView(for event: GalleryHistoryEvent, cardNumber: Int) -> some View {
-        // Calculate progressive lightening for text cards
+        // Calculate progressive lightening for text cards with subtle bluish tint (night mode aesthetic)
         // Note: Use cardNumber-1 for 0-based calculation
-        let baseColor: Double = 0.08
+        // Original pure black base: 0.08, 0.08, 0.08
+        let baseColorRed: Double = 0.08
+        let baseColorGreen: Double = 0.08
+        let baseColorBlue: Double = 0.12  // Bluish tint for softer appearance
         let lighteningAmount = Double(cardNumber - 1) * 0.05
-        let cardColor = Color(red: baseColor + lighteningAmount,
-                             green: baseColor + lighteningAmount,
-                             blue: baseColor + lighteningAmount)
+        let cardColor = Color(red: baseColorRed + lighteningAmount,
+                             green: baseColorGreen + lighteningAmount,
+                             blue: baseColorBlue + lighteningAmount)
 
         return ZStack {
             cardColor
