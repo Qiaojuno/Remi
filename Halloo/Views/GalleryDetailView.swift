@@ -49,6 +49,10 @@ struct GalleryDetailView: View {
     @State private var showingCreateActionSheet: Bool = false
     @State private var selectedProfileIndex: Int = 0
 
+    // Creation card states
+    @State private var showingHabitCreation: Bool = false
+    @State private var showingProfileCreation: Bool = false
+
     // MARK: - Initialization
     init(
         event: GalleryHistoryEvent,
@@ -116,30 +120,76 @@ struct GalleryDetailView: View {
                         showingCreateActionSheet = true
                     }
                 )
+                .padding(.horizontal, UIScreen.main.bounds.width * 0.04) // Match white card inset above
                 .opacity(showBottomNavBar ? 1 : 0) // Animate only the nav bar opacity
                 .animation(.easeIn(duration: 0.2), value: showBottomNavBar)
             }
         }
+        .ignoresSafeArea(.all, edges: .bottom) // Prevent bottom safe area from compressing entire view
         .navigationBarHidden(true)
         .presentationDragIndicator(.hidden) // Hide the drag indicator
         .interactiveDismissDisabled(true) // Disable swipe-to-dismiss
         .overlay(
+            // Wrapper with padding to match GalleryView base padding (4% screen width)
             CreateActionCard(
                 isPresented: $showingCreateActionSheet,
                 onCreateHabit: {
-                    // Handle create habit
-                    // TODO: Implement habit creation from gallery detail
+                    showingHabitCreation = true
                 },
                 onCreateProfile: {
-                    // Handle add family member
-                    // TODO: Implement profile creation from gallery detail
+                    showingProfileCreation = true
                 }
             )
+            .padding(.horizontal, UIScreen.main.bounds.width * 0.04)
+        )
+        .overlay(
+            // Wrapper with padding to match GalleryView base padding (4% screen width)
+            HabitCreationCard(
+                isPresented: $showingHabitCreation,
+                preselectedProfileId: nil, // No preselection in gallery detail
+                onDismiss: {
+                    showingHabitCreation = false
+                }
+            )
+            .environmentObject(appState)
+            .environmentObject(profileViewModel)
+            .environmentObject(TaskViewModel(
+                databaseService: container.resolve(DatabaseServiceProtocol.self),
+                smsService: container.resolve(SMSServiceProtocol.self),
+                notificationService: container.resolve(NotificationServiceProtocol.self),
+                authService: container.resolve(AuthenticationServiceProtocol.self),
+                dataSyncCoordinator: container.resolve(DataSyncCoordinator.self)
+            ))
+            .padding(.horizontal, UIScreen.main.bounds.width * 0.04)
+        )
+        .overlay(
+            // Wrapper with padding to match GalleryView base padding (4% screen width)
+            ProfileCreationCard(
+                isPresented: $showingProfileCreation,
+                onDismiss: {
+                    showingProfileCreation = false
+                }
+            )
+            .environmentObject(appState)
+            .environmentObject(profileViewModel)
+            .padding(.horizontal, UIScreen.main.bounds.width * 0.04)
         )
         .onChange(of: showingCreateActionSheet) { oldValue, newValue in
             // Reset create button when action sheet is dismissed
             if !newValue {
                 isCreateExpanded = false
+            }
+        }
+        .onChange(of: showingHabitCreation) { oldValue, newValue in
+            // Close create action sheet when habit creation opens
+            if newValue {
+                showingCreateActionSheet = false
+            }
+        }
+        .onChange(of: showingProfileCreation) { oldValue, newValue in
+            // Close create action sheet when profile creation opens
+            if newValue {
+                showingCreateActionSheet = false
             }
         }
         .onAppear {
