@@ -102,22 +102,29 @@ struct ContentView: View {
     // MARK: - Navigation Content
     @ViewBuilder
     private var navigationContent: some View {
-        if onboardingViewModel != nil {
-            if isAuthenticated {
-                authenticatedContent
+        if let onboardingVM = onboardingViewModel {
+            // Check if user has completed onboarding
+            if onboardingVM.isComplete {
+                // Onboarding complete - check authentication
+                if isAuthenticated {
+                    authenticatedContent
+                } else {
+                    // Returning user - show login directly
+                    LoginView(onAuthenticationSuccess: {
+                        profileViewModel?.loadProfiles()
+                    })
+                    .environmentObject(onboardingVM)
+                }
             } else {
-                LoginView(onAuthenticationSuccess: {
-                    // Auth state will be updated by the listener automatically
-                    // Just reload profiles when ready
-                    profileViewModel?.loadProfiles()
-                })
-                .environmentObject(onboardingViewModel!)
+                // Onboarding not complete - show onboarding flow
+                OnboardingContainerView()
+                    .environmentObject(onboardingVM)
             }
         } else {
             LoadingView()
         }
     }
-    
+
     @ViewBuilder
     private var authenticatedContent: some View {
         mainAppFlow

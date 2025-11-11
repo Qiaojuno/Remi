@@ -19,18 +19,20 @@ struct TopRoundedRectangle: Shape {
 struct WelcomeView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showMessages = false
-    
+    @State private var showButtons = false
+    @State private var showingLogin = false
+
     var body: some View {
-        GeometryReader { geometry in
+        ZStack {
+            // Main content
             VStack(spacing: 0) {
-                
                 // Remi Logo - EXACT same Y-axis as LoginView (100px from top)
                 Text("Remi")
                     .font(.custom("Poppins-Medium", size: 73.93))
                     .tracking(-3.0)
                     .foregroundColor(.black)
-                    .padding(.top, 100) // Exact match with LoginView position
-                
+                    .padding(.top, 100)
+
                 // Message bubbles conversation - positioned close to logo
                 VStack(spacing: 16) {
                     if showMessages {
@@ -45,7 +47,7 @@ struct WelcomeView: View {
                             )
                         }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
-                        
+
                         // Grey bubble (receiver) - "for anyone you love"
                         HStack {
                             SpeechBubbleView(
@@ -60,15 +62,54 @@ struct WelcomeView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 40) // Close spacing to logo
-                
-                Spacer() // Push everything to top
+                .padding(.top, 40)
+
+                Spacer()
+
+                // Buttons section
+                if showButtons {
+                    VStack(spacing: 16) {
+                        // Primary button - Let's get started
+                        Button(action: {
+                            HapticFeedback.medium()
+                            viewModel.startQuiz()
+                        }) {
+                            Text("Let's get started")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.black)
+                                .cornerRadius(25)
+                        }
+
+                        // Secondary button - Already signed up? Log in
+                        Button(action: {
+                            HapticFeedback.light()
+                            showingLogin = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Text("Already signed up?")
+                                    .foregroundColor(.gray)
+                                Text("Log in")
+                                    .foregroundColor(.black)
+                                    .fontWeight(.semibold)
+                            }
+                            .font(.system(size: 15))
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 50)
+                    .opacity(showButtons ? 1 : 0)
+                    .offset(y: showButtons ? 0 : 20)
+                    .animation(.easeOut(duration: 0.4).delay(0.3), value: showButtons)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 ZStack {
                     Color(hex: "f9f9f9")
-                    
+
                     VStack {
                         Spacer()
                         LinearGradient(
@@ -85,19 +126,102 @@ struct WelcomeView: View {
                 .ignoresSafeArea(.all)
             )
         }
+        .sheet(isPresented: $showingLogin) {
+            LoginSheetView()
+                .environmentObject(viewModel)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         .onAppear {
-            // Show messages after a brief delay with bottom-up animation
+            // Show messages after a brief delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 withAnimation(.easeOut(duration: 1.2)) {
                     showMessages = true
                 }
             }
-            
-            // Auto-advance to login flow after 5 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-                viewModel.nextStep()
+
+            // Show buttons after messages animate in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                showButtons = true
             }
         }
+    }
+}
+
+// MARK: - Login Sheet View
+struct LoginSheetView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(spacing: 24) {
+            // Handle
+            RoundedRectangle(cornerRadius: 2.5)
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 8)
+
+            // Title
+            Text("Welcome back")
+                .font(.system(size: 28, weight: .bold))
+                .tracking(-1.0)
+                .padding(.top, 16)
+
+            Spacer()
+                .frame(height: 20)
+
+            // Login buttons
+            VStack(spacing: 12) {
+                // Apple Sign In
+                Button {
+                    _Concurrency.Task {
+                        await viewModel.signInWithApple()
+                        dismiss()
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text("Continue with Apple")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.black)
+                    .cornerRadius(12)
+                }
+
+                // Google Sign In
+                Button {
+                    _Concurrency.Task {
+                        await viewModel.signInWithGoogle()
+                        dismiss()
+                    }
+                } label: {
+                    HStack {
+                        Image("GoogleIcon")
+                            .resizable()
+                            .frame(width: 20, height: 20)
+                        Text("Continue with Google")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.black)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                    .cornerRadius(12)
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+        .background(Color(hex: "f9f9f9"))
     }
 }
 
@@ -312,490 +436,6 @@ struct AccountSetupView: View {
     }
 }
 
-// MARK: - Step 1: Who For View
-struct Step1View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedOption: String? = nil
-    @State private var showOptions = false
-
-    let options = [
-        "My parent",
-        "My grandparent",
-        "My partner",
-        "Someone else I care about"
-    ]
-
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Progress bar at the top with back button
-                HStack(spacing: 12) {
-                    Button(action: {
-                        viewModel.previousStep()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 32, height: 32)
-                            .background(Color.white)
-                            .clipShape(Circle())
-                    }
-
-                    GeometryReader { progressGeometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 4)
-
-                            Rectangle()
-                                .fill(Color.black)
-                                .frame(width: progressGeometry.size.width * (1.0 / 9.0), height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 30)
-
-                // Header
-                Text("Who are you downloading Remi for?")
-                    .font(.system(size: 24, weight: .bold))
-                    .tracking(-1.0)
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-
-                Spacer()
-                    .frame(maxHeight: 60)
-
-                // Options
-                VStack(spacing: 12) {
-                    ForEach(Array(options.enumerated()), id: \.element) { index, option in
-                        Button(action: {
-                            selectedOption = option
-                            HapticFeedback.medium()
-                        }) {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(selectedOption == option ? Color(hex: "228B22") : Color.gray.opacity(0.3))
-                                        .frame(width: 20, height: 20)
-
-                                    if selectedOption == option {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .transition(.scale.combined(with: .opacity))
-                                    } else {
-                                        Text("\(index + 1)")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.gray)
-                                            .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .padding(.leading, 16)
-                                .animation(.easeInOut(duration: 0.3), value: selectedOption == option)
-
-                                Text(option)
-                                    .font(.system(size: 16, weight: .regular))
-                                    .foregroundColor(selectedOption == option ? .white : .black)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.trailing, 16)
-                            }
-                            .padding(.vertical, 16)
-                            .background(selectedOption == option ? Color.black : Color.white)
-                            .cornerRadius(25)
-                        }
-                        .opacity(showOptions ? 1 : 0)
-                        .offset(y: showOptions ? 0 : 10)
-                        .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.1), value: showOptions)
-                    }
-                }
-                .padding(.horizontal, 24)
-
-                Spacer()
-
-                // Next button
-                Button(action: {
-                    if let selected = selectedOption {
-                        HapticFeedback.medium()
-
-                        viewModel.userAnswers["who_for"] = selected
-                        viewModel.nextStep()
-                    }
-                }) {
-                    Text("Next")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(selectedOption != nil ? Color.black : Color.gray.opacity(0.3))
-                        .cornerRadius(25)
-                }
-                .disabled(selectedOption == nil)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                ZStack {
-                    Color(hex: "f9f9f9")
-
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.clear,
-                                Color(hex: "B3B3B3").opacity(0.3)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 200)
-                    }
-                }
-                .ignoresSafeArea(.all)
-            )
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showOptions = true
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Step 2: Connection View
-struct Step2View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedOption: String? = nil
-    @State private var showOptions = false
-
-    let options = [
-        "Every day",
-        "A few times a week",
-        "Once a week",
-        "Not as often as I'd like"
-    ]
-
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Progress bar at the top with back button
-                HStack(spacing: 12) {
-                    Button(action: {
-                        viewModel.previousStep()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 32, height: 32)
-                            .background(Color.white)
-                            .clipShape(Circle())
-                    }
-
-                    GeometryReader { progressGeometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 4)
-
-                            Rectangle()
-                                .fill(Color.black)
-                                .frame(width: progressGeometry.size.width * (2.0 / 9.0), height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 30)
-
-                // Header
-                Text("How often do you think about them?")
-                    .font(.system(size: 24, weight: .bold))
-                    .tracking(-1.0)
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-
-                Spacer()
-                    .frame(maxHeight: 60)
-
-                // Options
-                VStack(spacing: 12) {
-                    ForEach(Array(options.enumerated()), id: \.element) { index, option in
-                        Button(action: {
-                            selectedOption = option
-                            HapticFeedback.medium()
-                        }) {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(selectedOption == option ? Color(hex: "228B22") : Color.gray.opacity(0.3))
-                                        .frame(width: 20, height: 20)
-
-                                    if selectedOption == option {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .transition(.scale.combined(with: .opacity))
-                                    } else {
-                                        Text("\(index + 1)")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.gray)
-                                            .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .padding(.leading, 16)
-                                .animation(.easeInOut(duration: 0.3), value: selectedOption == option)
-
-                                Text(option)
-                                    .font(.system(size: 16, weight: .regular))
-                                    .foregroundColor(selectedOption == option ? .white : .black)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.trailing, 16)
-                            }
-                            .padding(.vertical, 16)
-                            .background(selectedOption == option ? Color.black : Color.white)
-                            .cornerRadius(25)
-                        }
-                        .opacity(showOptions ? 1 : 0)
-                        .offset(y: showOptions ? 0 : 10)
-                        .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.1), value: showOptions)
-                    }
-                }
-                .padding(.horizontal, 24)
-
-                Spacer()
-
-                // Next button
-                Button(action: {
-                    if let selected = selectedOption {
-                        HapticFeedback.medium()
-
-                        viewModel.userAnswers["connection_frequency"] = selected
-                        viewModel.nextStep()
-                    }
-                }) {
-                    Text("Next")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(selectedOption != nil ? Color.black : Color.gray.opacity(0.3))
-                        .cornerRadius(25)
-                }
-                .disabled(selectedOption == nil)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                ZStack {
-                    Color(hex: "f9f9f9")
-
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.clear,
-                                Color(hex: "B3B3B3").opacity(0.3)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 200)
-                    }
-                }
-                .ignoresSafeArea(.all)
-            )
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showOptions = true
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Step 3: Name & Relationship View
-struct Step3View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var lovedOneName: String = ""
-    @State private var selectedRelationship: String? = nil
-    @State private var showContent = false
-
-    let relationshipOptions = [
-        "Mom",
-        "Dad",
-        "Grandma",
-        "Grandpa",
-        "Partner",
-        "Other"
-    ]
-
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Progress bar at the top with back button
-                HStack(spacing: 12) {
-                    Button(action: {
-                        viewModel.previousStep()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 32, height: 32)
-                            .background(Color.white)
-                            .clipShape(Circle())
-                    }
-
-                    GeometryReader { progressGeometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 4)
-
-                            Rectangle()
-                                .fill(Color.black)
-                                .frame(width: progressGeometry.size.width * (3.0 / 9.0), height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 30)
-
-                // Header
-                Text("Tell us about them")
-                    .font(.system(size: 24, weight: .bold))
-                    .tracking(-1.0)
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-                    .opacity(showContent ? 1 : 0)
-                    .animation(.easeIn(duration: 0.3), value: showContent)
-
-                Spacer()
-                    .frame(maxHeight: 40)
-
-                // Name input
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Their name")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-
-                    TextField("Enter their name", text: $lovedOneName)
-                        .font(.system(size: 18, weight: .regular))
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal, 24)
-                .opacity(showContent ? 1 : 0)
-                .animation(.easeIn(duration: 0.3).delay(0.1), value: showContent)
-
-                // Relationship selection
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Your relationship")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 20)
-
-                    VStack(spacing: 8) {
-                        ForEach(Array(relationshipOptions.enumerated()), id: \.element) { index, option in
-                            Button(action: {
-                                selectedRelationship = option
-                                HapticFeedback.medium()
-                            }) {
-                                HStack {
-                                    Text(option)
-                                        .font(.system(size: 16, weight: .regular))
-                                        .foregroundColor(selectedRelationship == option ? .white : .black)
-
-                                    Spacer()
-
-                                    if selectedRelationship == option {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                                .padding()
-                                .background(selectedRelationship == option ? Color.black : Color.white)
-                                .cornerRadius(12)
-                            }
-                            .opacity(showContent ? 1 : 0)
-                            .animation(.easeIn(duration: 0.3).delay(0.2 + Double(index) * 0.05), value: showContent)
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                }
-
-                Spacer()
-
-                // Next button
-                Button(action: {
-                    HapticFeedback.medium()
-
-                    viewModel.userAnswers["loved_one_name"] = lovedOneName
-                    viewModel.userAnswers["relationship"] = selectedRelationship ?? ""
-                    viewModel.nextStep()
-                }) {
-                    Text("Next")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background((lovedOneName.isEmpty || selectedRelationship == nil) ? Color.gray.opacity(0.3) : Color.black)
-                        .cornerRadius(25)
-                }
-                .disabled(lovedOneName.isEmpty || selectedRelationship == nil)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
-                .opacity(showContent ? 1 : 0)
-                .animation(.easeIn(duration: 0.3).delay(0.4), value: showContent)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                ZStack {
-                    Color(hex: "f9f9f9")
-
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.clear,
-                                Color(hex: "B3B3B3").opacity(0.3)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 200)
-                    }
-                }
-                .ignoresSafeArea(.all)
-            )
-            .onTapGesture {
-                // Dismiss keyboard when tapping anywhere on screen
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showContent = true
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Profile Setup Confirmation View
 struct ProfileSetupConfirmationView: View {
     @EnvironmentObject var onboardingViewModel: OnboardingViewModel
@@ -868,334 +508,8 @@ struct ProfileSetupConfirmationView: View {
 
 // MARK: - Create Profile View moved to ProfileViews.swift
 
-// MARK: - Step 4: Memory Vision View
-struct Step4View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedMoments: Set<String> = []
-    @State private var showOptions = false
-
-    let momentOptions = [
-        ("Morning coffee rituals", "☕"),
-        ("Medication taken successfully", "💊"),
-        ("Photos from their day", "📸"),
-        ("Simple check-ins", "💬"),
-        ("Meals they're proud of", "🍽️"),
-        ("Walks and activities", "🚶")
-    ]
-
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Progress bar at the top with back button
-                HStack(spacing: 12) {
-                    Button(action: {
-                        viewModel.previousStep()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 32, height: 32)
-                            .background(Color.white)
-                            .clipShape(Circle())
-                    }
-
-                    GeometryReader { progressGeometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 4)
-
-                            Rectangle()
-                                .fill(Color.black)
-                                .frame(width: progressGeometry.size.width * (4.0 / 9.0), height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 30)
-
-                // Header
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("What kind of daily moments would you love to capture with \(viewModel.userAnswers["loved_one_name"] ?? "your loved one")?")
-                        .font(.system(size: 24, weight: .bold))
-                        .tracking(-1.0)
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text("Select all that matter to you")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-
-                Spacer()
-                    .frame(maxHeight: 40)
-
-                // Multi-select checkboxes
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(Array(momentOptions.enumerated()), id: \.offset) { index, moment in
-                            CheckboxCard(
-                                text: moment.0,
-                                emoji: moment.1,
-                                isSelected: selectedMoments.contains(moment.0),
-                                onTap: {
-                                    if selectedMoments.contains(moment.0) {
-                                        selectedMoments.remove(moment.0)
-                                    } else {
-                                        selectedMoments.insert(moment.0)
-                                    }
-                                    HapticFeedback.medium()
-                                }
-                            )
-                            .opacity(showOptions ? 1 : 0)
-                            .offset(y: showOptions ? 0 : 10)
-                            .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.1), value: showOptions)
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                }
-
-                Spacer()
-
-                // Next button
-                Button(action: {
-                    HapticFeedback.medium()
-
-                    // Store selected moments
-                    viewModel.selectedMoments = selectedMoments
-                    viewModel.nextStep()
-                }) {
-                    Text("Next")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(selectedMoments.isEmpty ? Color.gray.opacity(0.3) : Color.black)
-                        .cornerRadius(25)
-                }
-                .disabled(selectedMoments.isEmpty)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                ZStack {
-                    Color(hex: "f9f9f9")
-
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.clear,
-                                Color(hex: "B3B3B3").opacity(0.3)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 200)
-                    }
-                }
-                .ignoresSafeArea(.all)
-            )
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showOptions = true
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Step 5: Emotional Hook View
-struct Step5View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedValue: String? = nil
-    @State private var showGrid = false
-    @State private var showOptions = false
-
-    let emotionalValues = [
-        "A priceless family treasure",
-        "Daily peace of mind",
-        "Staying close despite distance",
-        "Creating lasting memories"
-    ]
-
-    var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // Progress bar at the top with back button
-                HStack(spacing: 12) {
-                    Button(action: {
-                        viewModel.previousStep()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.black)
-                            .frame(width: 32, height: 32)
-                            .background(Color.white)
-                            .clipShape(Circle())
-                    }
-
-                    GeometryReader { progressGeometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                                .frame(height: 4)
-
-                            Rectangle()
-                                .fill(Color.black)
-                                .frame(width: progressGeometry.size.width * (5.0 / 9.0), height: 4)
-                        }
-                    }
-                    .frame(height: 4)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 30)
-
-                // Header
-                VStack(spacing: 12) {
-                    Text("Imagine a year with \(viewModel.userAnswers["loved_one_name"] ?? "your loved one")...")
-                        .font(.system(size: 24, weight: .bold))
-                        .tracking(-1.0)
-                        .foregroundColor(.black)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text("What would that collection mean to you?")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-
-                // Scrollable content
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Memory grid mockup
-                        VStack(spacing: 0) {
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                                ForEach(0..<12, id: \.self) { index in
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.gray.opacity(0.2))
-                                        .aspectRatio(1, contentMode: .fit)
-                                        .overlay(
-                                            Image(systemName: index % 3 == 0 ? "photo" : index % 3 == 1 ? "message" : "heart.fill")
-                                                .font(.system(size: 20))
-                                                .foregroundColor(.gray.opacity(0.4))
-                                        )
-                                        .opacity(showGrid ? 1 : 0)
-                                        .scaleEffect(showGrid ? 1 : 0.8)
-                                        .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(Double(index) * 0.05), value: showGrid)
-                                }
-                            }
-                            .padding(.horizontal, 24)
-                        }
-
-                        // Options
-                        VStack(spacing: 12) {
-                            ForEach(Array(emotionalValues.enumerated()), id: \.element) { index, value in
-                                Button(action: {
-                                    selectedValue = value
-                                    HapticFeedback.medium()
-                                }) {
-                                    HStack(spacing: 12) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(selectedValue == value ? Color(hex: "228B22") : Color.gray.opacity(0.3))
-                                                .frame(width: 20, height: 20)
-
-                                            if selectedValue == value {
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 10, weight: .bold))
-                                                    .foregroundColor(.white)
-                                                    .transition(.scale.combined(with: .opacity))
-                                            }
-                                        }
-                                        .padding(.leading, 16)
-                                        .animation(.easeInOut(duration: 0.3), value: selectedValue == value)
-
-                                        Text(value)
-                                            .font(.system(size: 16, weight: .regular))
-                                            .foregroundColor(selectedValue == value ? .white : .black)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.trailing, 16)
-                                    }
-                                    .padding(.vertical, 16)
-                                    .background(selectedValue == value ? Color.black : Color.white)
-                                    .cornerRadius(25)
-                                }
-                                .opacity(showOptions ? 1 : 0)
-                                .offset(y: showOptions ? 0 : 10)
-                                .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.1), value: showOptions)
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
-                }
-
-                Spacer()
-                    .frame(height: 16)
-
-                // Next button
-                Button(action: {
-                    HapticFeedback.medium()
-
-                    // Store emotional value
-                    if let value = selectedValue {
-                        viewModel.emotionalValue = value
-                    }
-                    viewModel.nextStep()
-                }) {
-                    Text("Next")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(selectedValue != nil ? Color.black : Color.gray.opacity(0.3))
-                        .cornerRadius(25)
-                }
-                .disabled(selectedValue == nil)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                ZStack {
-                    Color(hex: "f9f9f9")
-
-                    VStack {
-                        Spacer()
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.clear,
-                                Color(hex: "B3B3B3").opacity(0.3)
-                            ]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 200)
-                    }
-                }
-                .ignoresSafeArea(.all)
-            )
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    showGrid = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    showOptions = true
-                }
-            }
-        }
-    }
-}
+// NOTE: Steps 1-5 have been refactored and moved to OnboardingQuizSteps.swift
+// This dramatically reduces code duplication and improves maintainability
 
 // MARK: - Step 6: Paywall View
 struct Step6View: View {
@@ -1204,50 +518,15 @@ struct Step6View: View {
     @State private var paywallDismissed = false
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Progress bar overlay at the top
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Button(action: {
-                            viewModel.previousStep()
-                        }) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.black)
-                                .frame(width: 32, height: 32)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                        }
-
-                        GeometryReader { progressGeometry in
-                            ZStack(alignment: .leading) {
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 4)
-
-                                Rectangle()
-                                    .fill(Color.black)
-                                    .frame(width: progressGeometry.size.width * (6.0 / 9.0), height: 4)
-                            }
-                        }
-                        .frame(height: 4)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 30)
-
-                    Spacer()
+        OnboardingStepContainer(
+            currentStep: 6,
+            onBack: viewModel.previousStep
+        ) {
+            // Superwall Paywall - automatically shows campaign
+            PaywallView()
+                .onAppear {
+                    configureSuperwallHandlers()
                 }
-                .zIndex(1)
-
-                // Superwall Paywall - automatically shows campaign
-                PaywallView()
-                    .onAppear {
-                        configureSuperwallHandlers()
-                    }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(hex: "f9f9f9").ignoresSafeArea(.all))
         }
     }
 

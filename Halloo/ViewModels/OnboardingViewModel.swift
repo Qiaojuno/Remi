@@ -229,8 +229,6 @@ final class OnboardingViewModel: ObservableObject {
         switch currentStep {
         case .welcome:
             return true
-        case .signUp:
-            return isValidSignUpForm
         case .step1WhoFor:
             return true
         case .step2Connection:
@@ -241,10 +239,14 @@ final class OnboardingViewModel: ObservableObject {
             return !selectedMoments.isEmpty
         case .step5EmotionalHook:
             return !emotionalValue.isEmpty
+        case .saveYourProgress:
+            return authService.currentUser != nil // Can proceed after auth
         case .step6Paywall:
             return true // Always can proceed after selecting plan
         case .profileSetupConfirmation:
             return true
+        case .signUp:
+            return isValidSignUpForm
         case .preferences:
             return true
         case .complete:
@@ -367,18 +369,19 @@ final class OnboardingViewModel: ObservableObject {
     /// - Important: Validates step requirements before allowing progression
     /// - Note: Some steps trigger async operations (account creation, completion)
     /// - Warning: Incomplete steps prevent progression to maintain data integrity
+    /// Start the quiz flow from welcome screen
+    func startQuiz() {
+        currentStep = .step1WhoFor
+        print("🚀 startQuiz: Starting quiz flow from welcome screen")
+    }
+
     func nextStep() {
         guard canProceed else { return }
 
         switch currentStep {
         case .welcome:
-            // Go to signup/login page
-            currentStep = .signUp
-            print("🧪 nextStep: Advanced from welcome to signup/login")
-        case .signUp:
-            // User should authenticate via LoginView before proceeding
-            // nextStep will be called by LoginView after successful authentication
-            print("🧪 nextStep: Waiting for user authentication in LoginView")
+            // New flow: "Let's get started" button calls startQuiz() directly
+            startQuiz()
         case .step1WhoFor:
             currentStep = .step2Connection
             print("🧪 nextStep: Advanced from step 1 to step 2 (Connection)")
@@ -392,14 +395,21 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .step5EmotionalHook
             print("🧪 nextStep: Advanced from step 4 to step 5 (Emotional Hook)")
         case .step5EmotionalHook:
+            currentStep = .saveYourProgress
+            print("🧪 nextStep: Advanced from step 5 to Save Your Progress (auth gate)")
+        case .saveYourProgress:
+            // After auth, proceed to paywall
             currentStep = .step6Paywall
-            print("🧪 nextStep: Advanced from step 5 to step 6 (Paywall)")
+            print("🧪 nextStep: Advanced from Save Your Progress to paywall")
         case .step6Paywall:
             currentStep = .profileSetupConfirmation
             print("🧪 nextStep: Advanced from step 6 to profile setup confirmation")
         case .profileSetupConfirmation:
             currentStep = .preferences
             print("🧪 nextStep: Advanced from profile setup confirmation to preferences")
+        case .signUp:
+            // Deprecated flow - redirect to quiz
+            startQuiz()
         case .preferences:
             // Show CreateProfileView - don't auto-complete
             print("🧪 nextStep: Reached preferences step - should show CreateProfileView")
@@ -414,10 +424,8 @@ final class OnboardingViewModel: ObservableObject {
         switch currentStep {
         case .welcome:
             break
-        case .signUp:
-            currentStep = .welcome
         case .step1WhoFor:
-            currentStep = .signUp
+            currentStep = .welcome
         case .step2Connection:
             currentStep = .step1WhoFor
         case .step3NameRelationship:
@@ -426,10 +434,14 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .step3NameRelationship
         case .step5EmotionalHook:
             currentStep = .step4MemoryVision
-        case .step6Paywall:
+        case .saveYourProgress:
             currentStep = .step5EmotionalHook
+        case .step6Paywall:
+            currentStep = .saveYourProgress
         case .profileSetupConfirmation:
             currentStep = .step6Paywall
+        case .signUp:
+            currentStep = .welcome
         case .preferences:
             currentStep = .profileSetupConfirmation
         case .complete:
@@ -461,7 +473,7 @@ final class OnboardingViewModel: ObservableObject {
 
                 // Existing user - check if onboarding complete
                 if user.isOnboardingComplete {
-                    // Already completed onboarding
+                    // Already completed onboarding - go to dashboard
                     print("✅ User already completed onboarding, navigating to dashboard")
                     await MainActor.run {
                         var transaction = Transaction()
@@ -471,62 +483,33 @@ final class OnboardingViewModel: ObservableObject {
                         }
                     }
                 } else {
-                    // Existing user but incomplete onboarding - skip for MVP
-                    print("📝 Marking incomplete onboarding as complete for MVP")
-                    let updatedUser = User(
-                        id: user.id,
-                        email: user.email,
-                        fullName: user.fullName,
-                        phoneNumber: user.phoneNumber,
-                        createdAt: user.createdAt,
-                        isOnboardingComplete: true, // ✅ Skip onboarding for MVP
-                        subscriptionStatus: user.subscriptionStatus,
-                        trialEndDate: user.trialEndDate,
-                        quizAnswers: user.quizAnswers,
-                        profileCount: user.profileCount,
-                        taskCount: user.taskCount,
-                        updatedAt: Date(),
-                        lastSyncTimestamp: user.lastSyncTimestamp
-                    )
-                    try? await databaseService.updateUser(updatedUser)
-                    print("✅ User updated with complete onboarding status")
-
-                    await MainActor.run {
-                        var transaction = Transaction()
-                        transaction.disablesAnimations = true
-                        withTransaction(transaction) {
-                            isComplete = true
-                        }
-                    }
+                    // Existing user but incomplete onboarding - continue the flow
+                    print("📝 User has incomplete onboarding, continuing quiz flow")
+                    // Don't set isComplete - let them continue through the flow
+                    // The quiz data is already saved in SaveYourProgressView
                 }
             } else {
-                // New user - create User record with onboarding already complete
-                print("🆕 New user detected, creating user document...")
+                // New user signing in during onboarding flow - create User record
+                print("🆕 New user detected during onboarding, creating user document...")
                 let newUser = User(
                     id: authResult.uid,
                     email: authResult.email ?? "",
                     fullName: authResult.displayName ?? "",
                     phoneNumber: "",
                     createdAt: Date(),
-                    isOnboardingComplete: true, // ✅ Skip onboarding for MVP
+                    isOnboardingComplete: false, // ❌ Still in onboarding (quiz → paywall remaining)
                     subscriptionStatus: .trial,
                     trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
-                    quizAnswers: [:],
+                    quizAnswers: userAnswers, // Save quiz answers collected so far
                     profileCount: 0,
                     taskCount: 0,
                     updatedAt: Date(),
                     lastSyncTimestamp: nil
                 )
                 try? await databaseService.createUser(newUser)
-                print("✅ New user document created")
+                print("✅ New user document created with incomplete onboarding")
 
-                await MainActor.run {
-                    var transaction = Transaction()
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) {
-                        isComplete = true
-                    }
-                }
+                // Don't set isComplete - let them continue to paywall
             }
 
             print("🎉 handleSuccessfulAuthentication completed successfully")
@@ -781,62 +764,18 @@ final class OnboardingViewModel: ObservableObject {
     func signInWithApple() async {
         isLoading = true
         errorMessage = nil
-        
+
         do {
             let authResult = try await authService.signInWithApple()
 
-            // Check if user exists in database
-            let existingUser = try await databaseService.getUser(authResult.uid)
+            // Delegate to handleSuccessfulAuthentication for consistent logic
+            await handleSuccessfulAuthentication(authResult: authResult)
 
-            // MVP: Skip onboarding, go straight to dashboard
-            // Mark onboarding as complete for all authenticated users
-            isComplete = true
-
-            if let existingUser = existingUser {
-                // Existing user - update to mark onboarding complete if needed
-                if !existingUser.isOnboardingComplete {
-                    let updatedUser = User(
-                        id: existingUser.id,
-                        email: existingUser.email,
-                        fullName: existingUser.fullName,
-                        phoneNumber: existingUser.phoneNumber,
-                        createdAt: existingUser.createdAt,
-                        isOnboardingComplete: true,
-                        subscriptionStatus: existingUser.subscriptionStatus,
-                        trialEndDate: existingUser.trialEndDate,
-                        quizAnswers: existingUser.quizAnswers,
-                        profileCount: existingUser.profileCount,
-                        taskCount: existingUser.taskCount,
-                        updatedAt: Date(),
-                        lastSyncTimestamp: existingUser.lastSyncTimestamp
-                    )
-                    try? await databaseService.updateUser(updatedUser)
-                }
-            } else {
-                // New user - create User record with onboarding already complete
-                let newUser = User(
-                    id: authResult.uid,
-                    email: authResult.email ?? "",
-                    fullName: authResult.displayName ?? "",
-                    phoneNumber: "",
-                    createdAt: Date(),
-                    isOnboardingComplete: true, // ✅ Skip onboarding for MVP
-                    subscriptionStatus: .trial,
-                    trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
-                    quizAnswers: [:],
-                    profileCount: 0,
-                    taskCount: 0,
-                    updatedAt: Date(),
-                    lastSyncTimestamp: nil
-                )
-                try? await databaseService.createUser(newUser)
-            }
-            
         } catch {
             errorMessage = error.localizedDescription
             logger.error("Apple Sign In failed: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
@@ -847,58 +786,14 @@ final class OnboardingViewModel: ObservableObject {
         do {
             let authResult = try await authService.signInWithGoogle()
 
-            // Check if user exists in database
-            let existingUser = try await databaseService.getUser(authResult.uid)
+            // Delegate to handleSuccessfulAuthentication for consistent logic
+            await handleSuccessfulAuthentication(authResult: authResult)
 
-            // MVP: Skip onboarding, go straight to dashboard
-            // Mark onboarding as complete for all authenticated users
-            isComplete = true
-
-            if let existingUser = existingUser {
-                // Existing user - update to mark onboarding complete if needed
-                if !existingUser.isOnboardingComplete {
-                    let updatedUser = User(
-                        id: existingUser.id,
-                        email: existingUser.email,
-                        fullName: existingUser.fullName,
-                        phoneNumber: existingUser.phoneNumber,
-                        createdAt: existingUser.createdAt,
-                        isOnboardingComplete: true,
-                        subscriptionStatus: existingUser.subscriptionStatus,
-                        trialEndDate: existingUser.trialEndDate,
-                        quizAnswers: existingUser.quizAnswers,
-                        profileCount: existingUser.profileCount,
-                        taskCount: existingUser.taskCount,
-                        updatedAt: Date(),
-                        lastSyncTimestamp: existingUser.lastSyncTimestamp
-                    )
-                    try? await databaseService.updateUser(updatedUser)
-                }
-            } else {
-                // New user - create User record with onboarding already complete
-                let newUser = User(
-                    id: authResult.uid,
-                    email: authResult.email ?? "",
-                    fullName: authResult.displayName ?? "",
-                    phoneNumber: "",
-                    createdAt: Date(),
-                    isOnboardingComplete: true, // ✅ Skip onboarding for MVP
-                    subscriptionStatus: .trial,
-                    trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
-                    quizAnswers: [:],
-                    profileCount: 0,
-                    taskCount: 0,
-                    updatedAt: Date(),
-                    lastSyncTimestamp: nil
-                )
-                try? await databaseService.createUser(newUser)
-            }
-            
         } catch {
             errorMessage = error.localizedDescription
             logger.error("Google Sign In failed: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
 }
@@ -906,23 +801,22 @@ final class OnboardingViewModel: ObservableObject {
 // MARK: - Onboarding Models
 enum OnboardingStep: String, CaseIterable {
     case welcome = "welcome"
-    case signUp = "signUp"
     case step1WhoFor = "step1WhoFor"
     case step2Connection = "step2Connection"
     case step3NameRelationship = "step3NameRelationship"
     case step4MemoryVision = "step4MemoryVision"
     case step5EmotionalHook = "step5EmotionalHook"
+    case saveYourProgress = "saveYourProgress"  // Auth gate before paywall
     case step6Paywall = "step6Paywall"
     case profileSetupConfirmation = "profileSetupConfirmation"
-    case preferences = "preferences"
+    case signUp = "signUp"  // Deprecated - kept for backwards compatibility
+    case preferences = "preferences"  // Deprecated
     case complete = "complete"
 
     var title: String {
         switch self {
         case .welcome:
             return "Welcome to Remi"
-        case .signUp:
-            return "Create Account"
         case .step1WhoFor:
             return "Who For"
         case .step2Connection:
@@ -933,10 +827,14 @@ enum OnboardingStep: String, CaseIterable {
             return "Memory Vision"
         case .step5EmotionalHook:
             return "Emotional Hook"
+        case .saveYourProgress:
+            return "Save Your Progress"
         case .step6Paywall:
             return "Choose Your Plan"
         case .profileSetupConfirmation:
             return "Profile Setup"
+        case .signUp:
+            return "Create Account"
         case .preferences:
             return "Preferences"
         case .complete:
@@ -948,8 +846,6 @@ enum OnboardingStep: String, CaseIterable {
         switch self {
         case .welcome:
             return "Create reminders for anyone you love"
-        case .signUp:
-            return "Create your account to get started"
         case .step1WhoFor:
             return "Who are you downloading Remi for?"
         case .step2Connection:
@@ -960,10 +856,14 @@ enum OnboardingStep: String, CaseIterable {
             return "Select moments to capture"
         case .step5EmotionalHook:
             return "What would these moments mean to you?"
+        case .saveYourProgress:
+            return "Create an account to save your personalized reminders"
         case .step6Paywall:
             return "Start your personalized memory plan"
         case .profileSetupConfirmation:
             return "Ready to create your first profile?"
+        case .signUp:
+            return "Create your account to get started"
         case .preferences:
             return "Customize your notification settings"
         case .complete:
