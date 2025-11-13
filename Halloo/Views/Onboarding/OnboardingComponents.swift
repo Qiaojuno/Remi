@@ -154,7 +154,7 @@ struct OnboardingStepHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: subtitle != nil ? 12 : 0) {
             Text(title)
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 28, weight: .bold))
                 .tracking(-1.0)
                 .foregroundColor(.black)
                 .multilineTextAlignment(.leading)
@@ -182,6 +182,7 @@ struct OnboardingStepHeader: View {
 // MARK: - Quiz Option Button
 
 /// Reusable option button for single-select quiz questions
+/// Simple pastel→black toggle design
 struct QuizOptionButton: View {
     let text: String
     let index: Int
@@ -189,41 +190,90 @@ struct QuizOptionButton: View {
     let onTap: () -> Void
     @State private var isVisible = false
 
+    // Rotate through super shallow pastel colors
+    private var unselectedBackground: Color {
+        let pastelColors = [
+            Color(hex: "B9E3FF").opacity(0.15),  // Light blue
+            Color(hex: "FFE3E3").opacity(0.15),  // Light red/pink
+            Color(hex: "E3FFE3").opacity(0.15),  // Light green
+            Color(hex: "F0E3FF").opacity(0.15),  // Light purple
+            Color(hex: "FFF0E3").opacity(0.15),  // Light orange
+            Color(hex: "FFE3F0").opacity(0.15)   // Light pink
+        ]
+        return pastelColors[index % pastelColors.count]
+    }
+
+    var body: some View {
+        Button(action: {
+            onTap()
+            HapticFeedback.medium()
+        }) {
+            Text(text)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(isSelected ? .white : .black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .padding(.horizontal, 16)
+                .background(isSelected ? Color.black : unselectedBackground)
+                .cornerRadius(12)
+        }
+        .opacity(isVisible ? 1 : 0)
+        .offset(y: isVisible ? 0 : 10)
+        .animation(
+            .easeOut(duration: 0.4).delay(Double(index) * OnboardingUI.optionAnimationDelay),
+            value: isVisible
+        )
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isVisible = true
+            }
+        }
+    }
+}
+
+// MARK: - Quiz Multi-Select Button
+
+/// Reusable option button for multi-select quiz questions
+/// Simple pastel→black toggle design (same as single-select)
+struct QuizMultiSelectButton: View {
+    let text: String
+    let emoji: String
+    let index: Int
+    let isSelected: Bool
+    let onTap: () -> Void
+    @State private var isVisible = false
+
+    // Rotate through super shallow pastel colors
+    private var unselectedBackground: Color {
+        let pastelColors = [
+            Color(hex: "B9E3FF").opacity(0.15),  // Light blue
+            Color(hex: "FFE3E3").opacity(0.15),  // Light red/pink
+            Color(hex: "E3FFE3").opacity(0.15),  // Light green
+            Color(hex: "F0E3FF").opacity(0.15),  // Light purple
+            Color(hex: "FFF0E3").opacity(0.15),  // Light orange
+            Color(hex: "FFE3F0").opacity(0.15)   // Light pink
+        ]
+        return pastelColors[index % pastelColors.count]
+    }
+
     var body: some View {
         Button(action: {
             onTap()
             HapticFeedback.medium()
         }) {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? OnboardingUI.successGreen : Color.gray.opacity(0.3))
-                        .frame(width: OnboardingUI.checkmarkCircleSize, height: OnboardingUI.checkmarkCircleSize)
-
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .transition(.scale.combined(with: .opacity))
-                    } else {
-                        Text("\(index + 1)")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.gray)
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .padding(.leading, 16)
-                .animation(.easeInOut(duration: 0.3), value: isSelected)
+                Text(emoji)
+                    .font(.system(size: 24))
 
                 Text(text)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(isSelected ? .white : .black)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.trailing, 16)
             }
-            .padding(.vertical, 16)
-            .background(isSelected ? Color.black : Color.white)
-            .cornerRadius(OnboardingUI.cornerRadius)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
+            .background(isSelected ? Color.black : unselectedBackground)
+            .cornerRadius(12)
         }
         .opacity(isVisible ? 1 : 0)
         .offset(y: isVisible ? 0 : 10)

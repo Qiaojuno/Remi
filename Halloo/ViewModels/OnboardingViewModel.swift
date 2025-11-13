@@ -65,7 +65,7 @@ final class OnboardingViewModel: ObservableObject {
     /// - .quiz: Care needs assessment and elderly preference gathering
     /// - .preferences: Notification and communication setup
     /// - .complete: Onboarding finished, ready for elderly profile creation
-    @Published var currentStep: OnboardingStep = .signUp
+    @Published var currentStep: OnboardingStep = .welcome
     
     /// Family's responses to elderly care assessment questions
     /// 
@@ -236,9 +236,7 @@ final class OnboardingViewModel: ObservableObject {
         case .step3NameRelationship:
             return true
         case .step4MemoryVision:
-            return !selectedMoments.isEmpty
-        case .step5EmotionalHook:
-            return !emotionalValue.isEmpty
+            return true  // Social proof screen - no validation needed
         case .saveYourProgress:
             return authService.currentUser != nil // Can proceed after auth
         case .step6Paywall:
@@ -369,10 +367,16 @@ final class OnboardingViewModel: ObservableObject {
     /// - Important: Validates step requirements before allowing progression
     /// - Note: Some steps trigger async operations (account creation, completion)
     /// - Warning: Incomplete steps prevent progression to maintain data integrity
-    /// Start the quiz flow from welcome screen
+    /// Start the quiz flow from welcome screen (Get Started button)
     func startQuiz() {
         currentStep = .step1WhoFor
         print("🚀 startQuiz: Starting quiz flow from welcome screen")
+    }
+
+    /// Skip quiz and go directly to login (Login button)
+    func goToLogin() {
+        currentStep = .saveYourProgress // This is the auth gate
+        print("🔐 goToLogin: Skipping quiz, going directly to login")
     }
 
     func nextStep() {
@@ -392,11 +396,8 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .step4MemoryVision
             print("🧪 nextStep: Advanced from step 3 to step 4 (Memory Vision)")
         case .step4MemoryVision:
-            currentStep = .step5EmotionalHook
-            print("🧪 nextStep: Advanced from step 4 to step 5 (Emotional Hook)")
-        case .step5EmotionalHook:
             currentStep = .saveYourProgress
-            print("🧪 nextStep: Advanced from step 5 to Save Your Progress (auth gate)")
+            print("🧪 nextStep: Advanced from step 4 (Social Proof) to Save Your Progress (auth gate)")
         case .saveYourProgress:
             // After auth, proceed to paywall
             currentStep = .step6Paywall
@@ -432,10 +433,8 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .step2Connection
         case .step4MemoryVision:
             currentStep = .step3NameRelationship
-        case .step5EmotionalHook:
-            currentStep = .step4MemoryVision
         case .saveYourProgress:
-            currentStep = .step5EmotionalHook
+            currentStep = .step4MemoryVision
         case .step6Paywall:
             currentStep = .saveYourProgress
         case .profileSetupConfirmation:
@@ -455,6 +454,7 @@ final class OnboardingViewModel: ObservableObject {
     }
     
     /// Handle successful authentication and navigation logic
+    /// NEW ARCHITECTURE: Only check subscription status, not onboarding completion
     func handleSuccessfulAuthentication(authResult: AuthResult) async {
         print("🔐 handleSuccessfulAuthentication called for UID: \(authResult.uid)")
 
@@ -469,12 +469,12 @@ final class OnboardingViewModel: ObservableObject {
             print("✅ Database check completed. User found: \(existingUser != nil)")
 
             if let user = existingUser {
-                print("👤 Existing user found. Onboarding complete: \(user.isOnboardingComplete)")
+                print("👤 Existing user found. Subscription: \(user.subscriptionStatus)")
 
-                // Existing user - check if onboarding complete
-                if user.isOnboardingComplete {
-                    // Already completed onboarding - go to dashboard
-                    print("✅ User already completed onboarding, navigating to dashboard")
+                // Check subscription status (ONLY gate we check)
+                if user.subscriptionStatus == .active || user.isTrialActive {
+                    // User has active subscription or trial - go to dashboard
+                    print("✅ User has active subscription, navigating to dashboard")
                     await MainActor.run {
                         var transaction = Transaction()
                         transaction.disablesAnimations = true
@@ -483,33 +483,36 @@ final class OnboardingViewModel: ObservableObject {
                         }
                     }
                 } else {
-                    // Existing user but incomplete onboarding - continue the flow
-                    print("📝 User has incomplete onboarding, continuing quiz flow")
-                    // Don't set isComplete - let them continue through the flow
-                    // The quiz data is already saved in SaveYourProgressView
+                    // User needs to subscribe - show paywall
+                    print("💳 User needs subscription, showing paywall")
+                    await MainActor.run {
+                        currentStep = .step6Paywall
+                    }
                 }
             } else {
-                // New user signing in during onboarding flow - create User record
-                print("🆕 New user detected during onboarding, creating user document...")
+                // New user signing in - create User record with trial
+                print("🆕 New user detected, creating user document with trial...")
                 let newUser = User(
                     id: authResult.uid,
                     email: authResult.email ?? "",
                     fullName: authResult.displayName ?? "",
                     phoneNumber: "",
                     createdAt: Date(),
-                    isOnboardingComplete: false, // ❌ Still in onboarding (quiz → paywall remaining)
                     subscriptionStatus: .trial,
                     trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
-                    quizAnswers: userAnswers, // Save quiz answers collected so far
+                    quizAnswers: userAnswers, // Save quiz answers if collected
                     profileCount: 0,
                     taskCount: 0,
                     updatedAt: Date(),
                     lastSyncTimestamp: nil
                 )
                 try? await databaseService.createUser(newUser)
-                print("✅ New user document created with incomplete onboarding")
+                print("✅ New user document created with 7-day trial")
 
-                // Don't set isComplete - let them continue to paywall
+                // New users get trial - go to dashboard
+                await MainActor.run {
+                    isComplete = true
+                }
             }
 
             print("🎉 handleSuccessfulAuthentication completed successfully")
@@ -580,9 +583,8 @@ final class OnboardingViewModel: ObservableObject {
                 fullName: fullName,
                 phoneNumber: phoneNumber,
                 createdAt: Date(),
-                isOnboardingComplete: false, // Requires quiz completion
                 subscriptionStatus: .trial, // Full feature access for evaluation
-                trialEndDate: Calendar.current.date(byAdding: .day, value: 3, to: Date()),
+                trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
                 quizAnswers: nil,
                 profileCount: 0,
                 taskCount: 0,
@@ -607,62 +609,59 @@ final class OnboardingViewModel: ObservableObject {
     // MARK: - Elderly Care Onboarding Completion
     
     /*
-    BUSINESS LOGIC: Onboarding Completion with Elderly Care Personalization
-    
-    CONTEXT: Families have provided their care context through the assessment quiz.
-    This information must be permanently stored to inform all future care
-    recommendations, SMS templates, and family coordination features.
-    
+    BUSINESS LOGIC: Save Quiz Answers for Personalization (Optional)
+
+    CONTEXT: If user went through quiz funnel, save their answers for personalization.
+    This is optional - users can skip quiz entirely and still use the app.
+
     DESIGN DECISION: Store quiz answers with user profile for persistent personalization
     - Alternative 1: Separate quiz results table (rejected - adds complexity)
-    - Alternative 2: Recalculate preferences each time (rejected - poor performance)  
+    - Alternative 2: Recalculate preferences each time (rejected - poor performance)
     - Chosen Solution: Embed quiz answers in user profile for fast access
-    
-    FAMILY READINESS: Onboarding completion unlocks elderly profile creation,
-    SMS confirmation workflow, and care task scheduling. Families are now
-    prepared to begin coordinating elderly care with proper context.
-    
+
     PERSONALIZATION: Quiz answers inform default reminder types, SMS language
     style, and care priority recommendations throughout the app experience.
     */
-    private func completeOnboarding() async {
+    private func saveQuizAnswers() async {
+        // Only save if quiz was actually completed
+        guard !userAnswers.isEmpty else { return }
+
         isLoading = true
         errorMessage = nil
-        
+
         do {
             guard let currentUser = authService.currentUser else {
                 throw OnboardingError.userNotFound
             }
-            
-            // Update user profile with completed onboarding and elderly care personalization
+
+            // Fetch existing user and update only quiz answers
+            guard let user = try await databaseService.getUser(currentUser.uid) else {
+                throw OnboardingError.userNotFound
+            }
+
             let updatedUser = User(
-                id: currentUser.uid,
-                email: email,
-                fullName: fullName,
-                phoneNumber: phoneNumber,
-                createdAt: Date(),
-                isOnboardingComplete: true, // Unlocks elderly profile creation
-                subscriptionStatus: .trial, // Maintains trial access
-                trialEndDate: Calendar.current.date(byAdding: .day, value: 3, to: Date()),
-                quizAnswers: userAnswers, // Permanent personalization data
-                profileCount: 0,
-                taskCount: 0,
+                id: user.id,
+                email: user.email,
+                fullName: user.fullName,
+                phoneNumber: user.phoneNumber,
+                createdAt: user.createdAt,
+                subscriptionStatus: user.subscriptionStatus,
+                trialEndDate: user.trialEndDate,
+                quizAnswers: userAnswers, // Save quiz personalization data
+                profileCount: user.profileCount,
+                taskCount: user.taskCount,
                 updatedAt: Date(),
-                lastSyncTimestamp: nil
+                lastSyncTimestamp: user.lastSyncTimestamp
             )
-            
-            // Persist family profile with elderly care context
+
             try await databaseService.updateUser(updatedUser)
-            
-            // Complete onboarding workflow - ready for elderly care coordination
-            currentStep = .complete
-            isComplete = true
-            
+            print("✅ Quiz answers saved for personalization")
+
         } catch {
             errorMessage = error.localizedDescription
-            logger.error("Completing onboarding failed: \(error.localizedDescription)")
+            logger.error("Saving quiz answers failed: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
@@ -675,49 +674,18 @@ final class OnboardingViewModel: ObservableObject {
         print("🎉 Paywall completed successfully - showing thank you confirmation")
     }
 
-    /// Mark user's onboarding as complete in Firestore after profile creation
-    func markOnboardingComplete() async {
-        do {
-            guard let currentUser = authService.currentUser else {
-                print("❌ Cannot mark onboarding complete - no current user")
-                return
-            }
+    /// Complete the onboarding flow and navigate to dashboard
+    /// NEW ARCHITECTURE: No more "onboarding complete" flag - just go to dashboard
+    func completeOnboardingFlow() async {
+        // Save quiz answers if collected (optional personalization)
+        if !userAnswers.isEmpty {
+            await saveQuizAnswers()
+        }
 
-            // Fetch current user data from database
-            guard let user = try await databaseService.getUser(currentUser.uid) else {
-                print("❌ Cannot mark onboarding complete - user not found in database")
-                return
-            }
-
-            // Update user with onboarding complete flag and quiz answers
-            let updatedUser = User(
-                id: user.id,
-                email: user.email,
-                fullName: user.fullName,
-                phoneNumber: user.phoneNumber,
-                createdAt: user.createdAt,
-                isOnboardingComplete: true,
-                subscriptionStatus: user.subscriptionStatus,
-                trialEndDate: user.trialEndDate,
-                quizAnswers: userAnswers.isEmpty ? user.quizAnswers : userAnswers,
-                profileCount: user.profileCount,
-                taskCount: user.taskCount,
-                updatedAt: Date(),
-                lastSyncTimestamp: user.lastSyncTimestamp
-            )
-
-            try await databaseService.updateUser(updatedUser)
-
-            await MainActor.run {
-                isComplete = true
-                print("✅ User onboarding marked as complete in Firestore")
-            }
-
-        } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                logger.error("Marking onboarding complete failed: \(error.localizedDescription)")
-            }
+        // Navigate to dashboard
+        await MainActor.run {
+            isComplete = true
+            print("✅ Onboarding flow completed - navigating to dashboard")
         }
     }
 
@@ -801,11 +769,10 @@ final class OnboardingViewModel: ObservableObject {
 // MARK: - Onboarding Models
 enum OnboardingStep: String, CaseIterable {
     case welcome = "welcome"
-    case step1WhoFor = "step1WhoFor"
-    case step2Connection = "step2Connection"
-    case step3NameRelationship = "step3NameRelationship"
-    case step4MemoryVision = "step4MemoryVision"
-    case step5EmotionalHook = "step5EmotionalHook"
+    case step1WhoFor = "step1WhoFor"  // Who would you like to help?
+    case step2Connection = "step2Connection"  // Habit Focus
+    case step3NameRelationship = "step3NameRelationship"  // Proof Screen
+    case step4MemoryVision = "step4MemoryVision"  // Social Proof
     case saveYourProgress = "saveYourProgress"  // Auth gate before paywall
     case step6Paywall = "step6Paywall"
     case profileSetupConfirmation = "profileSetupConfirmation"
@@ -824,9 +791,7 @@ enum OnboardingStep: String, CaseIterable {
         case .step3NameRelationship:
             return "About Them"
         case .step4MemoryVision:
-            return "Memory Vision"
-        case .step5EmotionalHook:
-            return "Emotional Hook"
+            return "Social Proof"
         case .saveYourProgress:
             return "Save Your Progress"
         case .step6Paywall:
@@ -853,9 +818,7 @@ enum OnboardingStep: String, CaseIterable {
         case .step3NameRelationship:
             return "Tell us about them"
         case .step4MemoryVision:
-            return "Select moments to capture"
-        case .step5EmotionalHook:
-            return "What would these moments mean to you?"
+            return "Families everywhere use Remi"
         case .saveYourProgress:
             return "Create an account to save your personalized reminders"
         case .step6Paywall:

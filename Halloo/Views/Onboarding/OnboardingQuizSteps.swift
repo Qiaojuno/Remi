@@ -14,17 +14,17 @@
 
 import SwiftUI
 
-// MARK: - Step 1: Who For
+// MARK: - Step 1: Personalization - Emotional Connection
 
 struct Step1View: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var selectedOption: String? = nil
 
     let options = [
-        "My parent",
-        "My grandparent",
-        "My partner",
-        "Someone else I care about"
+        "My Mom",
+        "My Dad",
+        "Both",
+        "Another Relative"
     ]
 
     var body: some View {
@@ -33,11 +33,12 @@ struct Step1View: View {
             onBack: viewModel.previousStep
         ) {
             QuizSelectionStep(
-                title: "Who are you downloading Remi for?",
+                title: "Who would you like to help with Remi?",
+                subtitle: "We'll personalize reminders and tone for your family.",
                 options: options,
                 selectedOption: $selectedOption,
                 onNext: {
-                    viewModel.userAnswers["who_for"] = selectedOption ?? ""
+                    viewModel.userAnswers["who_to_help"] = selectedOption ?? ""
                     viewModel.nextStep()
                 }
             )
@@ -45,17 +46,19 @@ struct Step1View: View {
     }
 }
 
-// MARK: - Step 2: Connection Frequency
+// MARK: - Step 2: Habit Focus (Micro-Commitment)
 
 struct Step2View: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedOption: String? = nil
+    @State private var selectedHabits: Set<String> = []
 
-    let options = [
-        "Every day",
-        "A few times a week",
-        "Once a week",
-        "Not as often as I'd like"
+    let habitOptions = [
+        ("Taking medication", "💊"),
+        ("Going for a walk", "🚶"),
+        ("Drinking water", "💧"),
+        ("Sending a daily photo", "📸"),
+        ("Staying positive", "😊"),
+        ("Other", "✨")
     ]
 
     var body: some View {
@@ -63,35 +66,54 @@ struct Step2View: View {
             currentStep: 2,
             onBack: viewModel.previousStep
         ) {
-            QuizSelectionStep(
-                title: "How often do you think about them?",
-                options: options,
-                selectedOption: $selectedOption,
-                onNext: {
-                    viewModel.userAnswers["connection_frequency"] = selectedOption ?? ""
-                    viewModel.nextStep()
+            VStack(spacing: 0) {
+                OnboardingStepHeader(
+                    title: "What would you like to remind \(viewModel.userAnswers["who_to_help"] ?? "them") about?",
+                    subtitle: "You can always add or change these later."
+                )
+
+                Spacer()
+                    .frame(maxHeight: OnboardingUI.contentTopSpacing)
+
+                // Multi-select habit options
+                VStack(spacing: 12) {
+                    ForEach(Array(habitOptions.enumerated()), id: \.offset) { index, habit in
+                        QuizMultiSelectButton(
+                            text: habit.0,
+                            emoji: habit.1,
+                            index: index,
+                            isSelected: selectedHabits.contains(habit.0),
+                            onTap: {
+                                if selectedHabits.contains(habit.0) {
+                                    selectedHabits.remove(habit.0)
+                                } else {
+                                    selectedHabits.insert(habit.0)
+                                }
+                            }
+                        )
+                    }
                 }
-            )
+                .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: !selectedHabits.isEmpty,
+                    action: {
+                        viewModel.selectedMoments = selectedHabits
+                        viewModel.nextStep()
+                    }
+                )
+            }
         }
     }
 }
 
-// MARK: - Step 3: Name & Relationship
+// MARK: - Step 3: Proof Screen (Authority & Logic)
 
 struct Step3View: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var lovedOneName: String = ""
-    @State private var selectedRelationship: String? = nil
     @State private var showContent = false
-
-    let relationshipOptions = [
-        "Mom",
-        "Dad",
-        "Grandma",
-        "Grandpa",
-        "Partner",
-        "Other"
-    ]
 
     var body: some View {
         OnboardingStepContainer(
@@ -99,81 +121,78 @@ struct Step3View: View {
             onBack: viewModel.previousStep
         ) {
             VStack(spacing: 0) {
-                OnboardingStepHeader(title: "Tell us about them")
+                OnboardingStepHeader(title: "Remi helps families build habits that stick.")
 
                 Spacer()
                     .frame(maxHeight: 40)
 
-                // Name input
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Their name")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
+                // Stats content
+                VStack(alignment: .leading, spacing: 24) {
+                    // Stat text
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Studies show daily text reminders improve habit adherence by up to 40% in older adults.")
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundColor(.black)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    TextField("Enter their name", text: $lovedOneName)
-                        .font(.system(size: 18, weight: .regular))
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(12)
+                        Text("Simple messages → consistent routines → lasting independence.")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.gray)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeIn(duration: 0.4).delay(0.1), value: showContent)
+
+                    // Visual comparison chart
+                    VStack(spacing: 16) {
+                        // Remi Users - rising line
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Remi Users")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.black)
+
+                            HStack(spacing: 4) {
+                                ForEach(0..<7) { index in
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.black)
+                                        .frame(width: 30, height: CGFloat(30 + index * 8))
+                                }
+                            }
+                        }
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeIn(duration: 0.4).delay(0.3), value: showContent)
+
+                        // Manual Reminders - declining line
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Manual Reminders")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.gray)
+
+                            HStack(spacing: 4) {
+                                ForEach(0..<7) { index in
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.gray.opacity(0.4))
+                                        .frame(width: 30, height: CGFloat(80 - index * 8))
+                                }
+                            }
+                        }
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeIn(duration: 0.4).delay(0.5), value: showContent)
+                    }
+                    .padding(.vertical, 20)
                 }
                 .padding(.horizontal, OnboardingUI.horizontalPadding)
-                .opacity(showContent ? 1 : 0)
-                .animation(.easeIn(duration: 0.3).delay(0.1), value: showContent)
-
-                // Relationship selection
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Your relationship")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, OnboardingUI.horizontalPadding)
-                        .padding(.top, 20)
-
-                    VStack(spacing: 8) {
-                        ForEach(Array(relationshipOptions.enumerated()), id: \.element) { index, option in
-                            Button(action: {
-                                selectedRelationship = option
-                                HapticFeedback.medium()
-                            }) {
-                                HStack {
-                                    Text(option)
-                                        .font(.system(size: 16, weight: .regular))
-                                        .foregroundColor(selectedRelationship == option ? .white : .black)
-
-                                    Spacer()
-
-                                    if selectedRelationship == option {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                                .padding()
-                                .background(selectedRelationship == option ? Color.black : Color.white)
-                                .cornerRadius(12)
-                            }
-                            .opacity(showContent ? 1 : 0)
-                            .animation(.easeIn(duration: 0.3).delay(0.2 + Double(index) * 0.05), value: showContent)
-                        }
-                    }
-                    .padding(.horizontal, OnboardingUI.horizontalPadding)
-                }
 
                 Spacer()
 
                 OnboardingNextButton(
-                    isEnabled: !lovedOneName.isEmpty && selectedRelationship != nil,
+                    isEnabled: true,
                     action: {
-                        viewModel.userAnswers["loved_one_name"] = lovedOneName
-                        viewModel.userAnswers["relationship"] = selectedRelationship ?? ""
                         viewModel.nextStep()
                     }
                 )
                 .opacity(showContent ? 1 : 0)
-                .animation(.easeIn(duration: 0.3).delay(0.4), value: showContent)
-            }
-            .onTapGesture {
-                // Dismiss keyboard
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                .animation(.easeIn(duration: 0.3).delay(0.7), value: showContent)
             }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -184,20 +203,17 @@ struct Step3View: View {
     }
 }
 
-// MARK: - Step 4: Memory Vision (Multi-Select)
+// MARK: - Step 4: Social Proof & Safety Beat
 
 struct Step4View: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedMoments: Set<String> = []
-    @State private var showOptions = false
+    @State private var currentTestimonialIndex = 0
+    @State private var showContent = false
 
-    let momentOptions = [
-        ("Morning coffee rituals", "☕"),
-        ("Medication taken successfully", "💊"),
-        ("Photos from their day", "📸"),
-        ("Simple check-ins", "💬"),
-        ("Meals they're proud of", "🍽️"),
-        ("Walks and activities", "🚶")
+    let testimonials = [
+        "Remi helped me stop worrying about my dad's meds — now I just get a text and a smile photo every day.",
+        "My mom finally takes her walks consistently — she even sends me photos!",
+        "Remi made caring for my parents easy and stress-free."
     ]
 
     var body: some View {
@@ -206,148 +222,76 @@ struct Step4View: View {
             onBack: viewModel.previousStep
         ) {
             VStack(spacing: 0) {
-                OnboardingStepHeader(
-                    title: "What kind of daily moments would you love to capture with \(viewModel.userAnswers["loved_one_name"] ?? "your loved one")?",
-                    subtitle: "Select all that matter to you"
-                )
+                OnboardingStepHeader(title: "Families everywhere use Remi to stay connected.")
 
                 Spacer()
-                    .frame(maxHeight: 40)
+                    .frame(maxHeight: OnboardingUI.contentTopSpacing)
 
-                // Multi-select checkboxes
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(Array(momentOptions.enumerated()), id: \.offset) { index, moment in
-                            CheckboxCard(
-                                text: moment.0,
-                                emoji: moment.1,
-                                isSelected: selectedMoments.contains(moment.0),
-                                onTap: {
-                                    if selectedMoments.contains(moment.0) {
-                                        selectedMoments.remove(moment.0)
-                                    } else {
-                                        selectedMoments.insert(moment.0)
-                                    }
-                                    HapticFeedback.medium()
-                                }
-                            )
-                            .opacity(showOptions ? 1 : 0)
-                            .offset(y: showOptions ? 0 : 10)
-                            .animation(.easeOut(duration: 0.4).delay(Double(index) * 0.1), value: showOptions)
+                // Testimonials
+                VStack(spacing: 24) {
+                    // Rotating testimonials
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("💬")
+                            .font(.system(size: 32))
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeIn(duration: 0.3).delay(0.1), value: showContent)
+
+                        Text(testimonials[currentTestimonialIndex])
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(.black)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .lineSpacing(4)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeIn(duration: 0.4).delay(0.2), value: showContent)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeIn(duration: 0.4).delay(0.3), value: showContent)
+
+                    // Pagination dots
+                    HStack(spacing: 8) {
+                        ForEach(0..<testimonials.count, id: \.self) { index in
+                            Circle()
+                                .fill(index == currentTestimonialIndex ? Color.black : Color.gray.opacity(0.3))
+                                .frame(width: 8, height: 8)
                         }
                     }
-                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeIn(duration: 0.3).delay(0.5), value: showContent)
                 }
+                .padding(.horizontal, OnboardingUI.horizontalPadding)
 
                 Spacer()
 
                 OnboardingNextButton(
-                    isEnabled: !selectedMoments.isEmpty,
+                    isEnabled: true,
                     action: {
-                        viewModel.selectedMoments = selectedMoments
                         viewModel.nextStep()
                     }
                 )
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeIn(duration: 0.3).delay(0.6), value: showContent)
             }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showOptions = true
+                    showContent = true
+                }
+
+                // Auto-rotate testimonials every 4 seconds
+                Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { _ in
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        currentTestimonialIndex = (currentTestimonialIndex + 1) % testimonials.count
+                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Step 5: Emotional Hook
-
-struct Step5View: View {
-    @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var selectedValue: String? = nil
-    @State private var showGrid = false
-    @State private var showOptions = false
-
-    let emotionalValues = [
-        "A priceless family treasure",
-        "Daily peace of mind",
-        "Staying close despite distance",
-        "Creating lasting memories"
-    ]
-
-    var body: some View {
-        OnboardingStepContainer(
-            currentStep: 5,
-            onBack: viewModel.previousStep
-        ) {
-            VStack(spacing: 0) {
-                OnboardingStepHeader(
-                    title: "Imagine a year with \(viewModel.userAnswers["loved_one_name"] ?? "your loved one")...",
-                    subtitle: "What would that collection mean to you?"
-                )
-
-                // Scrollable content
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Memory grid mockup
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            ForEach(0..<12, id: \.self) { index in
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.gray.opacity(0.2))
-                                    .aspectRatio(1, contentMode: .fit)
-                                    .overlay(
-                                        Image(systemName: index % 3 == 0 ? "photo" : index % 3 == 1 ? "message" : "heart.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(.gray.opacity(0.4))
-                                    )
-                                    .opacity(showGrid ? 1 : 0)
-                                    .scaleEffect(showGrid ? 1 : 0.8)
-                                    .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(Double(index) * 0.05), value: showGrid)
-                            }
-                        }
-                        .padding(.horizontal, OnboardingUI.horizontalPadding)
-
-                        // Options
-                        VStack(spacing: 12) {
-                            ForEach(Array(emotionalValues.enumerated()), id: \.element) { index, value in
-                                QuizOptionButton(
-                                    text: value,
-                                    index: index,
-                                    isSelected: selectedValue == value,
-                                    onTap: { selectedValue = value }
-                                )
-                            }
-                        }
-                        .padding(.horizontal, OnboardingUI.horizontalPadding)
-                    }
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
-                }
-
-                Spacer()
-                    .frame(height: 16)
-
-                OnboardingNextButton(
-                    isEnabled: selectedValue != nil,
-                    action: {
-                        if let value = selectedValue {
-                            viewModel.emotionalValue = value
-                        }
-                        viewModel.nextStep()
-                    }
-                )
-            }
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    showGrid = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    showOptions = true
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Step 6: Save Your Progress (Auth Gate)
+// MARK: - Step 5: Save Your Progress (Auth Gate)
 
 /// Auth gate that appears between quiz and paywall
 ///
@@ -361,8 +305,8 @@ struct SaveYourProgressView: View {
 
     var body: some View {
         OnboardingStepContainer(
-            currentStep: 6,
-            totalSteps: 8,  // Welcome + 5 quiz steps + this step + paywall
+            currentStep: 5,
+            totalSteps: 7,  // Welcome + 4 quiz steps + this step + paywall
             onBack: viewModel.previousStep
         ) {
             VStack(spacing: 0) {

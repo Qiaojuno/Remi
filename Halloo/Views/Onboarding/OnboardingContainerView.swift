@@ -26,63 +26,27 @@ struct OnboardingContainerView: View {
             switch viewModel.currentStep {
             case .welcome:
                 WelcomeView()
-                    .transition(.opacity)
 
             case .step1WhoFor:
                 Step1View()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .step2Connection:
                 Step2View()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .step3NameRelationship:
                 Step3View()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .step4MemoryVision:
                 Step4View()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
-
-            case .step5EmotionalHook:
-                Step5View()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .saveYourProgress:
                 SaveYourProgressView()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .step6Paywall:
                 Step6View()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .profileSetupConfirmation:
                 ProfileSetupConfirmationView()
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing),
-                        removal: .move(edge: .leading)
-                    ))
 
             case .signUp:
                 // Deprecated - redirect to quiz
@@ -103,6 +67,5 @@ struct OnboardingContainerView: View {
             }
         }
         .environmentObject(viewModel)
-        .animation(.easeInOut(duration: 0.3), value: viewModel.currentStep)
     }
 }
