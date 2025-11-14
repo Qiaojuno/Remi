@@ -30,23 +30,54 @@ struct OnboardingContainerView: View {
             case .step1WhoFor:
                 Step1View()
 
-            case .step2Connection:
+            case .step2ReminderFrequency:
                 Step2View()
 
-            case .step3NameRelationship:
+            case .step3MedicationProblem:
                 Step3View()
 
-            case .step4MemoryVision:
+            case .step3bProofScreen:
+                Step3bView()
+
+            case .step4HabitFocus:
                 Step4View()
+
+            case .step5WhatMatters:
+                Step5View()
+
+            case .step6NotificationPromise:
+                Step6View()
+
+            case .notificationPermission:
+                NotificationPermissionView()
+
+            case .step7SocialProof:
+                Step7View()
 
             case .saveYourProgress:
                 SaveYourProgressView()
 
             case .step6Paywall:
-                Step6View()
+                PaywallStepView()
 
             case .profileSetupConfirmation:
                 ProfileSetupConfirmationView()
+
+            // Deprecated cases - redirect
+            case .step2Connection:
+                Step4View()  // Old habit selection -> new Step4
+
+            case .step3NameRelationship:
+                Step3View()  // Redirect to medication problem
+
+            case .step4WhatMatters:
+                Step5View()  // Redirect to new Step5
+
+            case .step5NotificationPromise:
+                Step6View()  // Redirect to new Step6
+
+            case .step6SocialProof:
+                Step7View()  // Redirect to new Step7
 
             case .signUp:
                 // Deprecated - redirect to quiz

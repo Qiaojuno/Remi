@@ -220,7 +220,8 @@ final class OnboardingViewModel: ObservableObject {
     /// - .step1WhoFor: Always ready after selection
     /// - .step2Connection: Always ready after selection
     /// - .step3NameRelationship: Always ready after name and relationship entered
-    /// - .step4MemoryVision: Requires selected moments
+    /// - .step4WhatMatters: Optional question, no validation
+    /// - .step5SocialProof: No validation needed
     /// - .step5EmotionalHook: Requires emotional value selection
     /// - .step6Paywall: Always can proceed after selecting plan
     /// - .preferences: Always ready (optional configuration step)
@@ -231,17 +232,38 @@ final class OnboardingViewModel: ObservableObject {
             return true
         case .step1WhoFor:
             return true
-        case .step2Connection:
+        case .step2ReminderFrequency:
             return true
-        case .step3NameRelationship:
+        case .step3MedicationProblem:
+            return true  // Informational screen - no validation needed
+        case .step3bProofScreen:
+            return true  // Informational screen - no validation needed
+        case .step4HabitFocus:
             return true
-        case .step4MemoryVision:
+        case .step5WhatMatters:
+            return true  // Optional question - no validation needed
+        case .step6NotificationPromise:
+            return true  // Informational screen - no validation needed
+        case .notificationPermission:
+            return true  // Permission request - no validation needed
+        case .step7SocialProof:
             return true  // Social proof screen - no validation needed
         case .saveYourProgress:
             return authService.currentUser != nil // Can proceed after auth
         case .step6Paywall:
             return true // Always can proceed after selecting plan
         case .profileSetupConfirmation:
+            return true
+        // Deprecated cases
+        case .step2Connection:
+            return true
+        case .step3NameRelationship:
+            return true
+        case .step4WhatMatters:
+            return true
+        case .step5NotificationPromise:
+            return true
+        case .step6SocialProof:
             return true
         case .signUp:
             return isValidSignUpForm
@@ -274,14 +296,33 @@ final class OnboardingViewModel: ObservableObject {
     
     
     /// Calculated progress percentage for onboarding workflow visualization
-    /// 
+    ///
     /// Shows families how much of the setup process remains.
-    /// Excludes the complete step from calculation as it's a terminal state.
+    /// Calculates progress based on actual quiz flow steps (not all enum cases)
     /// Used for progress bars and completion indicators.
     var progressPercentage: Double {
-        let totalSteps = Double(OnboardingStep.allCases.count - 1) // Exclude complete step
-        let currentStepIndex = Double(OnboardingStep.allCases.firstIndex(of: currentStep) ?? 0)
-        return currentStepIndex / totalSteps
+        let totalSteps: Double = 11  // Actual quiz flow steps (notification permission not counted)
+        let stepNumber: Double
+
+        switch currentStep {
+        case .welcome: stepNumber = 0
+        case .step1WhoFor: stepNumber = 1
+        case .step2ReminderFrequency: stepNumber = 2
+        case .step3MedicationProblem: stepNumber = 3
+        case .step4HabitFocus: stepNumber = 4
+        case .step3bProofScreen: stepNumber = 5
+        case .step5WhatMatters: stepNumber = 6
+        case .step6NotificationPromise: stepNumber = 7
+        case .notificationPermission: stepNumber = 7  // Same as previous step - not counted
+        case .step7SocialProof: stepNumber = 8
+        case .saveYourProgress: stepNumber = 9
+        case .step6Paywall: stepNumber = 10
+        case .profileSetupConfirmation: stepNumber = 11
+        // Deprecated steps default to 0
+        case .step2Connection, .step3NameRelationship, .step4WhatMatters, .step5NotificationPromise, .step6SocialProof, .signUp, .preferences, .complete: stepNumber = 0
+        }
+
+        return stepNumber / totalSteps
     }
     
     // MARK: - Family Onboarding Setup
@@ -370,6 +411,7 @@ final class OnboardingViewModel: ObservableObject {
     /// Start the quiz flow from welcome screen (Get Started button)
     func startQuiz() {
         currentStep = .step1WhoFor
+        updateProgress()
         print("🚀 startQuiz: Starting quiz flow from welcome screen")
     }
 
@@ -387,27 +429,70 @@ final class OnboardingViewModel: ObservableObject {
             // New flow: "Let's get started" button calls startQuiz() directly
             startQuiz()
         case .step1WhoFor:
-            currentStep = .step2Connection
-            print("🧪 nextStep: Advanced from step 1 to step 2 (Connection)")
-        case .step2Connection:
-            currentStep = .step3NameRelationship
-            print("🧪 nextStep: Advanced from step 2 to step 3 (Name & Relationship)")
-        case .step3NameRelationship:
-            currentStep = .step4MemoryVision
-            print("🧪 nextStep: Advanced from step 3 to step 4 (Memory Vision)")
-        case .step4MemoryVision:
+            currentStep = .step2ReminderFrequency
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 1 to step 2 (Reminder Frequency)")
+        case .step2ReminderFrequency:
+            currentStep = .step3MedicationProblem
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 2 (Reminder Frequency) to step 3 (Medication Problem)")
+        case .step3MedicationProblem:
+            currentStep = .step4HabitFocus
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 3 (Medication Problem) to step 4 (Habit Focus)")
+        case .step4HabitFocus:
+            currentStep = .step3bProofScreen
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 4 (Habit Focus) to step 3b (Proof Screen)")
+        case .step3bProofScreen:
+            currentStep = .step5WhatMatters
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 3b (Proof) to step 5 (What Matters)")
+        case .step5WhatMatters:
+            currentStep = .step6NotificationPromise
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 5 (What Matters) to step 6 (Notification Promise)")
+        case .step6NotificationPromise:
+            currentStep = .notificationPermission
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 6 (Notification Promise) to notification permission")
+        case .notificationPermission:
+            currentStep = .step7SocialProof
+            updateProgress()
+            print("🧪 nextStep: Advanced from notification permission to step 7 (Social Proof)")
+        case .step7SocialProof:
             currentStep = .saveYourProgress
-            print("🧪 nextStep: Advanced from step 4 (Social Proof) to Save Your Progress (auth gate)")
+            updateProgress()
+            print("🧪 nextStep: Advanced from step 7 (Social Proof) to Save Your Progress (auth gate)")
         case .saveYourProgress:
             // After auth, proceed to paywall
             currentStep = .step6Paywall
+            updateProgress()
             print("🧪 nextStep: Advanced from Save Your Progress to paywall")
         case .step6Paywall:
             currentStep = .profileSetupConfirmation
-            print("🧪 nextStep: Advanced from step 6 to profile setup confirmation")
+            updateProgress()
+            print("🧪 nextStep: Advanced from paywall to profile setup confirmation")
         case .profileSetupConfirmation:
             currentStep = .preferences
+            updateProgress()
             print("🧪 nextStep: Advanced from profile setup confirmation to preferences")
+        // Deprecated cases - redirect to new flow
+        case .step2Connection:
+            currentStep = .step3MedicationProblem
+            updateProgress()
+        case .step3NameRelationship:
+            currentStep = .step4HabitFocus
+            updateProgress()
+        case .step4WhatMatters:
+            currentStep = .step5WhatMatters
+            updateProgress()
+        case .step5NotificationPromise:
+            currentStep = .step6NotificationPromise
+            updateProgress()
+        case .step6SocialProof:
+            currentStep = .step7SocialProof
+            updateProgress()
         case .signUp:
             // Deprecated flow - redirect to quiz
             startQuiz()
@@ -427,27 +512,68 @@ final class OnboardingViewModel: ObservableObject {
             break
         case .step1WhoFor:
             currentStep = .welcome
-        case .step2Connection:
+            updateProgress()
+        case .step2ReminderFrequency:
             currentStep = .step1WhoFor
-        case .step3NameRelationship:
-            currentStep = .step2Connection
-        case .step4MemoryVision:
-            currentStep = .step3NameRelationship
+            updateProgress()
+        case .step3MedicationProblem:
+            currentStep = .step2ReminderFrequency
+            updateProgress()
+        case .step4HabitFocus:
+            currentStep = .step3MedicationProblem
+            updateProgress()
+        case .step3bProofScreen:
+            currentStep = .step4HabitFocus
+            updateProgress()
+        case .step5WhatMatters:
+            currentStep = .step3bProofScreen
+            updateProgress()
+        case .step6NotificationPromise:
+            currentStep = .step5WhatMatters
+            updateProgress()
+        case .notificationPermission:
+            currentStep = .step6NotificationPromise
+            updateProgress()
+        case .step7SocialProof:
+            currentStep = .step6NotificationPromise  // Skip notification permission screen
+            updateProgress()
         case .saveYourProgress:
-            currentStep = .step4MemoryVision
+            currentStep = .step7SocialProof
+            updateProgress()
         case .step6Paywall:
             currentStep = .saveYourProgress
+            updateProgress()
         case .profileSetupConfirmation:
             currentStep = .step6Paywall
+            updateProgress()
+        // Deprecated cases
+        case .step2Connection:
+            currentStep = .step1WhoFor
+            updateProgress()
+        case .step3NameRelationship:
+            currentStep = .step2ReminderFrequency
+            updateProgress()
+        case .step4WhatMatters:
+            currentStep = .step3bProofScreen
+            updateProgress()
+        case .step5NotificationPromise:
+            currentStep = .step4HabitFocus
+            updateProgress()
+        case .step6SocialProof:
+            currentStep = .step5WhatMatters
+            updateProgress()
         case .signUp:
             currentStep = .welcome
+            updateProgress()
         case .preferences:
             currentStep = .profileSetupConfirmation
+            updateProgress()
         case .complete:
             currentStep = .preferences
+            updateProgress()
         }
     }
-    
+
     func skipToEnd() {
         currentStep = .complete
         isComplete = true
@@ -723,7 +849,7 @@ final class OnboardingViewModel: ObservableObject {
     }
     
     private func updateProgress() {
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.linear(duration: 0.5)) {
             progress = progressPercentage
         }
     }
@@ -770,12 +896,22 @@ final class OnboardingViewModel: ObservableObject {
 enum OnboardingStep: String, CaseIterable {
     case welcome = "welcome"
     case step1WhoFor = "step1WhoFor"  // Who would you like to help?
-    case step2Connection = "step2Connection"  // Habit Focus
-    case step3NameRelationship = "step3NameRelationship"  // Proof Screen
-    case step4MemoryVision = "step4MemoryVision"  // Social Proof
+    case step2ReminderFrequency = "step2ReminderFrequency"  // How often do they need reminders? (NEW)
+    case step3MedicationProblem = "step3MedicationProblem"  // Problem: Medication adherence crisis
+    case step3bProofScreen = "step3bProofScreen"  // Proof Screen (chart showing 40%)
+    case step4HabitFocus = "step4HabitFocus"  // What would you like to remind them about? (MOVED FROM STEP 2)
+    case step5WhatMatters = "step5WhatMatters"  // What matters most (emotional) - MOVED FROM STEP 4
+    case step6NotificationPromise = "step6NotificationPromise"  // Reassurance / notification promise - MOVED FROM STEP 5
+    case notificationPermission = "notificationPermission"  // Request notification permission (soft ask)
+    case step7SocialProof = "step7SocialProof"  // Testimonials - MOVED FROM STEP 6
     case saveYourProgress = "saveYourProgress"  // Auth gate before paywall
     case step6Paywall = "step6Paywall"
     case profileSetupConfirmation = "profileSetupConfirmation"
+    case step2Connection = "step2Connection"  // Deprecated - renamed to step4HabitFocus
+    case step4WhatMatters = "step4WhatMatters"  // Deprecated - renamed to step5WhatMatters
+    case step5NotificationPromise = "step5NotificationPromise"  // Deprecated - renamed to step6NotificationPromise
+    case step6SocialProof = "step6SocialProof"  // Deprecated - renamed to step7SocialProof
+    case step3NameRelationship = "step3NameRelationship"  // Deprecated - kept for compatibility
     case signUp = "signUp"  // Deprecated - kept for backwards compatibility
     case preferences = "preferences"  // Deprecated
     case complete = "complete"
@@ -786,11 +922,21 @@ enum OnboardingStep: String, CaseIterable {
             return "Welcome to Remi"
         case .step1WhoFor:
             return "Who For"
-        case .step2Connection:
-            return "Connection"
-        case .step3NameRelationship:
-            return "About Them"
-        case .step4MemoryVision:
+        case .step2ReminderFrequency:
+            return "Reminder Frequency"
+        case .step3MedicationProblem:
+            return "Medication Problem"
+        case .step3bProofScreen:
+            return "Proof Screen"
+        case .step4HabitFocus:
+            return "Habit Focus"
+        case .step5WhatMatters:
+            return "What Matters"
+        case .step6NotificationPromise:
+            return "Stay Informed"
+        case .notificationPermission:
+            return "Notifications"
+        case .step7SocialProof:
             return "Social Proof"
         case .saveYourProgress:
             return "Save Your Progress"
@@ -798,6 +944,16 @@ enum OnboardingStep: String, CaseIterable {
             return "Choose Your Plan"
         case .profileSetupConfirmation:
             return "Profile Setup"
+        case .step2Connection:
+            return "Connection" // Deprecated
+        case .step4WhatMatters:
+            return "What Matters" // Deprecated
+        case .step5NotificationPromise:
+            return "Stay Informed" // Deprecated
+        case .step6SocialProof:
+            return "Social Proof" // Deprecated
+        case .step3NameRelationship:
+            return "Proof Screen"
         case .signUp:
             return "Create Account"
         case .preferences:
@@ -813,11 +969,21 @@ enum OnboardingStep: String, CaseIterable {
             return "Create reminders for anyone you love"
         case .step1WhoFor:
             return "Who are you downloading Remi for?"
-        case .step2Connection:
-            return "How often do you think about them?"
-        case .step3NameRelationship:
-            return "Tell us about them"
-        case .step4MemoryVision:
+        case .step2ReminderFrequency:
+            return "How often do they need reminders?"
+        case .step3MedicationProblem:
+            return "The medication adherence crisis"
+        case .step3bProofScreen:
+            return "Proof screen"
+        case .step4HabitFocus:
+            return "What would you like to remind them about?"
+        case .step5WhatMatters:
+            return "What matters most to you"
+        case .step6NotificationPromise:
+            return "Remi keeps you in the loop"
+        case .notificationPermission:
+            return "Never miss a moment"
+        case .step7SocialProof:
             return "Families everywhere use Remi"
         case .saveYourProgress:
             return "Create an account to save your personalized reminders"
@@ -825,6 +991,16 @@ enum OnboardingStep: String, CaseIterable {
             return "Start your personalized memory plan"
         case .profileSetupConfirmation:
             return "Ready to create your first profile?"
+        case .step2Connection:
+            return "How often do you think about them?" // Deprecated
+        case .step4WhatMatters:
+            return "What matters most to you" // Deprecated
+        case .step5NotificationPromise:
+            return "Remi keeps you in the loop" // Deprecated
+        case .step6SocialProof:
+            return "Families everywhere use Remi" // Deprecated
+        case .step3NameRelationship:
+            return "Proof screen"
         case .signUp:
             return "Create your account to get started"
         case .preferences:

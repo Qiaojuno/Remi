@@ -24,7 +24,7 @@ enum OnboardingUI {
 
     // Spacing
     static let horizontalPadding: CGFloat = 24
-    static let topPadding: CGFloat = 30
+    static let topPadding: CGFloat = 16
     static let headerTopSpacing: CGFloat = 20
     static let contentTopSpacing: CGFloat = 60
 
@@ -38,21 +38,17 @@ enum OnboardingUI {
     // Animation
     static let optionAnimationDelay: TimeInterval = 0.1
 
-    // Total steps in quiz flow
-    static let totalSteps = 9
+    // Total steps in quiz flow (notification permission not counted)
+    static let totalSteps = 11
 }
 
 // MARK: - Progress Bar
 
 /// Reusable progress bar with back button for onboarding steps
+/// Progress is controlled by parent (OnboardingViewModel) - this is a presentational component
 struct OnboardingProgressBar: View {
-    let currentStep: Int
-    let totalSteps: Int
+    @Binding var progress: Double  // Animated by ViewModel
     let onBack: () -> Void
-
-    private var progress: CGFloat {
-        CGFloat(currentStep) / CGFloat(totalSteps)
-    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -61,21 +57,20 @@ struct OnboardingProgressBar: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.black)
                     .frame(width: OnboardingUI.backButtonSize, height: OnboardingUI.backButtonSize)
-                    .background(Color.white)
-                    .clipShape(Circle())
             }
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background track
-                    Rectangle()
+                    // Background track (rounded)
+                    RoundedRectangle(cornerRadius: OnboardingUI.progressBarHeight / 2)
                         .fill(Color.gray.opacity(0.2))
                         .frame(height: OnboardingUI.progressBarHeight)
 
-                    // Progress fill
-                    Rectangle()
+                    // Progress fill (rounded) - directly bound to ViewModel progress
+                    RoundedRectangle(cornerRadius: OnboardingUI.progressBarHeight / 2)
                         .fill(Color.black)
                         .frame(width: geometry.size.width * progress, height: OnboardingUI.progressBarHeight)
+                        .animation(.easeOut(duration: 0.4), value: progress)
                 }
             }
             .frame(height: OnboardingUI.progressBarHeight)
@@ -128,9 +123,9 @@ struct OnboardingNextButton: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, 20)
                 .background(isEnabled ? Color.black : Color.gray.opacity(0.3))
-                .cornerRadius(OnboardingUI.cornerRadius)
+                .clipShape(Capsule())
         }
         .disabled(!isEnabled)
         .padding(.horizontal, OnboardingUI.horizontalPadding)
@@ -144,7 +139,6 @@ struct OnboardingNextButton: View {
 struct OnboardingStepHeader: View {
     let title: String
     let subtitle: String?
-    @State private var showContent = false
 
     init(title: String, subtitle: String? = nil) {
         self.title = title
@@ -154,7 +148,7 @@ struct OnboardingStepHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: subtitle != nil ? 12 : 0) {
             Text(title)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: 32, weight: .bold))
                 .tracking(-1.0)
                 .foregroundColor(.black)
                 .multilineTextAlignment(.leading)
@@ -169,39 +163,20 @@ struct OnboardingStepHeader: View {
         }
         .padding(.horizontal, OnboardingUI.horizontalPadding)
         .padding(.top, OnboardingUI.headerTopSpacing)
-        .opacity(showContent ? 1 : 0)
-        .animation(.easeIn(duration: 0.3), value: showContent)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                showContent = true
-            }
-        }
     }
 }
 
 // MARK: - Quiz Option Button
 
 /// Reusable option button for single-select quiz questions
-/// Simple pastel→black toggle design
+/// Simple white→black toggle design with subtle shadow
+/// Sequential scale + spring animation for modern, premium feel
 struct QuizOptionButton: View {
     let text: String
     let index: Int
     let isSelected: Bool
     let onTap: () -> Void
     @State private var isVisible = false
-
-    // Rotate through super shallow pastel colors
-    private var unselectedBackground: Color {
-        let pastelColors = [
-            Color(hex: "B9E3FF").opacity(0.15),  // Light blue
-            Color(hex: "FFE3E3").opacity(0.15),  // Light red/pink
-            Color(hex: "E3FFE3").opacity(0.15),  // Light green
-            Color(hex: "F0E3FF").opacity(0.15),  // Light purple
-            Color(hex: "FFF0E3").opacity(0.15),  // Light orange
-            Color(hex: "FFE3F0").opacity(0.15)   // Light pink
-        ]
-        return pastelColors[index % pastelColors.count]
-    }
 
     var body: some View {
         Button(action: {
@@ -214,17 +189,16 @@ struct QuizOptionButton: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
                 .padding(.horizontal, 16)
-                .background(isSelected ? Color.black : unselectedBackground)
+                .background(isSelected ? Color.black : Color.white)
                 .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
+        .scaleEffect(isVisible ? 1.0 : 0.92)
         .opacity(isVisible ? 1 : 0)
-        .offset(y: isVisible ? 0 : 10)
-        .animation(
-            .easeOut(duration: 0.4).delay(Double(index) * OnboardingUI.optionAnimationDelay),
-            value: isVisible
-        )
+        .animation(.spring(response: 0.55, dampingFraction: 0.75), value: isVisible)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Sequential animation: 160ms delay between buttons
+            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(index) * 0.16)) {
                 isVisible = true
             }
         }
@@ -234,7 +208,8 @@ struct QuizOptionButton: View {
 // MARK: - Quiz Multi-Select Button
 
 /// Reusable option button for multi-select quiz questions
-/// Simple pastel→black toggle design (same as single-select)
+/// White button with checkbox on right (empty→black with checkmark)
+/// Sequential scale + spring animation for modern, premium feel
 struct QuizMultiSelectButton: View {
     let text: String
     let emoji: String
@@ -242,19 +217,6 @@ struct QuizMultiSelectButton: View {
     let isSelected: Bool
     let onTap: () -> Void
     @State private var isVisible = false
-
-    // Rotate through super shallow pastel colors
-    private var unselectedBackground: Color {
-        let pastelColors = [
-            Color(hex: "B9E3FF").opacity(0.15),  // Light blue
-            Color(hex: "FFE3E3").opacity(0.15),  // Light red/pink
-            Color(hex: "E3FFE3").opacity(0.15),  // Light green
-            Color(hex: "F0E3FF").opacity(0.15),  // Light purple
-            Color(hex: "FFF0E3").opacity(0.15),  // Light orange
-            Color(hex: "FFE3F0").opacity(0.15)   // Light pink
-        ]
-        return pastelColors[index % pastelColors.count]
-    }
 
     var body: some View {
         Button(action: {
@@ -267,22 +229,38 @@ struct QuizMultiSelectButton: View {
 
                 Text(text)
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(isSelected ? .white : .black)
+                    .foregroundColor(.black)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Checkbox on the right
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.black.opacity(0.2), lineWidth: 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isSelected ? Color.black : Color.white)
+                        )
+                        .frame(width: 24, height: 24)
+
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
             }
             .padding(.vertical, 20)
             .padding(.horizontal, 16)
-            .background(isSelected ? Color.black : unselectedBackground)
+            .background(Color.white)
             .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
+        .scaleEffect(isVisible ? 1.0 : 0.92)
         .opacity(isVisible ? 1 : 0)
-        .offset(y: isVisible ? 0 : 10)
-        .animation(
-            .easeOut(duration: 0.4).delay(Double(index) * OnboardingUI.optionAnimationDelay),
-            value: isVisible
-        )
+        .animation(.spring(response: 0.55, dampingFraction: 0.75), value: isVisible)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Sequential animation: 160ms delay between buttons
+            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(index) * 0.16)) {
                 isVisible = true
             }
         }
@@ -293,19 +271,16 @@ struct QuizMultiSelectButton: View {
 
 /// Container that wraps all onboarding steps with consistent layout
 struct OnboardingStepContainer<Content: View>: View {
-    let currentStep: Int
-    let totalSteps: Int
+    @Binding var progress: Double  // Progress from ViewModel
     let onBack: () -> Void
     let content: Content
 
     init(
-        currentStep: Int,
-        totalSteps: Int = OnboardingUI.totalSteps,
+        progress: Binding<Double>,
         onBack: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
-        self.currentStep = currentStep
-        self.totalSteps = totalSteps
+        self._progress = progress
         self.onBack = onBack
         self.content = content()
     }
@@ -313,8 +288,7 @@ struct OnboardingStepContainer<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             OnboardingProgressBar(
-                currentStep: currentStep,
-                totalSteps: totalSteps,
+                progress: $progress,
                 onBack: onBack
             )
 
@@ -354,7 +328,7 @@ struct QuizSelectionStep: View {
             OnboardingStepHeader(title: title, subtitle: subtitle)
 
             Spacer()
-                .frame(maxHeight: OnboardingUI.contentTopSpacing)
+                .frame(height: 80)  // Fixed spacing from header
 
             // Options
             VStack(spacing: 12) {
@@ -369,7 +343,7 @@ struct QuizSelectionStep: View {
             }
             .padding(.horizontal, OnboardingUI.horizontalPadding)
 
-            Spacer()
+            Spacer()  // Flexible spacer to bottom
 
             OnboardingNextButton(
                 isEnabled: selectedOption != nil,
