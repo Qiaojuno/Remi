@@ -4,6 +4,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 import SuperwallKit
+import RevenueCat
 import GoogleSignIn
 
 // MARK: - App Delegate for Orientation Control
@@ -39,6 +40,7 @@ struct HalloApp: App {
         // Configure other services after container is initialized
         if !ProcessInfo.processInfo.environment.keys.contains("XCODE_RUNNING_FOR_PREVIEWS") {
             configureNotifications()
+            configureRevenueCat()
             configureSuperwall()
             configureGoogleSignIn()
         }
@@ -93,14 +95,33 @@ struct HalloApp: App {
             await requestNotificationPermissions()
         }
     }
-    
+
+    private func configureRevenueCat() {
+        // RevenueCat API key from dashboard
+        let REVENUECAT_API_KEY = "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"
+
+        // Get subscription service from container
+        let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+
+        // Configure RevenueCat with current user ID (if authenticated)
+        let authService = container.resolve(AuthenticationServiceProtocol.self)
+        let userId = authService.currentUser?.uid
+
+        subscriptionService.configure(apiKey: REVENUECAT_API_KEY, userId: userId)
+        print("✅ RevenueCat configuration completed")
+    }
+
     private func configureSuperwall() {
         // Superwall API key from dashboard
         let SUPERWALL_API_KEY = "pk_1FZVcGgpr1JMD5XJ4d0Cb"
-        
-        Superwall.configure(apiKey: SUPERWALL_API_KEY)
-        print("✅ Superwall configuration initiated")
-        
+
+        // Configure Superwall to use RevenueCat as the purchase controller
+        Superwall.configure(
+            apiKey: SUPERWALL_API_KEY,
+            purchaseController: PurchaseController()
+        )
+        print("✅ Superwall configuration initiated with RevenueCat integration")
+
         // Optional: Set user attributes for targeting
         // Superwall.shared.setUserAttributes([
         //     "plan": "free",

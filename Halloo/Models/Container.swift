@@ -73,6 +73,12 @@ final class Container: ObservableObject {
             print("🖼️ [Container] Creating ImageCacheService SINGLETON")
             return ImageCacheService()
         }
+
+        // Subscription Service - Singleton for RevenueCat subscription management
+        registerSingleton(SubscriptionServiceProtocol.self) {
+            print("💰 [Container] Creating RevenueCatSubscriptionService SINGLETON")
+            return RevenueCatSubscriptionService()
+        }
     }
     
     // MARK: - Firebase Configuration Check
