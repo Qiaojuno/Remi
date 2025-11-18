@@ -97,8 +97,27 @@ struct HalloApp: App {
     }
 
     private func configureRevenueCat() {
-        // RevenueCat API key from dashboard
-        let REVENUECAT_API_KEY = "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"
+        // RevenueCat API key - automatically switches between Test Store and Production
+        // ⚠️ IMPORTANT: Replace "YOUR_PRODUCTION_KEY_HERE" with your production API key before release
+        let REVENUECAT_API_KEY: String = {
+            #if DEBUG
+            // Test Store key for development and testing
+            // This key works immediately without connecting real App Store
+            return "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"
+            #else
+            // Production key for App Store release
+            // TODO: Replace with your production API key from RevenueCat dashboard
+            // Find it at: Settings -> API Keys -> Apple App Store
+            return "YOUR_PRODUCTION_KEY_HERE"
+            #endif
+        }()
+
+        // Validate production key
+        #if !DEBUG
+        guard REVENUECAT_API_KEY != "YOUR_PRODUCTION_KEY_HERE" else {
+            fatalError("🚨 CRITICAL: Replace production RevenueCat API key before release!")
+        }
+        #endif
 
         // Get subscription service from container
         let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
@@ -108,19 +127,41 @@ struct HalloApp: App {
         let userId = authService.currentUser?.uid
 
         subscriptionService.configure(apiKey: REVENUECAT_API_KEY, userId: userId)
-        print("✅ RevenueCat configuration completed")
+
+        #if DEBUG
+        print("✅ RevenueCat configuration completed (TEST STORE MODE)")
+        #else
+        print("✅ RevenueCat configuration completed (PRODUCTION MODE)")
+        #endif
     }
 
     private func configureSuperwall() {
-        // Superwall API key from dashboard
-        let SUPERWALL_API_KEY = "pk_1FZVcGgpr1JMD5XJ4d0Cb"
+        // Superwall API key - automatically switches between Test and Production
+        // ⚠️ IMPORTANT: Add production key before release (or use same key for both)
+        let SUPERWALL_API_KEY: String = {
+            #if DEBUG
+            // Development/Test key
+            return "pk_1FZVcGgpr1JMD5XJ4d0Cb"
+            #else
+            // Production key for App Store release
+            // NOTE: Superwall allows using the same key for dev and prod
+            // If you have separate environments, replace with production key
+            // Find it at: Superwall Dashboard -> Settings -> API Keys
+            return "pk_1FZVcGgpr1JMD5XJ4d0Cb"  // TODO: Update if using separate prod key
+            #endif
+        }()
 
         // Configure Superwall to use RevenueCat as the purchase controller
         Superwall.configure(
             apiKey: SUPERWALL_API_KEY,
             purchaseController: PurchaseController()
         )
-        print("✅ Superwall configuration initiated with RevenueCat integration")
+
+        #if DEBUG
+        print("✅ Superwall configuration initiated with RevenueCat integration (DEVELOPMENT)")
+        #else
+        print("✅ Superwall configuration initiated with RevenueCat integration (PRODUCTION)")
+        #endif
 
         // Optional: Set user attributes for targeting
         // Superwall.shared.setUserAttributes([
