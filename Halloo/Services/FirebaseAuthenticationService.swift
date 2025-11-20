@@ -5,6 +5,7 @@ import FirebaseFirestore
 import GoogleSignIn
 import AuthenticationServices
 import Combine
+import CryptoKit
 
 // MARK: - Firebase Authentication Service
 class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProtocol {
@@ -78,14 +79,81 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     }
     
     func signInWithApple() async throws -> AuthResult {
-        // Note: Apple Sign In integration would typically be handled at the UI level
-        // with SignInWithAppleButton, which then passes the ASAuthorization result here
-        // For now, we'll throw an error indicating this should be handled differently
-        throw AuthenticationError.unknownError("Apple Sign In should be handled through SignInWithAppleButton in the UI layer")
+        print("🍎 Starting Apple Sign-In flow...")
+
+        // Generate nonce for security
+        let nonce = randomNonceString()
+        let sha256Nonce = sha256(nonce)
+
+        // Create Apple Sign In request
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256Nonce
+
+        // Create and configure authorization controller
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+
+        // Use coordinator to handle delegate callbacks
+        let coordinator = SignInWithAppleCoordinator(nonce: nonce)
+        authorizationController.delegate = coordinator
+        authorizationController.presentationContextProvider = coordinator
+
+        // Start the authorization flow
+        authorizationController.performRequests()
+
+        // Wait for result
+        let authorization = try await coordinator.waitForResult()
+
+        // Process the authorization
+        return try await processAppleSignIn(authorization: authorization, nonce: nonce)
+    }
+
+    // Helper function to generate nonce
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+
+        while remainingLength > 0 {
+            let randoms: [UInt8] = (0..<16).map { _ in
+                var random: UInt8 = 0
+                let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
+                if errorCode != errSecSuccess {
+                    fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+                }
+                return random
+            }
+
+            randoms.forEach { random in
+                if remainingLength == 0 {
+                    return
+                }
+
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+
+        return result
+    }
+
+    // Helper function to hash nonce
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        let hashString = hashedData.compactMap {
+            String(format: "%02x", $0)
+        }.joined()
+
+        return hashString
     }
     
     /// Process Apple Sign In authorization result from UI layer
-    func processAppleSignIn(authorization: ASAuthorization) async throws -> AuthResult {
+    func processAppleSignIn(authorization: ASAuthorization, nonce: String) async throws -> AuthResult {
         guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential else {
             throw AuthenticationError.unknownError("Invalid Apple ID credential")
         }
@@ -97,7 +165,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
 
         // Create Firebase credential
         let credential = OAuthProvider.appleCredential(withIDToken: identityTokenString,
-                                                      rawNonce: "",
+                                                      rawNonce: nonce,
                                                       fullName: appleIDCredential.fullName)
 
         // Sign in with Firebase
@@ -117,6 +185,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
 
         // CRITICAL: Ensure user document exists in Firestore
         // This is required for profile creation (updateUserProfileCount needs it)
+        // ✅ ARCHITECTURE: Subscription managed by RevenueCat (no app-side trial)
         if isNewUser {
             print("📝 Creating user document for new Apple user...")
             let newUser = User(
@@ -125,9 +194,8 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                 fullName: firebaseUser.displayName ?? "",
                 phoneNumber: "",
                 createdAt: Date(),
-                isOnboardingComplete: false,
-                subscriptionStatus: .trial,
-                trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
+                subscriptionStatus: .active, // RevenueCat controls access
+                trialEndDate: nil, // No app-side trial - RevenueCat handles this
                 quizAnswers: nil,
                 profileCount: 0,
                 taskCount: 0,
@@ -192,6 +260,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
 
             // CRITICAL: Ensure user document exists in Firestore
             // This is required for profile creation (updateUserProfileCount needs it)
+            // ✅ ARCHITECTURE: Subscription managed by RevenueCat (no app-side trial)
             if isNewUser {
                 print("📝 Creating user document for new Google user...")
                 let newUser = User(
@@ -200,9 +269,8 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                     fullName: firebaseUser.displayName ?? "",
                     phoneNumber: "",
                     createdAt: Date(),
-                    isOnboardingComplete: false,
-                    subscriptionStatus: .trial,
-                    trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
+                    subscriptionStatus: .active, // RevenueCat controls access
+                    trialEndDate: nil, // No app-side trial - RevenueCat handles this
                     quizAnswers: nil,
                     profileCount: 0,
                     taskCount: 0,
@@ -434,7 +502,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                 fullName: data["fullName"] as? String ?? firebaseUser.displayName ?? "",
                 phoneNumber: data["phoneNumber"] as? String ?? "",
                 createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
-                isOnboardingComplete: data["isOnboardingComplete"] as? Bool ?? false,
                 subscriptionStatus: SubscriptionStatus(rawValue: data["subscriptionStatus"] as? String ?? "trial") ?? .trial,
                 trialEndDate: (data["trialEndDate"] as? Timestamp)?.dateValue(),
                 quizAnswers: data["quizAnswers"] as? [String: String],
@@ -451,7 +518,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                 fullName: firebaseUser.displayName ?? "",
                 phoneNumber: "",
                 createdAt: Date(),
-                isOnboardingComplete: false,
                 subscriptionStatus: .trial,
                 trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
                 quizAnswers: nil,
@@ -474,7 +540,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
             "phoneNumber": user.phoneNumber,
             "createdAt": user.createdAt,
             "subscriptionStatus": user.subscriptionStatus.rawValue,
-            "isOnboardingComplete": user.isOnboardingComplete,
             "trialEndDate": user.trialEndDate ?? Date(),
             "quizAnswers": user.quizAnswers ?? [:],
             "profileCount": user.profileCount,
@@ -512,5 +577,48 @@ extension FirebaseAuthenticationService {
         default:
             return .unknownError(error.localizedDescription)
         }
+    }
+}
+
+// MARK: - Sign In With Apple Coordinator
+@MainActor
+class SignInWithAppleCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+
+    private let nonce: String
+    private var continuation: CheckedContinuation<ASAuthorization, Error>?
+
+    init(nonce: String) {
+        self.nonce = nonce
+        super.init()
+    }
+
+    func waitForResult() async throws -> ASAuthorization {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    // MARK: - ASAuthorizationControllerDelegate
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("✅ [AppleSignIn] Authorization successful")
+        continuation?.resume(returning: authorization)
+        continuation = nil
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        print("❌ [AppleSignIn] Authorization failed: \(error.localizedDescription)")
+        continuation?.resume(throwing: error)
+        continuation = nil
+    }
+
+    // MARK: - ASAuthorizationControllerPresentationContextProviding
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            fatalError("No window available for Apple Sign In")
+        }
+        return window
     }
 }
