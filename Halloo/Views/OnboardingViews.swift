@@ -15,95 +15,364 @@ struct TopRoundedRectangle: Shape {
     }
 }
 
+// MARK: - Welcome Card Stack (Interactive Preview)
+struct WelcomeCardStack: View {
+    @State private var stackedCards: [Int] = [0, 1, 2]
+    @State private var isDragging: Bool = false
+    @State private var dragOffset: CGSize = .zero
+    @State private var showCards = false
+
+    // Mock task examples (randomized from common habits)
+    private let mockTasks = [
+        "take your medication",
+        "go for a walk",
+        "drink some water"
+    ]
+
+    // Randomized greetings (matching TwilioSMSService)
+    private let mockGreetings = [
+        "Hi Mom!",
+        "Hello Mom 🌞",
+        "Hi Mom! Hope you're doing well."
+    ]
+
+    // Randomized prompts (matching TwilioSMSService)
+    private let mockPrompts = [
+        "Time to",
+        "A gentle reminder to",
+        "Just a little nudge to"
+    ]
+
+    // Text-only instructions (matching TwilioSMSService textInstructions)
+    private let mockInstructions = [
+        "Text back a quick note when you're finished — I'd love to hear 💬",
+        "When you're done, send a little message to let me know 🌷",
+        "Once you finish, reply with a quick hello — it always makes my day ☀️"
+    ]
+
+    // Mock confirmations (matching actual SMS responses)
+    private let mockConfirmations = [
+        "Done ✅",
+        "All set!",
+        "Completed!"
+    ]
+
+    // Mock appreciation messages (matching Cloud Functions thankYouMessages)
+    private let mockAppreciations = [
+        "Thank you! 💙",
+        "Got it! That's wonderful 😊",
+        "Perfect! Great work ✨"
+    ]
+
+    // Profile images for cards
+    private let cardFaces = [
+        "Card Face 1",
+        "Card Face 2",
+        "Card Face 1"  // Reuse first face for third card
+    ]
+
+    private let sidePadding: CGFloat = 18  // Scaled down 10%: 20 * 0.9
+    private var cardWidth: CGFloat {
+        // Scaled down 10%: 0.95 * 0.9 = 0.855
+        (UIScreen.main.bounds.width - (sidePadding * 2)) * 0.855
+    }
+    private var cardHeight: CGFloat {
+        // Scaled down 10%: 1.4 * 0.9 = 1.26
+        cardWidth * 1.26
+    }
+    private let swipeThreshold: CGFloat = 90  // Scaled down 10%: 100 * 0.9
+
+    var body: some View {
+        ZStack {
+            ForEach(stackedCards, id: \.self) { cardIndex in
+                if showCards {
+                    let currentPosition = stackedCards.firstIndex(of: cardIndex) ?? 0
+
+                    mockCard(taskIndex: cardIndex)
+                        .scaleEffect(getCardScale(for: currentPosition))
+                        .offset(
+                            x: currentPosition == 0 ? dragOffset.width : getCardXOffset(for: currentPosition),
+                            y: currentPosition == 0 ? dragOffset.height : getCardYOffset(for: currentPosition)
+                        )
+                        .rotationEffect(.degrees(
+                            currentPosition == 0 ? Double(dragOffset.width * 0.02) : getCardRotation(for: currentPosition)
+                        ))
+                        .zIndex(currentPosition == 0 ? 100 : Double(10 - currentPosition))
+                        .animation(currentPosition == 0 && isDragging ? nil : .easeOut(duration: 0.35), value: dragOffset)
+                        .animation(currentPosition == 0 && isDragging ? nil : .linear(duration: 0.2), value: stackedCards)
+                        .opacity(showCards ? 1 : 0)
+                        .animation(.easeOut(duration: 0.5).delay(Double(currentPosition) * 0.1), value: showCards)
+                }
+            }
+        }
+        .frame(width: cardWidth, height: cardHeight)
+        .gesture(DragGesture()
+            .onChanged { value in
+                isDragging = true
+                dragOffset = CGSize(width: value.translation.width, height: 0)
+            }
+            .onEnded { value in
+                isDragging = false
+
+                if abs(value.translation.width) > swipeThreshold && stackedCards.count > 1 {
+                    HapticFeedback.light()
+
+                    let targetX = value.translation.width > 0 ? 405 : -405  // Scaled down 10%: 450 * 0.9
+                    dragOffset = CGSize(width: targetX, height: 0)
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        let topCard = stackedCards.removeFirst()
+                        stackedCards.append(topCard)
+                        dragOffset = .zero
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        dragOffset = .zero
+                    }
+                }
+            })
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showCards = true
+            }
+        }
+    }
+
+    private func mockCard(taskIndex: Int) -> some View {
+        // Calculate progressive lightening for cards in stack (matching CardStackView)
+        // Current position in stack determines lightening amount
+        let currentPosition = stackedCards.firstIndex(of: taskIndex) ?? 0
+        let baseColorRed: Double = 0.08
+        let baseColorGreen: Double = 0.08
+        let baseColorBlue: Double = 0.12  // Bluish tint
+        let lighteningAmount = Double(currentPosition) * 0.05  // 5% lighter per position
+        let cardColor = Color(red: baseColorRed + lighteningAmount,
+                             green: baseColorGreen + lighteningAmount,
+                             blue: baseColorBlue + lighteningAmount)
+
+        return ZStack {
+            cardColor
+
+            VStack {
+                // Header with card counter
+                HStack {
+                    Text("\(taskIndex + 1)/\(mockTasks.count)")
+                        .font(.system(size: 12.6, weight: .semibold))  // Scaled down 10%: 14 * 0.9
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10.8)  // Scaled down 10%: 12 * 0.9
+                        .padding(.vertical, 5.4)  // Scaled down 10%: 6 * 0.9
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.5))
+                        )
+                        .padding(.leading, 14.4)  // Scaled down 10%: 16 * 0.9
+                        .padding(.top, 14.4)  // Scaled down 10%: 16 * 0.9
+                    Spacer()
+                }
+
+                Spacer()
+
+                // SMS bubbles using SpeechBubbleView (matching CardStackView)
+                VStack(spacing: 16.2) {  // Scaled down 10%: 18 * 0.9
+                    // Outgoing reminder (using randomized greeting + prompt + instructions system)
+                    HStack {
+                        Spacer(minLength: 0)
+                        SpeechBubbleView(
+                            text: "\(mockGreetings[taskIndex]) \(mockPrompts[taskIndex]) \(mockTasks[taskIndex]).\n\n\(mockInstructions[taskIndex])",
+                            isOutgoing: true,
+                            backgroundColor: Color.blue,
+                            textColor: .white,
+                            maxWidth: 258.3,  // Scaled down 10%: 287 * 0.9
+                            scale: 0.765  // Scaled down 10%: 0.85 * 0.9
+                        )
+                    }
+
+                    // Incoming confirmation (randomized responses)
+                    HStack {
+                        SpeechBubbleView(
+                            text: mockConfirmations[taskIndex],
+                            isOutgoing: false,
+                            backgroundColor: Color(red: 0.9, green: 0.9, blue: 0.9),
+                            textColor: .black,
+                            maxWidth: 217.8,  // Scaled down 10%: 242 * 0.9
+                            scale: 0.765  // Scaled down 10%: 0.85 * 0.9
+                        )
+                        Spacer(minLength: 0)
+                    }
+
+                    // Thank you reply (randomized appreciation messages)
+                    HStack {
+                        Spacer(minLength: 0)
+                        SpeechBubbleView(
+                            text: mockAppreciations[taskIndex],
+                            isOutgoing: true,
+                            backgroundColor: Color.blue,
+                            textColor: .white,
+                            maxWidth: 258.3,  // Scaled down 10%: 287 * 0.9
+                            scale: 0.765  // Scaled down 10%: 0.85 * 0.9
+                        )
+                    }
+                }
+                .padding(.horizontal, 14.4)  // Scaled down 10%: 16 * 0.9
+
+                Spacer()
+
+                // Bottom banner with profile
+                HStack(spacing: 10.8) {  // Scaled down 10%: 12 * 0.9
+                    Image(cardFaces[taskIndex])
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 40.5, height: 40.5)  // Scaled down 10%: 45 * 0.9
+                        .clipShape(Circle())
+
+                    Text(mockTasks[taskIndex])
+                        .font(.system(size: 14.4, weight: .semibold))  // Scaled down 10%: 16 * 0.9
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text("9:30 AM")
+                        .font(.system(size: 12.6, weight: .medium))  // Scaled down 10%: 14 * 0.9
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                .padding(.horizontal, 14.4)  // Scaled down 10%: 16 * 0.9
+                .padding(.vertical, 10.8)  // Scaled down 10%: 12 * 0.9
+                .background(Color.black.opacity(0.3))
+            }
+        }
+        .frame(width: cardWidth, height: cardHeight)
+        .cornerRadius(10)  // Changed from 9 to 10 to match CardStackView
+    }
+
+    // Card positioning helpers (same as CardStackView)
+    private func getCardScale(for index: Int) -> CGFloat {
+        switch index {
+        case 0: return 1.0
+        case 1, 2: return 0.98
+        default: return 0.96
+        }
+    }
+
+    private func getCardXOffset(for index: Int) -> CGFloat {
+        switch index {
+        case 1: return -10.8  // Scaled down 10%: -12 * 0.9
+        case 2: return 9  // Scaled down 10%: 10 * 0.9
+        default: return 0
+        }
+    }
+
+    private func getCardYOffset(for index: Int) -> CGFloat {
+        switch index {
+        case 1: return -18  // Scaled down 10%: -20 * 0.9
+        case 2: return 16.2  // Scaled down 10%: 18 * 0.9
+        default: return 0
+        }
+    }
+
+    private func getCardRotation(for index: Int) -> Double {
+        switch index {
+        case 1: return -2.5
+        case 2: return 1.8
+        default: return 0
+        }
+    }
+}
+
 // MARK: - Welcome View
 struct WelcomeView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var showMessages = false
-    @State private var showButtons = false
+    @State private var showContent = false
     @State private var showingLogin = false
 
     var body: some View {
         ZStack {
             // Main content
             VStack(spacing: 0) {
-                // Remi Logo - EXACT same Y-axis as LoginView (100px from top)
-                Text("Remi")
-                    .font(.custom("Poppins-Medium", size: 73.93))
-                    .tracking(-3.0)
-                    .foregroundColor(.black)
-                    .padding(.top, 100)
+                // Remi Logo at top left
+                HStack {
+                    Image("Remi Logo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 80)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6), value: showContent)
 
-                // Message bubbles conversation - positioned close to logo
-                VStack(spacing: 16) {
-                    if showMessages {
-                        // Blue bubble (sender) - "Create Reminders"
-                        HStack {
-                            Spacer(minLength: UIScreen.main.bounds.width * 0.2)
-                            SpeechBubbleView(
-                                text: "Create Reminders",
-                                isOutgoing: true,
-                                backgroundColor: Color(hex: "007AFF"),
-                                textColor: .white
-                            )
-                        }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-
-                        // Grey bubble (receiver) - "for anyone you love"
-                        HStack {
-                            SpeechBubbleView(
-                                text: "for anyone you love",
-                                isOutgoing: false,
-                                backgroundColor: Color(hex: "E5E5EA"),
-                                textColor: .black
-                            )
-                            Spacer(minLength: UIScreen.main.bounds.width * 0.2)
-                        }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 40)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
 
                 Spacer()
 
-                // Buttons section
-                if showButtons {
-                    VStack(spacing: 16) {
-                        // Primary button - Let's get started
-                        Button(action: {
-                            HapticFeedback.medium()
-                            viewModel.startQuiz()
-                        }) {
-                            Text("Let's get started")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(Color.black)
-                                .cornerRadius(25)
-                        }
+                // Card stack preview
+                if showContent {
+                    WelcomeCardStack()
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.6).delay(0.1), value: showContent)
 
-                        // Secondary button - Already signed up? Log in
-                        Button(action: {
-                            HapticFeedback.light()
-                            showingLogin = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Text("Already signed up?")
-                                    .foregroundColor(.gray)
-                                Text("Log in")
-                                    .foregroundColor(.black)
-                                    .fontWeight(.semibold)
-                            }
-                            .font(.system(size: 15))
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 50)
-                    .opacity(showButtons ? 1 : 0)
-                    .offset(y: showButtons ? 0 : 20)
-                    .animation(.easeOut(duration: 0.4).delay(0.3), value: showButtons)
+                    // Tagline with gradient on "automatically"
+                    (
+                        Text("Keep your parents healthy,")
+                            .foregroundColor(.black)
+                        +
+                        Text(" automatically")
+                            .foregroundStyle(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color(hex: "6BB6FF"),
+                                        Color(hex: "4A9DFF")
+                                    ]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+                    .font(.system(size: 28, weight: .bold))
+                    .tracking(-1.0)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 48)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.6).delay(0.2), value: showContent)
                 }
+
+                Spacer()
+                    .frame(height: 24)
+
+                // Buttons section
+                VStack(spacing: 16) {
+                    // Primary button - Get Started
+                    Button(action: {
+                        HapticFeedback.medium()
+                        viewModel.startQuiz()
+                    }) {
+                        Text("Get Started")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                            .background(Color.black)
+                            .cornerRadius(28)  // Pill-shaped: height/2 = 56/2 = 28
+                    }
+
+                    // Secondary button - Already signed up? Log in
+                    Button(action: {
+                        HapticFeedback.light()
+                        showingLogin = true
+                    }) {
+                        HStack(spacing: 4) {
+                            Text("Already signed up?")
+                                .foregroundColor(.black)
+                            Text("Log in")
+                                .foregroundColor(.black)
+                                .fontWeight(.semibold)
+                        }
+                        .font(.system(size: 15))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 34)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
@@ -133,16 +402,9 @@ struct WelcomeView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            // Show messages after a brief delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                withAnimation(.easeOut(duration: 1.2)) {
-                    showMessages = true
-                }
-            }
-
-            // Show buttons after messages animate in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                showButtons = true
+            // Show content (cards + tagline) with slight delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
             }
         }
     }
@@ -154,29 +416,25 @@ struct LoginSheetView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        VStack(spacing: 24) {
-            // Handle
-            RoundedRectangle(cornerRadius: 2.5)
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 36, height: 5)
-                .padding(.top, 8)
-
-            // Title
-            Text("Welcome back")
-                .font(.system(size: 28, weight: .bold))
-                .tracking(-1.0)
-                .padding(.top, 16)
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 24) {
+                // Title
+                Text("Welcome back")
+                    .font(.system(size: 28, weight: .bold))
+                    .tracking(-1.0)
+                    .padding(.top, 40)
 
             Spacer()
-                .frame(height: 20)
+                .frame(height: 12)
 
             // Login buttons
+            // ✅ ARCHITECTURE: No manual dismiss - ContentView reacts to auth state changes
             VStack(spacing: 12) {
                 // Apple Sign In
                 Button {
                     _Concurrency.Task {
                         await viewModel.signInWithApple()
-                        dismiss()
+                        // ✅ No dismiss() - ContentView will automatically navigate when authService.isAuthenticated changes
                     }
                 } label: {
                     HStack {
@@ -196,7 +454,7 @@ struct LoginSheetView: View {
                 Button {
                     _Concurrency.Task {
                         await viewModel.signInWithGoogle()
-                        dismiss()
+                        // ✅ No dismiss() - ContentView will automatically navigate when authService.isAuthenticated changes
                     }
                 } label: {
                     HStack {
@@ -220,8 +478,23 @@ struct LoginSheetView: View {
             .padding(.horizontal, 24)
 
             Spacer()
+            }
+            .background(Color(hex: "f9f9f9"))
+
+            // Close button
+            Button(action: {
+                dismiss()
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                    .frame(width: 32, height: 32)
+                    .background(Color.gray.opacity(0.15))
+                    .clipShape(Circle())
+            }
+            .padding(.top, 16)
+            .padding(.trailing, 24)
         }
-        .background(Color(hex: "f9f9f9"))
     }
 }
 
@@ -511,15 +784,16 @@ struct ProfileSetupConfirmationView: View {
 // NOTE: Steps 1-5 have been refactored and moved to OnboardingQuizSteps.swift
 // This dramatically reduces code duplication and improves maintainability
 
-// MARK: - Step 6: Paywall View
-struct Step6View: View {
+// MARK: - Paywall Step View
+struct PaywallStepView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
     @State private var paywallDismissed = false
 
     var body: some View {
         OnboardingStepContainer(
-            currentStep: 6,
+            progress: $viewModel.progress,
+            
             onBack: viewModel.previousStep
         ) {
             // Superwall Paywall - automatically shows campaign
@@ -564,6 +838,170 @@ struct PaywallView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
         // No updates needed
+    }
+}
+
+// MARK: - Paywall Gate View (Subscription Check)
+
+/// ✅ ARCHITECTURE: Subscription gate between authentication and main app
+///
+/// This view acts as a decision point after successful authentication:
+/// - If user has active subscription/trial (via RevenueCat) → Pass through to main app
+/// - If user needs subscription → Show Superwall paywall
+///
+/// Placement triggers are differentiated based on user journey:
+/// - New users (< 5 min old account) → "onboarding_paywall"
+/// - Returning users (no sub) → "auth_gate_paywall"
+///
+/// Note: RevenueCat handles trial logic via product configuration, not app-side
+struct PaywallGateView<AuthenticatedContent: View>: View {
+    @EnvironmentObject var appState: AppState
+    @State private var subscriptionStatus: SubscriptionCheckStatus = .checking
+    @State private var isNewUser: Bool = false
+
+    let authenticatedContent: AuthenticatedContent
+
+    enum SubscriptionCheckStatus {
+        case checking
+        case hasSubscription
+        case needsSubscription
+    }
+
+    init(@ViewBuilder authenticatedContent: () -> AuthenticatedContent) {
+        self.authenticatedContent = authenticatedContent()
+    }
+
+    var body: some View {
+        Group {
+            switch subscriptionStatus {
+            case .checking:
+                LoadingView()
+                    .onAppear {
+                        checkSubscriptionStatus()
+                    }
+
+            case .hasSubscription:
+                // ✅ User has subscription (RevenueCat confirms) - show main app
+                authenticatedContent
+
+            case .needsSubscription:
+                // ❌ No subscription - show paywall
+                PaywallGateContent(
+                    placement: determinePlacement(),
+                    isNewUser: isNewUser
+                )
+            }
+        }
+    }
+
+    private func checkSubscriptionStatus() {
+        _Concurrency.Task { @MainActor in
+            print("🔍 [PaywallGate] Checking subscription status...")
+
+            // Check if user has active subscription or trial
+            let hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+
+            if hasSubscription {
+                print("✅ [PaywallGate] User has active subscription - allowing access")
+                subscriptionStatus = .hasSubscription
+                // ContentView will handle navigation to dashboard
+            } else {
+                print("❌ [PaywallGate] No subscription - showing paywall")
+
+                // Determine user state for placement targeting
+                await determineUserState()
+
+                subscriptionStatus = .needsSubscription
+            }
+        }
+    }
+
+    private func determineUserState() async {
+        // Check if this is a new user (account created recently)
+        if let user = appState.currentUser, let createdAt = user.createdAt {
+            let accountAge = Date().timeIntervalSince(createdAt)
+            isNewUser = accountAge < 300 // Less than 5 minutes old = new user
+
+            print("📊 [PaywallGate] User state:")
+            print("   - Account age: \(Int(accountAge)) seconds")
+            print("   - Is new user: \(isNewUser)")
+        } else {
+            // No creation date available - assume returning user
+            isNewUser = false
+        }
+    }
+
+    private func determinePlacement() -> String {
+        // ✅ SIMPLIFIED: Only 2 placements (RevenueCat handles trial logic)
+        // Choose Superwall placement based on user journey
+        if isNewUser {
+            return "onboarding_paywall" // New user (account < 5 min old)
+        } else {
+            return "auth_gate_paywall"  // Returning user without subscription
+        }
+    }
+}
+
+// MARK: - Paywall Gate Content
+
+/// Displays the paywall with Superwall integration
+/// ✅ SIMPLIFIED: RevenueCat handles trials, we just check subscription status
+private struct PaywallGateContent: View {
+    let placement: String
+    let isNewUser: Bool
+
+    @EnvironmentObject var appState: AppState
+
+    var body: some View {
+        ZStack {
+            Color(hex: "f9f9f9")
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Spacer()
+
+                // Remi logo
+                Image("Remi Logo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 200)
+
+                // Message based on user state
+                Text(getMessage())
+                    .font(.system(size: 24, weight: .bold))
+                    .tracking(-1.0)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+
+                Spacer()
+            }
+        }
+        .onAppear {
+            triggerSuperwallPaywall()
+        }
+    }
+
+    private func getMessage() -> String {
+        if isNewUser {
+            return "Choose your plan to get started"
+        } else {
+            return "Subscribe to continue"
+        }
+    }
+
+    private func triggerSuperwallPaywall() {
+        print("🎨 [PaywallGate] Triggering Superwall placement: \(placement)")
+
+        // Set user attributes for targeting (RevenueCat handles trial state)
+        Superwall.shared.setUserAttributes([
+            "user_type": isNewUser ? "new" : "returning",
+            "paywall_trigger": "auth_gate"
+        ])
+
+        // Register placement - Superwall handles the rest
+        Superwall.shared.register(placement: placement) {
+            print("✅ [PaywallGate] User gained access after purchase")
+        }
     }
 }
 
