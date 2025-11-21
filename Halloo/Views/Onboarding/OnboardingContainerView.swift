@@ -51,6 +51,12 @@ struct OnboardingContainerView: View {
             case .notificationPermission:
                 NotificationPermissionView()
 
+            case .loadingPlan:
+                LoadingPlanView()
+
+            case .personalizedPlan:
+                PersonalizedPlanView()
+
             case .step7SocialProof:
                 Step7View()
 
@@ -63,38 +69,11 @@ struct OnboardingContainerView: View {
             case .profileSetupConfirmation:
                 ProfileSetupConfirmationView()
 
-            // Deprecated cases - redirect
-            case .step2Connection:
-                Step4View()  // Old habit selection -> new Step4
-
-            case .step3NameRelationship:
-                Step3View()  // Redirect to medication problem
-
-            case .step4WhatMatters:
-                Step5View()  // Redirect to new Step5
-
-            case .step5NotificationPromise:
-                Step6View()  // Redirect to new Step6
-
-            case .step6SocialProof:
-                Step7View()  // Redirect to new Step7
-
-            case .signUp:
-                // Deprecated - redirect to quiz
-                WelcomeView()
-                    .onAppear {
-                        viewModel.startQuiz()
-                    }
-
             case .preferences:
                 // Show CreateProfileView
                 Text("Create Profile (TODO)")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(hex: "f9f9f9"))
-
-            case .complete:
-                // This should never show - ContentView handles transition to dashboard
-                ProgressView()
             }
         }
         .environmentObject(viewModel)

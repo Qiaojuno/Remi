@@ -1,8 +1,8 @@
 # 🔥 Firebase Schema Contract & Audit Report
 **Project:** Halloo/Remi iOS App
 **Date:** 2025-10-03
-**Last Verified:** 2025-10-09
-**Status:** ✅ **SCHEMA MIGRATION COMPLETE**
+**Last Verified:** 2025-11-18
+**Status:** ✅ **SCHEMA MIGRATION COMPLETE** + RevenueCat Integration
 
 ---
 
@@ -50,7 +50,13 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
   },
   "profileCount": 2,                          // Auto-calculated
   "taskCount": 5,                             // Auto-calculated
-  "lastSyncTimestamp": "2025-10-03T14:30:00Z"
+  "lastSyncTimestamp": "2025-10-03T14:30:00Z",
+
+  // ✨ NEW (2025-11-18): RevenueCat Integration Fields
+  "revenueCatCustomerId": "firebase-auth-uid-abc123",  // Links to RevenueCat customer
+  "hasActiveSubscription": false,             // Cached subscription status
+  "subscriptionTier": "free",                 // "free" | "unlimited"
+  "lastSubscriptionCheck": "2025-11-18T12:00:00Z"  // Last entitlement check timestamp
 }
 ```
 
@@ -62,6 +68,18 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 - `createdAt` → Required, set on first document creation
 - `profileCount` → Auto-updated when profiles added/removed
 - `taskCount` → Auto-updated when tasks added/removed
+- `revenueCatCustomerId` → Optional, matches Firebase Auth UID (for RevenueCat customer linking)
+- `hasActiveSubscription` → Optional, cached entitlement status (updated on app launch)
+- `subscriptionTier` → Optional, cached tier ("free" or "unlimited")
+- `lastSubscriptionCheck` → Optional, timestamp of last RevenueCat entitlement check
+
+**RevenueCat Integration Notes (2025-11-18):**
+- User subscription state is **primarily managed by RevenueCat SDK**, not Firestore
+- Firebase User document may optionally cache subscription status for convenience
+- Source of truth is **RevenueCat.Purchases.shared.customerInfo()**, NOT Firestore
+- `revenueCatCustomerId` links Firebase user to RevenueCat customer (same as Firebase Auth UID)
+- Subscription checks use `SubscriptionManager.hasUnlimitedAccess()` → Queries RevenueCat SDK
+- See `/Halloo/docs/REVENUECAT_INTEGRATION_GUIDE.md` for full integration details
 
 ---
 

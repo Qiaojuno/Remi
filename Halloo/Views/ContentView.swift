@@ -47,7 +47,7 @@ struct ContentView: View {
     @State private var dashboardViewModel: DashboardViewModel?
     @State private var galleryViewModel: GalleryViewModel?
     @State private var authService: FirebaseAuthenticationService?
-    @State private var isAuthenticated = false  // Temporary - will be removed in Phase 4
+    // ✅ REMOVED: @State private var isAuthenticated - Using authService.isAuthenticated as single source of truth
     @State private var selectedTab = 0
     @State private var previousTab = 0  // Track previous tab for Habits (middle) transition direction
     @State private var transitionDirection: Int = 1  // Unused - kept for backward compatibility with bindings
@@ -100,27 +100,32 @@ struct ContentView: View {
     }
     
     // MARK: - Navigation Content
+    // ✅ ARCHITECTURE: Single source of truth for authentication state
+    // Auth state (authService.isAuthenticated) determines view hierarchy
+    // Subscription check happens AFTER authentication via PaywallGateView
     @ViewBuilder
     private var navigationContent: some View {
-        if let onboardingVM = onboardingViewModel {
-            // Check if user has completed onboarding
-            if onboardingVM.isComplete {
-                // Onboarding complete - check authentication
-                if isAuthenticated {
+        if let authService = authService {
+            if authService.isAuthenticated {
+                // ✅ User is authenticated → Check subscription via PaywallGateView
+                // PaywallGateView will either:
+                //   - Show dashboard if subscribed
+                //   - Show Superwall paywall if not subscribed
+                PaywallGateView {
                     authenticatedContent
-                } else {
-                    // Returning user - show login directly
-                    LoginView(onAuthenticationSuccess: {
-                        profileViewModel?.loadProfiles()
-                    })
-                    .environmentObject(onboardingVM)
                 }
+                .environmentObject(appState)
             } else {
-                // Onboarding not complete - show onboarding flow
-                OnboardingContainerView()
-                    .environmentObject(onboardingVM)
+                // ✅ User not authenticated → Show onboarding/welcome
+                if let onboardingVM = onboardingViewModel {
+                    OnboardingContainerView()
+                        .environmentObject(onboardingVM)
+                } else {
+                    LoadingView()
+                }
             }
         } else {
+            // Auth service still initializing
             LoadingView()
         }
     }
@@ -499,7 +504,8 @@ struct ContentView: View {
         // Subscribe to auth state changes
         setupAuthStateObserver()
 
-        // Check if user is already authenticated on app launch
+        // ✅ ARCHITECTURE: Check auth state on launch (no local state update needed)
+        // authService.isAuthenticated is the single source of truth
         _Concurrency.Task {
             // Small delay to ensure Firebase Auth is ready
             try? await _Concurrency.Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
@@ -508,7 +514,6 @@ struct ContentView: View {
                 print("🔵 [ContentView] Checking auth on launch...")
                 if authService?.isAuthenticated == true {
                     print("✅ [ContentView] User is authenticated on launch")
-                    isAuthenticated = true
                     // Load all user data and setup real-time listeners
                     _Concurrency.Task {
                         print("🔵 [ContentView] Calling appState.loadUserData()...")
@@ -530,7 +535,6 @@ struct ContentView: View {
                     }
                 } else {
                     print("⚠️ [ContentView] User is NOT authenticated on launch")
-                    isAuthenticated = false
                 }
             }
         }
@@ -571,12 +575,11 @@ struct ContentView: View {
     private func setupAuthStateObserver() {
         guard let authService = authService else { return }
 
-        // Subscribe to auth state publisher
+        // ✅ ARCHITECTURE: Subscribe to auth state changes (single source of truth)
+        // No local isAuthenticated state - authService.isAuthenticated drives navigation
         authService.authStatePublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak authService] newAuthState in
-                self.isAuthenticated = newAuthState
-
+            .sink { newAuthState in
                 if newAuthState {
                     // User logged in - load data and setup listeners
                     print("✅ [ContentView] User logged in - loading data and setting up listeners")
@@ -640,7 +643,8 @@ struct ContentView: View {
     // MARK: - Event Handlers
     private func handleOnboardingCompletion(_ isComplete: Bool) {
         if isComplete {
-            // User completed onboarding, reset tab selection
+            // User completed onboarding flow (either via quiz or direct login)
+            // Reset tab selection to Dashboard
             selectedTab = 0
         }
     }

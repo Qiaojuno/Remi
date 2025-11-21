@@ -1,6 +1,6 @@
 # Halloo iOS App - Project Structure & Status
-# Last Updated: 2025-11-06
-# Status: ✅ **BUILD SUCCESSFUL** - EXIF Metadata Stripping for Privacy Complete
+# Last Updated: 2025-11-18
+# Status: ✅ **BUILD SUCCESSFUL** - RevenueCat + Superwall Subscription Integration Complete
 
 ## 🚨 CURRENT BUILD STATUS
 **Build Status:** ✅ **BUILD SUCCEEDED** (Verified 2025-10-21)
@@ -11,7 +11,17 @@ xcodebuild -scheme Halloo \
   clean build
 ```
 
-**Recent Changes (2025-11-06):**
+**Recent Changes (2025-11-18):**
+- ✅ **RevenueCat Integration:** Complete subscription management SDK integration
+- ✅ **Superwall Integration:** Advanced paywall presentation with A/B testing support
+- ✅ **Subscription Service:** RevenueCatSubscriptionService implements SubscriptionServiceProtocol
+- ✅ **Purchase Controller:** Bridges Superwall paywalls with RevenueCat purchase processing
+- ✅ **Subscription Manager:** High-level utilities for entitlement checking and paywall presentation
+- ✅ **Customer Center:** Native subscription management UI using RevenueCat SDK
+- ✅ **Build Configuration:** Automatic API key switching between Test Store and Production
+- ✅ **User Identification:** Automatic RevenueCat customer ID linking with Firebase Auth
+
+**Previous Changes (2025-11-06):**
 - ✅ **EXIF Metadata Stripping:** Created UIImage+EXIFStripping extension for privacy protection
 - ✅ **Privacy Enhancement:** Removes GPS coordinates, device info, timestamps from all photo uploads
 - ✅ **Profile Photo Security:** Applied to profile creation (ProfileViews.swift) and photo updates (HabitsView.swift)
@@ -31,7 +41,15 @@ xcodebuild -scheme Halloo \
 - ✅ **Code Quality:** Fixed 20+ deprecation warnings and compiler warnings
 - ✅ **Archive Removal:** Deleted 150 lines of unused archive code
 
-**Files Modified Since Last Update (2025-11-06):**
+**Files Modified Since Last Update (2025-11-18):**
+- 4 new files: Core/PurchaseController.swift, Services/RevenueCatSubscriptionService.swift, Services/SubscriptionServiceProtocol.swift, Utilities/SubscriptionManager.swift
+- 1 new file: Views/SubscriptionViews/CustomerCenterView.swift
+- Core/App.swift: Added RevenueCat and Superwall configuration (lines 99-171)
+- Models/Container.swift: Registered SubscriptionServiceProtocol singleton (lines 77-81)
+- Models/User.swift: Added subscription-related fields
+- Package.resolved: Added RevenueCat SDK v5.48.0 and Superwall SDK v4.7.0 dependencies
+
+**Previous Files Modified (2025-11-06):**
 - 1 new file: Extensions/UIImage+EXIFStripping.swift
 - ProfileViews.swift: Profile creation now strips EXIF metadata (line 429)
 - HabitsView.swift: Profile photo update now strips EXIF metadata (line 494)
@@ -51,8 +69,8 @@ xcodebuild -scheme Halloo \
 📁 Halloo/
 ├── 📄 Info.plist
 ├── 📄 GoogleService-Info.plist
-├── 📁 Core/ (10 files)
-│   ├── 📄 App.swift ✅ Main app entry point
+├── 📁 Core/ (11 files)
+│   ├── 📄 App.swift ✅ Main app entry point + RevenueCat/Superwall configuration (updated 2025-11-18)
 │   ├── 📄 AppState.swift ✅ Single source of truth for all app state (Phase 4)
 │   ├── 📄 AppFonts.swift ✅ Custom font system (Poppins/Inter)
 │   ├── 📄 Color+Extensions.swift ✅ (2025-10-30) - Hex color utility
@@ -60,6 +78,7 @@ xcodebuild -scheme Halloo \
 │   ├── 📄 DateFormatters.swift ✅ (2025-10-30) - Shared time/date formatters (eliminates 6 duplicates)
 │   ├── 📄 HapticFeedback.swift ✅ (2025-10-30) - Centralized haptic utility (replaces 42 duplicates)
 │   ├── 📄 IDGenerator.swift ✅ Unique ID generation utilities
+│   ├── 📄 PurchaseController.swift ✅ NEW (2025-11-18) - Superwall ↔ RevenueCat bridge
 │   ├── 📄 String+Extensions.swift ✅ String utility methods (E.164 phone format)
 │   └── 📄 ViewModelExtensions.swift ✅ AppState CRUD protocol extensions - Eliminates 80+ lines of duplicate code
 │
@@ -90,7 +109,7 @@ xcodebuild -scheme Halloo \
 │   ❌ DELETED (Phase 1):
 │   └── 📄 VersionedModel.swift ❌ REMOVED - Not used in MVP
 │
-├── 📁 Services/ (9 files - Firebase only, no Mock services)
+├── 📁 Services/ (12 files - Firebase + RevenueCat)
 │   ├── 📄 AuthenticationServiceProtocol.swift ✅ Auth service interface
 │   ├── 📄 FirebaseAuthenticationService.swift ✅ Firebase auth (ObservableObject, singleton)
 │   ├── 📄 DatabaseServiceProtocol.swift ✅ Database service interface
@@ -99,7 +118,10 @@ xcodebuild -scheme Halloo \
 │   ├── 📄 TwilioSMSService.swift ✅ Twilio SMS (E.164 format, friendly randomized messages - ffd2878)
 │   ├── 📄 NotificationServiceProtocol.swift ✅ Notification service interface
 │   ├── 📄 NotificationService.swift ✅ NEW (Phase 2) - Local notifications
-│   └── 📄 ImageCacheService.swift ✅ NEW (2025-10-21) - NSCache-based image caching
+│   ├── 📄 ImageCacheService.swift ✅ NEW (2025-10-21) - NSCache-based image caching
+│   ├── 📄 SubscriptionServiceProtocol.swift ✅ NEW (2025-11-18) - Subscription service contract
+│   ├── 📄 RevenueCatSubscriptionService.swift ✅ NEW (2025-11-18) - RevenueCat SDK integration (singleton)
+│   └── 📄 (Mock services removed for MVP)
 │
 │   ❌ DELETED (Phase 1 - MVP Simplification):
 │   ├── 📄 MockAuthenticationService.swift ❌ REMOVED - Firebase only in MVP
@@ -124,6 +146,9 @@ xcodebuild -scheme Halloo \
 │   - Added @Published var errorMessage: String? for simple error display
 │   - Updated Container factories (no coordinator parameters)
 │
+├── 📁 Utilities/ (1 file - NEW 2025-11-18)
+│   └── 📄 SubscriptionManager.swift ✅ NEW (2025-11-18) - High-level subscription helpers (@MainActor)
+│
 ├── 📁 Views/
 │   ├── 📄 ContentView.swift ✅ Root navigation + AppState initialization + tab swiping config
 │   ├── 📄 DashboardView.swift ✅ Main dashboard with profile filtering (swiping enabled)
@@ -134,32 +159,22 @@ xcodebuild -scheme Halloo \
 │   ├── 📄 OnboardingViews.swift ✅ Welcome/quiz onboarding screens
 │   ├── 📄 ProfileViews.swift ✅ Profile creation/edit screens
 │   ├── 📄 TaskViews.swift ✅ Task creation/edit screens
-│   └── 📁 Components/
-│       ├── 📄 BottomGradientNavigation.swift ✅ 3-tab navigation pill
-│       ├── 📄 CardStackView.swift ✅ Swipeable task card stack
-│       ├── 📄 GalleryPhotoView.swift ✅ Gallery photo thumbnail
-│       ├── 📄 ProfileGalleryItemView.swift ✅ Profile gallery item
-│       ├── 📄 ProfileImageView.swift ✅ Profile image display
-│       └── 📄 SharedHeaderSection.swift ✅ Reusable header with profile circles
+│   ├── 📁 Components/
+│   │   ├── 📄 BottomGradientNavigation.swift ✅ 3-tab navigation pill
+│   │   ├── 📄 CardStackView.swift ✅ Swipeable task card stack
+│   │   ├── 📄 GalleryPhotoView.swift ✅ Gallery photo thumbnail
+│   │   ├── 📄 ProfileGalleryItemView.swift ✅ Profile gallery item
+│   │   ├── 📄 ProfileImageView.swift ✅ Profile image display
+│   │   └── 📄 SharedHeaderSection.swift ✅ Reusable header with profile circles
+│   └── 📁 SubscriptionViews/ (1 file - NEW 2025-11-18)
+│       └── 📄 CustomerCenterView.swift ✅ NEW (2025-11-18) - RevenueCat subscription management UI
 │
 ❌ DELETED Helpers/ (Phase 1):
 │   ├── 📄 TestDataInjector.swift ❌ REMOVED - Dev-only tool, not needed in MVP
 │   └── 📄 FirestoreDataMigration.swift ❌ REMOVED - Schema migration complete
 │
 └── 🎨 Assets.xcassets/
-    ├── 🖼️ Mascot.imageset/ ✅ Main character
-    ├── 🖼️ MascotSitting.imageset/ ✅ Character sitting pose
-    ├── 🖼️ Mascotbubble.imageset/ ✅ Character with speech bubble
-    ├── 🖼️ Mascotcooking.imageset/ ✅ Character cooking
-    ├── 🖼️ Mascotdrinking.imageset/ ✅ Character drinking
-    ├── 🖼️ Mascotmilitarypress.imageset/ ✅ Character exercising
-    ├── 🖼️ Bird1.imageset/ ✅ Bird illustration
-    ├── 🖼️ Bird2.imageset/ ✅ Bird illustration
-    ├── 🖼️ Person1.imageset/ ✅ Person placeholder
-    ├── 🖼️ Camping.imageset/ ✅ Camping scene
-    ├── 🖼️ GoogleIcon.imageset/ ✅ Google sign-in icon
-    ├── 🖼️ AppIcon.appiconset/ ✅ App icon
-    └── 🎨 AccentColor.colorset/ ✅ Accent color
+    └─── Investigate as needed!
 ```
 
 ## STATE ARCHITECTURE (Phase 4 Complete - 2025-10-12)
@@ -229,19 +244,29 @@ All Views Update (reactive via @Published)
 - **ContentView**: Initializes and injects AppState to all views
 - **Result**: 47% reduction in Firebase queries, 46% reduction in ViewModel code
 
-### Authentication & Onboarding ✅
-**9-STEP EMOTIONAL JOURNEY:**
-1. WelcomeView - Entry point with speech bubble animation
-2. LoginView - Apple Sign-In & Google Sign-In
-3. Who are you downloading for? (Family/Friend/Other)
-4. Connection frequency assessment
-5. Name & relationship input with validation
-6. Memory vision selection (checkboxes)
-7. Emotional value proposition with memory grid
-8. Paywall with Superwall integration
-9. Profile photo upload (camera/library/skip)
-10. Phone number input with auto-formatting (+1 555 123-4567)
-11. Custom first message with relationship templates
+### Authentication & Onboarding ✅ (v2.0 - Subscription-Gated)
+**TWO-PATH SYSTEM:**
+
+**Path 1: Quiz (Optional Education)**
+1. WelcomeView - Entry point with card stack preview
+2. Quiz Step 1: Who are you downloading for?
+3. Quiz Step 2: Connection frequency assessment
+4. Quiz Step 3: Name & relationship input
+5. Quiz Step 4: Memory vision selection (multi-select)
+6. Quiz Step 5: Emotional value proposition
+7. Auth Gate - Apple/Google Sign-In
+8. Subscription Check → Paywall (if needed) or Dashboard
+
+**Path 2: Direct Login (Skip Quiz)**
+1. WelcomeView - Entry point with card stack preview
+2. Auth Gate - Apple/Google Sign-In
+3. Subscription Check → Paywall (if needed) or Dashboard
+
+**Key Changes from v1.0:**
+- ❌ Removed: `isOnboardingComplete` boolean from Firestore
+- ✅ Added: Two-path welcome screen ("Get Started" vs "Log in")
+- ✅ Added: 7-day free trial for new users
+- ✅ Simplified: Only subscription status gates app access
 
 ### Profile Management ✅
 - 6-step guided profile creation flow
@@ -285,7 +310,8 @@ All Views Update (reactive via @Published)
 ### Data Structure
 ```
 /users/{userId}
-  - email, displayName, subscriptionStatus, profileCount, isOnboardingComplete
+  - email, displayName, subscriptionStatus, profileCount
+  - ❌ REMOVED (v2.0): isOnboardingComplete (subscription-gated architecture)
   - createdAt, updatedAt
 
 /users/{userId}/profiles/{profileId}  [NESTED SUBCOLLECTION]
@@ -378,11 +404,12 @@ TabView (3 tabs)
   - Dashboard with CardStackView ✅
   - HabitsView with week filtering ✅
   - GalleryView with photo timeline ✅
-- **9-STEP ONBOARDING FLOW**
-  - New user detection via Firestore
+- **TWO-PATH ONBOARDING FLOW (v2.0 - Subscription-Gated)**
+  - Quiz Path: 5-step educational funnel (optional)
+  - Login Path: Direct authentication (skip quiz)
+  - Subscription-gated architecture (NO isOnboardingComplete tracking)
+  - 7-day free trial for new users
   - Paywall integration (Superwall)
-  - Phone number auto-formatting
-  - Relationship-based templates
 - **Profile creation with SMS confirmation**
 - **Task creation flow (2-step)**
 - **Dashboard with profile filtering**
@@ -403,12 +430,141 @@ TabView (3 tabs)
 - Subscription management (Superwall integration)
 - Family member sharing
 
+## SUBSCRIPTION INTEGRATION (2025-11-18)
+
+### RevenueCat + Superwall Architecture
+
+**Integration Pattern:**
+```
+User Action → SubscriptionManager.hasUnlimitedAccess() → Entitlement Check
+                    ↓                                              ↓
+              (No Access)                                    (Has Access)
+                    ↓                                              ↓
+    Superwall.presentPaywall() ← PurchaseController → RevenueCat Processing
+                    ↓                                              ↓
+            User Purchases                                  Premium Feature
+                    ↓
+         Subscription Active
+```
+
+### Key Components
+
+**1. SubscriptionServiceProtocol** (`Services/SubscriptionServiceProtocol.swift`)
+- Service contract for subscription management
+- Defines entitlement checking, customer info, purchase restoration
+- Implemented by `RevenueCatSubscriptionService`
+
+**2. RevenueCatSubscriptionService** (`Services/RevenueCatSubscriptionService.swift`)
+- Singleton service registered in Container
+- Integrates RevenueCat SDK for subscription processing
+- Methods: `hasActiveEntitlement()`, `fetchCustomerInfo()`, `restorePurchases()`
+- Customer info listener via `AsyncStream`
+
+**3. PurchaseController** (`Core/PurchaseController.swift`)
+- Bridges Superwall paywall UI with RevenueCat purchase processing
+- Implements Superwall's `PurchaseController` protocol
+- Delegates `purchase()` and `restorePurchases()` to RevenueCat SDK
+
+**4. SubscriptionManager** (`Utilities/SubscriptionManager.swift`)
+- @MainActor singleton for high-level subscription utilities
+- `hasUnlimitedAccess()`: Check "Remi Unlimited" entitlement
+- `presentPaywall(event:)`: Show Superwall paywall for placement
+- `restorePurchases()`: Restore previous purchases
+
+**5. CustomerCenterView** (`Views/SubscriptionViews/CustomerCenterView.swift`)
+- Native subscription management UI
+- Displays active subscription details
+- Restore purchases button
+- Links to App Store subscription management
+
+### Configuration
+
+**App.swift Integration (lines 99-171):**
+```swift
+// RevenueCat configuration
+private func configureRevenueCat() {
+    let REVENUECAT_API_KEY = {
+        #if DEBUG
+        return "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"  // Test Store
+        #else
+        return "YOUR_PRODUCTION_KEY_HERE"  // Production (⚠️ MUST REPLACE)
+        #endif
+    }()
+
+    let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+    subscriptionService.configure(apiKey: REVENUECAT_API_KEY, userId: authService.currentUser?.uid)
+}
+
+// Superwall configuration
+private func configureSuperwall() {
+    let SUPERWALL_API_KEY = "pk_1FZVcGgpr1JMD5XJ4d0Cb"
+
+    Superwall.configure(
+        apiKey: SUPERWALL_API_KEY,
+        purchaseController: PurchaseController()  // RevenueCat integration
+    )
+}
+```
+
+**Container Registration (lines 77-81):**
+```swift
+registerSingleton(SubscriptionServiceProtocol.self) {
+    print("💰 [Container] Creating RevenueCatSubscriptionService SINGLETON")
+    return RevenueCatSubscriptionService()
+}
+```
+
+### Usage Patterns
+
+**Check Entitlement:**
+```swift
+let hasAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+if !hasAccess {
+    SubscriptionManager.shared.presentPaywall(event: "premium_feature")
+}
+```
+
+**User Identification (after login):**
+```swift
+let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+try await subscriptionService.identify(userId: authService.currentUser!.uid)
+```
+
+**Customer Center (settings screen):**
+```swift
+.sheet(isPresented: $showCustomerCenter) {
+    CustomerCenterView()
+}
+```
+
+### Entitlement: "Remi Unlimited"
+- Product IDs: `monthly`, `yearly` (configured in RevenueCat Dashboard)
+- Entitlement ID: `"Remi Unlimited"` (used in code)
+- Grants: Unlimited profiles, tasks, premium features
+
+### Build Configuration
+- **Debug builds**: Automatically use Test Store API key (safe for development)
+- **Release builds**: Require production API key (app crashes if not replaced)
+- **⚠️ CRITICAL**: Replace `"YOUR_PRODUCTION_KEY_HERE"` in App.swift before App Store submission
+
+### Dependencies
+- **RevenueCat SDK**: v5.48.0 (subscription management, purchase processing)
+- **Superwall SDK**: v4.7.0 (paywall presentation, A/B testing)
+
+### Documentation References
+- Integration Guide: `/Halloo/docs/REVENUECAT_INTEGRATION_GUIDE.md`
+- Code Examples: `/Halloo/docs/REVENUECAT_CODE_EXAMPLES.md`
+- Production Deployment: `/Halloo/docs/PRODUCTION_DEPLOYMENT.md`
+
+---
+
 ## REQUIRED DEPENDENCIES
 
 ### Swift Packages
 - Firebase iOS SDK (Auth, Firestore, Storage, Functions)
 - Google Sign-In SDK
-- Superwall SDK (Paywall integration)
+- RevenueCat SDK v5.48.0 (Subscription management)
+- Superwall SDK v4.7.0 (Paywall UI and A/B testing)
 
 ### Configuration Files
 - GoogleService-Info.plist (from Firebase Console)

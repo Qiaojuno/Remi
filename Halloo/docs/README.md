@@ -57,9 +57,12 @@ docs/
 |------|-----------|
 | Current project status | `SESSION-STATE.md` |
 | What to work on next | `QUICK-START-NEXT-SESSION.md` |
-| App architecture | `architecture/Hallo-iOS-App-Structure.txt` |
-| Coding patterns | `architecture/Hallo-Development-Guidelines.txt` |
-| UI specifications | `architecture/Hallo-UI-Integration-Plan.txt` |
+| App architecture | `architecture/App-Structure.md` |
+| Coding patterns | `architecture/Dev-Guidelines.md` |
+| UI specifications | `architecture/UI-Specs.md` |
+| Subscription integration | `REVENUECAT_INTEGRATION_GUIDE.md` |
+| Subscription code examples | `REVENUECAT_CODE_EXAMPLES.md` |
+| Production deployment | `PRODUCTION_DEPLOYMENT.md` |
 
 ### For Firebase
 
@@ -300,11 +303,26 @@ grep -r "2025-10" docs/
 
 ---
 
-**Last updated:** 2025-10-21
+**Last updated:** 2025-11-18
 **Maintained by:** Claude Code
 **Project:** Halloo/Remi iOS App
 
-## Recent Updates (2025-10-21)
+## Recent Updates (2025-11-18)
+- ✅ RevenueCat SDK integration (v5.48.0) - Complete subscription management
+- ✅ Superwall SDK integration (v4.7.0) - Advanced paywall presentation
+- ✅ SubscriptionManager utility - High-level subscription helpers
+- ✅ PurchaseController - Superwall ↔ RevenueCat bridge
+- ✅ CustomerCenterView - Native subscription management UI
+- ✅ Build configuration - Automatic Test Store / Production API key switching
+- ✅ User identification - RevenueCat customer linking with Firebase Auth
+
+**New Documentation Files:**
+- `REVENUECAT_INTEGRATION_GUIDE.md` - Complete integration guide
+- `REVENUECAT_CODE_EXAMPLES.md` - Practical code snippets
+- `PRODUCTION_DEPLOYMENT.md` - Pre-release checklist
+- `ONBOARDING_FLOW.md` - Subscription-gated onboarding architecture
+
+## Previous Updates (2025-10-21)
 - ✅ Image caching system implemented (ImageCacheService)
 - ✅ StoreKit configuration fixed
 - ✅ iOS 18 compatibility updates

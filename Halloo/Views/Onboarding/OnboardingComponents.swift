@@ -111,6 +111,7 @@ struct OnboardingGradientBackground: View {
 struct OnboardingNextButton: View {
     let isEnabled: Bool
     let action: () -> Void
+    var buttonText: String = "Next"
 
     var body: some View {
         Button(action: {
@@ -119,7 +120,7 @@ struct OnboardingNextButton: View {
                 action()
             }
         }) {
-            Text("Next")
+            Text(buttonText)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)

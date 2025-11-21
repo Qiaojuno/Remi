@@ -18,6 +18,10 @@
 		87A3AE782EC5AB900083E08C /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 87A3AE772EC5AB900083E08C /* Lottie */; };
 		87A3B29D2EC7DFE60083E08C /* Yoga.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B29C2EC7DFE50083E08C /* Yoga.json */; };
 		87A3B29F2EC7E2D10083E08C /* 5 stars.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B29E2EC7E2D10083E08C /* 5 stars.json */; };
+		87A3B2A22EC9471E0083E08C /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 87A3B2A12EC9471E0083E08C /* RevenueCat */; };
+		87A3B6482ECFC58A0083E08C /* Relax.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B6472ECFC58A0083E08C /* Relax.json */; };
+		87A3B64C2ECFCA650083E08C /* Family.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B64B2ECFCA650083E08C /* Family.json */; };
+		87A3B64E2ECFE5B60083E08C /* Like success.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B64D2ECFE5B60083E08C /* Like success.json */; };
 		87E87B5F2E736D970014AEFE /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 87E87B5E2E736D970014AEFE /* SuperwallKit */; };
 		87E87B662E73A1940014AEFE /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 87E87B652E73A1940014AEFE /* GoogleSignIn */; };
 		87E87B682E73A1940014AEFE /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 87E87B672E73A1940014AEFE /* GoogleSignInSwift */; };
@@ -48,6 +52,9 @@
 		87A3AE762EC5AB610083E08C /* Money.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Money.json; sourceTree = "<group>"; };
 		87A3B29C2EC7DFE50083E08C /* Yoga.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Yoga.json; sourceTree = "<group>"; };
 		87A3B29E2EC7E2D10083E08C /* 5 stars.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "5 stars.json"; sourceTree = "<group>"; };
+		87A3B6472ECFC58A0083E08C /* Relax.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Relax.json; sourceTree = "<group>"; };
+		87A3B64B2ECFCA650083E08C /* Family.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Family.json; sourceTree = "<group>"; };
+		87A3B64D2ECFE5B60083E08C /* Like success.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Like success.json"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -101,6 +108,7 @@
 				87E87B5F2E736D970014AEFE /* SuperwallKit in Frameworks */,
 				87E87B662E73A1940014AEFE /* GoogleSignIn in Frameworks */,
 				87A3AE782EC5AB900083E08C /* Lottie in Frameworks */,
+				87A3B2A22EC9471E0083E08C /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +141,9 @@
 				87A3AE762EC5AB610083E08C /* Money.json */,
 				87A3B29E2EC7E2D10083E08C /* 5 stars.json */,
 				87A3B29C2EC7DFE50083E08C /* Yoga.json */,
+				87A3B6472ECFC58A0083E08C /* Relax.json */,
+				87A3B64B2ECFCA650083E08C /* Family.json */,
+				87A3B64D2ECFE5B60083E08C /* Like success.json */,
 			);
 			sourceTree = "<group>";
 		};
@@ -176,6 +187,7 @@
 				87E87B5E2E736D970014AEFE /* SuperwallKit */,
 				87E87B652E73A1940014AEFE /* GoogleSignIn */,
 				87E87B672E73A1940014AEFE /* GoogleSignInSwift */,
+				87A3B2A12EC9471E0083E08C /* RevenueCat */,
 			);
 			productName = Halloo;
 			productReference = 8746D53C2E443C2800F3D4EA /* Halloo.app */;
@@ -286,6 +298,9 @@
 				87A3AE772EC5AB610083E08C /* Money.json in Resources */,
 				87A3B29F2EC7E2D10083E08C /* 5 stars.json in Resources */,
 				878D39DD2E95A654001D2561 /* StoreKit.storekit in Resources */,
+				87A3B64E2ECFE5B60083E08C /* Like success.json in Resources */,
+				87A3B64C2ECFCA650083E08C /* Family.json in Resources */,
+				87A3B6482ECFC58A0083E08C /* Relax.json in Resources */,
 				87A3B29D2EC7DFE60083E08C /* Yoga.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -751,6 +766,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 87A3AE792EC5AB900083E08C /* XCRemoteSwiftPackageReference "lottie-spm" */;
 			productName = Lottie;
+		};
+		87A3B2A12EC9471E0083E08C /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 87A3B2A02EC9471E0083E08C /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
 		};
 		87E87B5E2E736D970014AEFE /* SuperwallKit */ = {
 			isa = XCSwiftPackageProductDependency;

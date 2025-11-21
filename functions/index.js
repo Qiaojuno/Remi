@@ -329,7 +329,7 @@ exports.twilioWebhook = onRequest(
 
     console.log(`🔍 Checking ${allHabitsSnapshot.size} active habits for recent SMS`);
 
-    // Filter habits where SMS was sent in last 30 minutes
+    // Filter habits where SMS was sent in last 30 minutes AND not already completed
     const recentHabits = allHabitsSnapshot.docs
       .map(doc => ({ doc, data: doc.data() }))
       .filter(({ data }) => {
@@ -339,6 +339,18 @@ exports.twilioWebhook = onRequest(
         }
         const sentTime = data.lastSMSSentAt.toDate();
         const inWindow = sentTime >= thirtyMinutesAgo && sentTime <= now;
+
+        // 🔒 DUPLICATE PREVENTION: Check if this habit instance was already completed
+        // If lastCompletedAt is AFTER lastSMSSentAt, the habit was already completed for this SMS
+        // This prevents duplicate "Thanks!" messages when elderly person texts multiple times
+        if (data.lastCompletedAt) {
+          const completedTime = data.lastCompletedAt.toDate();
+          if (completedTime >= sentTime) {
+            console.log(`  🛑 ${data.title}: Already completed at ${completedTime.toISOString()} (sent at ${sentTime.toISOString()})`);
+            return false; // Skip - already processed this SMS instance
+          }
+        }
+
         console.log(`  ${inWindow ? '✅' : '❌'} ${data.title}: SMS sent at ${sentTime.toISOString()}, in window? ${inWindow}`);
         return inWindow;
       })

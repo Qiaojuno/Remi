@@ -663,7 +663,8 @@ struct Step6View: View {
                     isEnabled: true,
                     action: {
                         viewModel.nextStep()
-                    }
+                    },
+                    buttonText: "Got it"
                 )
                 .opacity(showContent ? 1 : 0)
                 .animation(.easeIn(duration: 0.3).delay(0.6), value: showContent)
@@ -911,25 +912,31 @@ struct Step7View: View {
 
                         // Overlapping circles (avatars)
                         HStack(spacing: -12) {
-                            Circle()
-                                .fill(Color(hex: "4A9DFF"))
+                            Image("Face 1")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
                                 .frame(width: 40, height: 40)
+                                .clipShape(Circle())
                                 .overlay(
                                     Circle()
                                         .strokeBorder(Color.white, lineWidth: 2)
                                 )
 
-                            Circle()
-                                .fill(Color(hex: "FC8181"))
+                            Image("Face 2")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
                                 .frame(width: 40, height: 40)
+                                .clipShape(Circle())
                                 .overlay(
                                     Circle()
                                         .strokeBorder(Color.white, lineWidth: 2)
                                 )
 
-                            Circle()
-                                .fill(Color(hex: "FBBF24"))
+                            Image("Face 3")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
                                 .frame(width: 40, height: 40)
+                                .clipShape(Circle())
                                 .overlay(
                                     Circle()
                                         .strokeBorder(Color.white, lineWidth: 2)
@@ -1048,6 +1055,871 @@ struct Step7View: View {
             }
         }
     }
+}
+
+// MARK: - Personalized Plan View
+
+/// Shows user their personalized plan based on quiz answers
+///
+/// This view summarizes the user's quiz responses in a beautiful, personalized format.
+/// Appears after notification permission and before social proof for psychological commitment.
+struct PersonalizedPlanView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var showContent = false
+
+    // Helper to format recipient name
+    private var recipientName: String {
+        let answer = viewModel.userAnswers["who_to_help"] ?? "them"
+        if answer == "Both" {
+            return "your parents"
+        } else if answer == "Other" {
+            return "your loved one"
+        } else {
+            return answer
+        }
+    }
+
+    // Helper to format selected moments
+    private var selectedMomentsText: String {
+        let moments = Array(viewModel.selectedMoments)
+        if moments.isEmpty {
+            return "Daily habits"
+        } else if moments.count == 1 {
+            return moments[0]
+        } else if moments.count == 2 {
+            return moments.joined(separator: " and ")
+        } else {
+            let lastMoment = moments.last!
+            let otherMoments = moments.dropLast().joined(separator: ", ")
+            return "\(otherMoments), and \(lastMoment)"
+        }
+    }
+
+    // Habits to display with emoji mapping
+    private var habitsToDisplay: [(name: String, emoji: String)] {
+        let habitEmojiMap: [String: String] = [
+            "Taking medication": "💊",
+            "Going for a walk": "🚶",
+            "Drinking water": "💧",
+            "Sending a daily photo": "📸",
+            "Staying positive": "😊",
+            "Other": "✨"
+        ]
+
+        let selectedHabits = Array(viewModel.selectedMoments)
+
+        // If user selected "Other" or no habits, show 3 random default habits
+        if selectedHabits.contains("Other") || selectedHabits.isEmpty {
+            return [
+                ("Taking medication", "💊"),
+                ("Going for a walk", "🚶"),
+                ("Drinking water", "💧")
+            ]
+        }
+
+        // Map selected habits to (name, emoji) tuples
+        return selectedHabits.compactMap { habit in
+            if let emoji = habitEmojiMap[habit] {
+                return (name: habit, emoji: emoji)
+            }
+            return nil
+        }
+    }
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                // Scrollable content area (including header)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Spacer()
+                            .frame(height: OnboardingUI.headerTopSpacing)
+
+                        // Header
+                        VStack(spacing: 20) {
+                            // Title and description grouped together
+                            VStack(spacing: 8) {
+                                Text("Your Expert-Backed Plan For Remi")
+                                    .font(.system(size: 32, weight: .bold))
+                                    .tracking(-1.0)
+                                    .foregroundColor(.black)
+                                    .multilineTextAlignment(.center)
+
+                                Text("Based on your answers about helping \(recipientName)")
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundColor(.black)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.05), value: showContent)
+
+                            Text("Start Today!")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 14)
+                                .background(Color.black)
+                                .cornerRadius(25)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+                        }
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                        Spacer()
+                            .frame(height: 20)
+
+                        // White container card for reminder strategies
+                        VStack(alignment: .center, spacing: 16) {
+                            // 5-star rating with laurel wreaths (smaller version)
+                            HStack(spacing: 2) {
+                                // Left laurel wreath
+                                Image("Laurel Wreath")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 40)
+                                    .opacity(showContent ? 1 : 0)
+                                    .scaleEffect(showContent ? 1.0 : 0.5)
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.15), value: showContent)
+
+                                // 5-star rating Lottie animation
+                                LottieView(animation: .named("5 stars"))
+                                    .playing(loopMode: .playOnce)
+                                    .frame(width: 90, height: 36)
+                                    .opacity(showContent ? 1 : 0)
+                                    .scaleEffect(showContent ? 1.0 : 0.5)
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
+
+                                // Right laurel wreath (flipped)
+                                Image("Laurel Wreath")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 20, height: 40)
+                                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))  // Flip horizontally
+                                    .opacity(showContent ? 1 : 0)
+                                    .scaleEffect(showContent ? 1.0 : 0.5)
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.15), value: showContent)
+                            }
+                            .padding(.bottom, 8)
+
+                            // Section header
+                            HStack(spacing: 8) {
+                                Text("🏆")
+                                    .font(.system(size: 20))
+                                Text("Simple, daily habits")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(.black)
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            // Description with green card background
+                            ZStack {
+                                // Opaque green card behind text
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.green.opacity(0.15))
+
+                                Text("Remi helps your parents stay on track with gentle text reminders they already know how to use — no apps, no learning curve, just consistency.")
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundColor(.black)
+                                    .lineSpacing(4)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(16)
+                            }
+                        }
+                        .padding(20)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
+
+                        Spacer()
+                            .frame(height: 20)
+
+                        // First benefit section: Feel secure about the little things
+                        VStack(spacing: 16) {
+                            // Lottie animation
+                            LottieView(animation: .named("Relax"))
+                                .playing(loopMode: .loop)
+                                .frame(width: 250, height: 250)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.35), value: showContent)
+
+                            // Title
+                            Text("Feel secure about the little things")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, OnboardingUI.horizontalPadding)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.4), value: showContent)
+
+                            // Benefit points
+                            VStack(alignment: .leading, spacing: 14) {
+                                // Point 1: Automated reminders
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "clock.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Automated reminders")
+                                        .fontWeight(.bold) +
+                                    Text(" keep habits ")
+                                        .fontWeight(.regular) +
+                                    Text("consistent")
+                                        .fontWeight(.bold) +
+                                    Text(" without effort")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 2: Clinical backing
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Backed by ")
+                                        .fontWeight(.regular) +
+                                    Text("clinical studies")
+                                        .fontWeight(.bold) +
+                                    Text(" showing ")
+                                        .fontWeight(.regular) +
+                                    Text("improved adherence")
+                                        .fontWeight(.bold) +
+                                    Text(" in older adults")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 3: Know when unanswered
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.orange)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "bell.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("You'll ")
+                                        .fontWeight(.regular) +
+                                    Text("know")
+                                        .fontWeight(.bold) +
+                                    Text(" when messages go ")
+                                        .fontWeight(.regular) +
+                                    Text("unanswered")
+                                        .fontWeight(.bold))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 4: Simple text
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.purple)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "message.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Works through ")
+                                        .fontWeight(.regular) +
+                                    Text("simple text")
+                                        .fontWeight(.bold) +
+                                    Text(" — ")
+                                        .fontWeight(.regular) +
+                                    Text("nothing to download")
+                                        .fontWeight(.bold))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 5: Reduce stress
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.pink)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Designed to ")
+                                        .fontWeight(.regular) +
+                                    Text("reduce stress")
+                                        .fontWeight(.bold) +
+                                    Text(", not add to it")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+                            }
+                            .padding(.horizontal, OnboardingUI.horizontalPadding)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.45), value: showContent)
+                        }
+                        .padding(.vertical, 20)
+
+                        Spacer()
+                            .frame(height: 20)
+
+                        // Experts recommend card
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Text("🎩")
+                                    .font(.system(size: 20))
+                                Text("Experts recommend:")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            // Card list for reminder strategies
+                            VStack(spacing: 8) {
+                                // Text reminders card
+                                HStack(spacing: 12) {
+                                    Text("💬")
+                                        .font(.system(size: 28))
+                                        .frame(width: 40, height: 40)
+
+                                    Text("Mostly text reminders")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundColor(.black)
+
+                                    Spacer()
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .background(Color(hex: "F5F5F7"))
+                                .cornerRadius(10)
+
+                                // Photo confirmations card
+                                HStack(spacing: 12) {
+                                    Text("📸")
+                                        .font(.system(size: 28))
+                                        .frame(width: 40, height: 40)
+
+                                    Text("Occasional photo confirmations")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundColor(.black)
+
+                                    Spacer()
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .background(Color(hex: "F5F5F7"))
+                                .cornerRadius(10)
+                            }
+                        }
+                        .padding(20)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.55), value: showContent)
+
+                        Spacer()
+                            .frame(height: 32)
+
+                        // Second benefit section: Become the child who always shows up
+                        VStack(spacing: 16) {
+                            // Lottie animation
+                            LottieView(animation: .named("Family"))
+                                .playing(loopMode: .loop)
+                                .frame(width: 250, height: 250)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.5), value: showContent)
+
+                            // Title
+                            Text("Become the child who always shows up")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, OnboardingUI.horizontalPadding)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.55), value: showContent)
+
+                            // Benefit points (no cards, just list)
+                            VStack(alignment: .leading, spacing: 14) {
+                                // Point 1: Health
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Keep them ")
+                                        .fontWeight(.regular) +
+                                    Text("healthy")
+                                        .fontWeight(.bold) +
+                                    Text(" with ")
+                                        .fontWeight(.regular) +
+                                    Text("minimal effort")
+                                        .fontWeight(.bold))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 2: Nothing slips
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Make sure ")
+                                        .fontWeight(.regular) +
+                                    Text("nothing important")
+                                        .fontWeight(.bold) +
+                                    Text(" slips through the cracks")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 3: Longevity
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.purple)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "chart.line.uptrend.xyaxis")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Build habits that ")
+                                        .fontWeight(.regular) +
+                                    Text("improve their longevity")
+                                        .fontWeight(.bold))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 4: Stay close
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.orange)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "figure.2.and.child.holdinghands")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Stay ")
+                                        .fontWeight(.regular) +
+                                    Text("close")
+                                        .fontWeight(.bold) +
+                                    Text(" even when life gets ")
+                                        .fontWeight(.regular) +
+                                    Text("busy")
+                                        .fontWeight(.bold))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 5: Lasting memories
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.pink)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Turn ")
+                                        .fontWeight(.regular) +
+                                    Text("everyday replies")
+                                        .fontWeight(.bold) +
+                                    Text(" into ")
+                                        .fontWeight(.regular) +
+                                    Text("lasting memories")
+                                        .fontWeight(.bold))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+                            }
+                            .padding(.horizontal, OnboardingUI.horizontalPadding)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.6), value: showContent)
+                        }
+                        .padding(.vertical, 20)
+
+                        Spacer()
+                            .frame(height: 32)
+
+                        // White container card for personalized plan
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Section header
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Text("🌿")
+                                        .font(.system(size: 20))
+                                    Text("Based on your quiz selections:")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.black)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Text("We'll add these recommendations when you create habits with Remi later")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.black)
+                            }
+
+                            // Card list for selected habits
+                            VStack(spacing: 8) {
+                                ForEach(Array(habitsToDisplay.enumerated()), id: \.offset) { index, habit in
+                                    HStack(spacing: 12) {
+                                        Text(habit.emoji)
+                                            .font(.system(size: 28))
+                                            .frame(width: 40, height: 40)
+
+                                        Text(habit.name)
+                                            .font(.system(size: 17, weight: .regular))
+                                            .foregroundColor(.black)
+
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 16)
+                                    .background(Color(hex: "F5F5F7"))
+                                    .cornerRadius(10)
+                                }
+                            }
+                        }
+                        .padding(20)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.65), value: showContent)
+
+                        Spacer()
+                            .frame(height: 32)
+
+                        // Third benefit section: Proven by research
+                        VStack(spacing: 16) {
+                            // Lottie animation
+                            LottieView(animation: .named("Like success"))
+                                .playing(loopMode: .loop)
+                                .frame(width: 280, height: 280)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.7), value: showContent)
+
+                            // Title
+                            Text("Proven by research")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, OnboardingUI.horizontalPadding)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.75), value: showContent)
+
+                            // Benefit points
+                            VStack(alignment: .leading, spacing: 14) {
+                                // Point 1: 40% improvement
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color(hex: "6BB6D6"))
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "chart.line.uptrend.xyaxis")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Up to ")
+                                        .fontWeight(.regular) +
+                                    Text("40% improvement")
+                                        .fontWeight(.bold) +
+                                    Text(" in habit adherence")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 2: Clinical studies
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Validated by ")
+                                        .fontWeight(.regular) +
+                                    Text("clinical studies")
+                                        .fontWeight(.bold) +
+                                    Text(" from JAMA and Stanford")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 3: Text-based
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.purple)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "message.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Text-based reminders are ")
+                                        .fontWeight(.regular) +
+                                    Text("most effective")
+                                        .fontWeight(.bold) +
+                                    Text(" for older adults")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 4: Long-term success
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.orange)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "star.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Sustained ")
+                                        .fontWeight(.regular) +
+                                    Text("long-term success")
+                                        .fontWeight(.bold) +
+                                    Text(" through consistent check-ins")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+
+                                // Point 5: Real-world results
+                                HStack(alignment: .center, spacing: 10) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.pink)
+                                            .frame(width: 24, height: 24)
+
+                                        Image(systemName: "person.2.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white)
+                                    }
+
+                                    (Text("Trusted by ")
+                                        .fontWeight(.regular) +
+                                    Text("thousands of families")
+                                        .fontWeight(.bold) +
+                                    Text(" nationwide")
+                                        .fontWeight(.regular))
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.black)
+                                        .fixedSize(horizontal: false, vertical: true)
+
+                                    Spacer()
+                                }
+                            }
+                            .padding(.horizontal, OnboardingUI.horizontalPadding)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.8), value: showContent)
+                        }
+                        .padding(.vertical, 20)
+
+                        Spacer()
+                            .frame(height: 20)
+
+                        // Research-backed studies section
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Plan further with Research-backed studies")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                // Study 1: JAMA Network Open
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("•")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.black)
+
+                                    Button(action: {
+                                        if let url = URL(string: "https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2794447") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        Text("JAMA: Text messaging improves medication adherence")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.black)
+                                            .underline()
+                                            .multilineTextAlignment(.leading)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+
+                                // Study 2: Cochrane Review
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("•")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.black)
+
+                                    Button(action: {
+                                        if let url = URL(string: "https://www.cochranelibrary.com/cdsr/doi/10.1002/14651858.CD007458.pub3/full") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        Text("Cochrane: SMS for long-term adherence")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.black)
+                                            .underline()
+                                            .multilineTextAlignment(.leading)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+
+                                // Study 3: Stanford Behavior Design Lab
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text("•")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.black)
+
+                                    Button(action: {
+                                        if let url = URL(string: "https://behaviordesign.stanford.edu/") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        Text("Stanford: Tiny Habits framework")
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundColor(.black)
+                                            .underline()
+                                            .multilineTextAlignment(.leading)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        }
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.7), value: showContent)
+
+                        Spacer()
+                            .frame(height: 20)
+                    }
+                    .padding(.bottom, 20)
+                }
+
+                OnboardingNextButton(
+                    isEnabled: true,
+                    action: {
+                        viewModel.nextStep()
+                    },
+                    buttonText: "Save my setup"
+                )
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeOut(duration: 0.3).delay(0.75), value: showContent)
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showContent = true
+                }
+            }
+        }
+    }
+
 }
 
 // MARK: - Step 7: Save Your Progress (Auth Gate)
@@ -1193,6 +2065,170 @@ struct SaveYourProgressView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
+        }
+    }
+}
+
+// MARK: - Loading Plan View (2.5s with artificial delays at 60% and 92%)
+
+struct LoadingPlanView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var progress: Double = 0.0
+    @State private var currentMessage: String = "Analyzing quiz answers..."
+
+    // Get recipient name from quiz answers
+    private var recipientName: String {
+        viewModel.userAnswers["loved_one_name"] ?? "your loved one"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // Percentage counter
+            Text("\(Int(progress * 100))%")
+                .font(.system(size: 64, weight: .bold))
+                .foregroundColor(.black)
+                .padding(.bottom, 32)
+
+            // Headline
+            Text("We're building your plan")
+                .font(.system(size: 28, weight: .bold))
+                .tracking(-1.0)
+                .foregroundColor(.black)
+                .padding(.bottom, 4)
+
+            Text("for \(recipientName)")
+                .font(.system(size: 28, weight: .bold))
+                .tracking(-1.0)
+                .foregroundColor(.black)
+                .padding(.bottom, 32)
+
+            // Progress bar with Remi blue gradient
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(height: 8)
+
+                    // Progress fill with gradient
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "6BB6FF"), Color(hex: "4A9DFF")],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * progress, height: 8)
+                }
+            }
+            .frame(height: 8)
+            .padding(.horizontal, 40)
+            .padding(.bottom, 24)
+
+            // Current task message
+            Text(currentMessage)
+                .font(.system(size: 16))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 48)
+
+            // What we're personalizing (bullet list)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("We're personalizing:")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.bottom, 8)
+
+                BulletPoint(text: "Reminder schedule for \(recipientName)")
+                BulletPoint(text: "Best daily habits")
+                BulletPoint(text: "SMS message style")
+                BulletPoint(text: "Check-in frequency")
+                BulletPoint(text: "Family notifications")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 40)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            ZStack {
+                Color(hex: "f9f9f9")
+
+                VStack {
+                    Spacer()
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.clear,
+                            Color(hex: "B3B3B3").opacity(0.3)
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 200)
+                }
+            }
+            .ignoresSafeArea(.all)
+        )
+        .onAppear {
+            startLoading()
+        }
+    }
+
+    private func startLoading() {
+        currentMessage = "Analyzing quiz answers..."
+
+        // Phase 1: 0% → 60% (1.0 second)
+        animateProgress(from: 0.0, to: 0.6, duration: 1.0) {
+            // Pause at 60% for 0.3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                currentMessage = "Selecting best reminder times..."
+
+                // Phase 2: 60% → 92% (0.6 seconds)
+                animateProgress(from: 0.6, to: 0.92, duration: 0.6) {
+                    // Pause at 92% for 0.4 seconds
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        currentMessage = "Finalizing recommendations..."
+
+                        // Phase 3: 92% → 100% (0.2 seconds)
+                        animateProgress(from: 0.92, to: 1.0, duration: 0.2) {
+                            // Done - advance to next screen after brief delay
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                viewModel.nextStep()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func animateProgress(from start: Double, to end: Double, duration: TimeInterval, completion: @escaping () -> Void) {
+        withAnimation(.easeInOut(duration: duration)) {
+            progress = end
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+            completion()
+        }
+    }
+}
+
+// Helper view for bullet points
+private struct BulletPoint: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .font(.system(size: 15))
+                .foregroundColor(.black)
+            Text(text)
+                .font(.system(size: 15))
+                .foregroundColor(.black)
         }
     }
 }

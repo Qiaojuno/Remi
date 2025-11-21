@@ -1010,7 +1010,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
         
         return UserDataExport(
             userId: userId,
-            user: user ?? User(id: userId, email: "", fullName: "", phoneNumber: "", createdAt: Date(), isOnboardingComplete: false, subscriptionStatus: .trial, trialEndDate: nil, quizAnswers: nil, profileCount: 0, taskCount: 0, updatedAt: Date(), lastSyncTimestamp: nil),
+            user: user ?? User(id: userId, email: "", fullName: "", phoneNumber: "", createdAt: Date(), subscriptionStatus: .trial, trialEndDate: nil, quizAnswers: nil, profileCount: 0, taskCount: 0, updatedAt: Date(), lastSyncTimestamp: nil),
             profiles: profiles,
             tasks: tasks,
             responses: responses,

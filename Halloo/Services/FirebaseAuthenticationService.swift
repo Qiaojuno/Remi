@@ -95,7 +95,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
         let authorizationController = ASAuthorizationController(authorizationRequests: [request])
 
         // Use coordinator to handle delegate callbacks
-        let coordinator = SignInWithAppleCoordinator(nonce: nonce)
+        let coordinator = await SignInWithAppleCoordinator(nonce: nonce)
         authorizationController.delegate = coordinator
         authorizationController.presentationContextProvider = coordinator
 

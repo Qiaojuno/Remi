@@ -7,7 +7,7 @@
 //    • RevenueCat-powered subscription management with Superwall integration
 //    • Entitlement checking for "Remi Unlimited" premium features
 //    • Customer info management and purchase handling
-//  Dependencies: Foundation, Combine, RevenueCat
+//  Dependencies: Foundation, RevenueCat
 //
 //  Business Context: Enables premium subscription features while working seamlessly with Superwall paywalls
 //  Critical Paths: Subscription check → Entitlement validation → Premium feature access
@@ -16,7 +16,6 @@
 //
 
 import Foundation
-import Combine
 import RevenueCat
 
 /// Subscription service contract for managing premium feature access in the Hallo app
@@ -43,16 +42,12 @@ import RevenueCat
 /// // Check if user has premium access
 /// let hasAccess = await subscriptionService.hasActiveEntitlement(for: "Remi Unlimited")
 ///
-/// // Listen to subscription changes
-/// subscriptionService.customerInfoPublisher
-///     .sink { customerInfo in
-///         // Update UI based on subscription status
-///     }
+/// // Access current customer info
+/// if let customerInfo = subscriptionService.currentCustomerInfo {
+///     // Update UI based on subscription status
+/// }
 /// ```
 protocol SubscriptionServiceProtocol {
-
-    /// Publisher that emits customer info updates when subscription status changes
-    var customerInfoPublisher: AnyPublisher<CustomerInfo?, Never> { get }
 
     /// Current customer information including active subscriptions and entitlements
     var currentCustomerInfo: CustomerInfo? { get }

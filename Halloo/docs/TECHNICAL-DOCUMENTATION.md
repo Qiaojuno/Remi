@@ -1875,4 +1875,681 @@ $ exiftool uploaded.jpg
 
 ---
 
-*Last Updated: 2025-11-06*
+# RevenueCat + Superwall Subscription Integration
+
+**Updated:** 2025-11-18
+**Status:** Complete - Production-ready subscription system with Superwall paywalls
+
+## Overview
+
+The Halloo app uses a dual-SDK approach for subscription management:
+- **RevenueCat SDK**: Handles purchase processing, receipt validation, and subscription state
+- **Superwall SDK**: Manages paywall UI presentation, A/B testing, and conversion optimization
+
+This architecture separates concerns: Superwall focuses on conversion UI, while RevenueCat handles the complex subscription backend.
+
+## Architecture
+
+### Integration Flow
+
+```
+User triggers premium feature
+    ↓
+SubscriptionManager.hasUnlimitedAccess() checks RevenueCat entitlements
+    ↓
+If NO access → Superwall.presentPaywall(event:) shows paywall
+    ↓
+User taps purchase button → Superwall calls PurchaseController.purchase()
+    ↓
+PurchaseController delegates to RevenueCat.Purchases.shared.purchase()
+    ↓
+RevenueCat processes purchase → Updates entitlements
+    ↓
+Both Superwall and RevenueCat customer info sync automatically
+    ↓
+User now has "Remi Unlimited" entitlement → Premium features unlocked
+```
+
+### Key Components
+
+#### 1. SubscriptionServiceProtocol
+**File:** `/Halloo/Services/SubscriptionServiceProtocol.swift`
+
+Defines the subscription service contract:
+```swift
+protocol SubscriptionServiceProtocol {
+    var currentCustomerInfo: CustomerInfo? { get }
+
+    func configure(apiKey: String, userId: String?)
+    func hasActiveEntitlement(for entitlementId: String) async -> Bool
+    func hasActiveSubscription() async -> Bool
+    func fetchCustomerInfo() async throws -> CustomerInfo
+    func identify(userId: String) async throws
+    func logout() async throws
+    func restorePurchases() async throws -> CustomerInfo
+    func getOfferings() async throws -> Offerings?
+}
+```
+
+**Purpose:**
+- Abstracts subscription logic from implementation details
+- Allows dependency injection via Container
+- Enables future alternative subscription providers (if needed)
+
+#### 2. RevenueCatSubscriptionService
+**File:** `/Halloo/Services/RevenueCatSubscriptionService.swift` (230 lines)
+
+Implementation of `SubscriptionServiceProtocol` using RevenueCat SDK:
+
+**Key Features:**
+- **Singleton pattern**: Registered in Container as shared instance
+- **Customer info listener**: Uses `AsyncStream` to react to subscription changes
+- **User identification**: Links RevenueCat customers to Firebase Auth UIDs
+- **Entitlement checking**: `hasActiveEntitlement(for: "Remi Unlimited")`
+- **Purchase restoration**: `restorePurchases()` for cross-device support
+
+**Implementation Details:**
+```swift
+final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
+    private var _currentCustomerInfo: CustomerInfo?
+    private var customerInfoTask: _Concurrency.Task<Void, Never>?
+
+    // Real-time customer info updates
+    private func setupCustomerInfoListener() {
+        customerInfoTask = _Concurrency.Task { [weak self] in
+            for await customerInfo in Purchases.shared.customerInfoStream {
+                print("📡 Customer info updated: \(customerInfo.entitlements.active.keys)")
+                self?._currentCustomerInfo = customerInfo
+            }
+        }
+    }
+
+    // Check specific entitlement
+    func hasActiveEntitlement(for entitlementId: String) async -> Bool {
+        do {
+            let customerInfo = try await fetchCustomerInfo()
+            let hasEntitlement = customerInfo.entitlements[entitlementId]?.isActive == true
+            return hasEntitlement
+        } catch {
+            print("⚠️ Failed to check entitlement: \(error.localizedDescription)")
+            return false
+        }
+    }
+}
+```
+
+#### 3. PurchaseController
+**File:** `/Halloo/Core/PurchaseController.swift` (110 lines)
+
+Bridges Superwall paywall presentation with RevenueCat purchase processing:
+
+**Protocol Conformance:**
+```swift
+final class PurchaseController: SuperwallKit.PurchaseController {
+    func purchase(product: SuperwallKit.StoreProduct) async -> SuperwallKit.PurchaseResult {
+        // Convert Superwall product to RevenueCat product
+        guard let sk2Product = product.sk2Product else {
+            return .failed(NSError(domain: "PurchaseController", code: -1))
+        }
+
+        let storeProduct = RevenueCat.StoreProduct(sk2Product: sk2Product)
+        let result = try await Purchases.shared.purchase(product: storeProduct)
+
+        if result.userCancelled {
+            return .cancelled
+        }
+
+        return .purchased
+    }
+
+    func restorePurchases() async -> SuperwallKit.RestorationResult {
+        let customerInfo = try await Purchases.shared.restorePurchases()
+        return .restored
+    }
+}
+```
+
+**Why This Pattern:**
+- Superwall handles paywall UI and A/B testing
+- RevenueCat handles actual purchase processing and receipt validation
+- Separation of concerns: UI layer vs business logic layer
+
+#### 4. SubscriptionManager
+**File:** `/Halloo/Utilities/SubscriptionManager.swift` (195 lines)
+
+High-level convenience utilities for subscription checks and paywall presentation:
+
+**Key Methods:**
+```swift
+@MainActor
+final class SubscriptionManager: ObservableObject {
+    static let shared = SubscriptionManager()
+    static let unlimitedEntitlementID = "Remi Unlimited"
+
+    // Check premium access
+    func hasUnlimitedAccess() async -> Bool {
+        let customerInfo = try await Purchases.shared.customerInfo()
+        return customerInfo.entitlements[Self.unlimitedEntitlementID]?.isActive == true
+    }
+
+    // Present Superwall paywall
+    func presentPaywall(event: String, params: [String: Any]? = nil) {
+        Superwall.shared.register(placement: event, params: params, handler: nil, feature: {
+            print("✅ User has access - feature executed")
+        })
+    }
+
+    // Restore purchases
+    func restorePurchases() async -> Bool {
+        let customerInfo = try await Purchases.shared.restorePurchases()
+        return !customerInfo.entitlements.active.isEmpty
+    }
+}
+```
+
+**Usage in ViewModels:**
+```swift
+// Check entitlement before premium action
+guard await SubscriptionManager.shared.hasUnlimitedAccess() else {
+    SubscriptionManager.shared.presentPaywall(event: "premium_feature")
+    return
+}
+
+// Perform premium action...
+```
+
+#### 5. CustomerCenterView
+**File:** `/Halloo/Views/SubscriptionViews/CustomerCenterView.swift` (288 lines)
+
+Native SwiftUI view for subscription management:
+
+**Features:**
+- Display current subscription status
+- Show active product (monthly/yearly)
+- Display renewal date
+- Restore purchases button
+- Link to App Store subscription management
+- Premium feature list
+
+**UI Structure:**
+```swift
+struct CustomerCenterView: View {
+    @State private var hasActiveSubscription = false
+    @State private var activeProduct: String?
+    @State private var expirationDate: Date?
+
+    var body: some View {
+        ScrollView {
+            VStack {
+                headerSection                   // "Remi Unlimited" with crown icon
+                subscriptionDetailsSection      // Active plan details
+                actionsSection                  // Restore/Manage buttons
+            }
+        }
+        .task {
+            await loadSubscriptionInfo()
+        }
+    }
+}
+```
+
+## Configuration
+
+### App.swift Setup
+
+**RevenueCat Configuration (lines 99-136):**
+```swift
+private func configureRevenueCat() {
+    // API key switches automatically based on build configuration
+    let REVENUECAT_API_KEY: String = {
+        #if DEBUG
+        return "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"  // Test Store (safe for dev)
+        #else
+        return "YOUR_PRODUCTION_KEY_HERE"  // ⚠️ MUST REPLACE BEFORE RELEASE
+        #endif
+    }()
+
+    // Validate production key
+    #if !DEBUG
+    guard REVENUECAT_API_KEY != "YOUR_PRODUCTION_KEY_HERE" else {
+        fatalError("🚨 CRITICAL: Replace production RevenueCat API key before release!")
+    }
+    #endif
+
+    // Get subscription service from container
+    let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+
+    // Configure with user ID if authenticated
+    let authService = container.resolve(AuthenticationServiceProtocol.self)
+    let userId = authService.currentUser?.uid
+
+    subscriptionService.configure(apiKey: REVENUECAT_API_KEY, userId: userId)
+}
+```
+
+**Superwall Configuration (lines 138-171):**
+```swift
+private func configureSuperwall() {
+    let SUPERWALL_API_KEY: String = {
+        #if DEBUG
+        return "pk_1FZVcGgpr1JMD5XJ4d0Cb"  // Development key
+        #else
+        return "pk_1FZVcGgpr1JMD5XJ4d0Cb"  // Same key for prod (Superwall allows this)
+        #endif
+    }()
+
+    // Configure Superwall to use RevenueCat via PurchaseController
+    Superwall.configure(
+        apiKey: SUPERWALL_API_KEY,
+        purchaseController: PurchaseController()  // 👈 RevenueCat integration
+    )
+}
+```
+
+**Initialization Order (CRITICAL):**
+1. Firebase configured first (`configureFirebase()`)
+2. Container initialized
+3. RevenueCat configured (`configureRevenueCat()`)
+4. Superwall configured (`configureSuperwall()`)
+5. Google Sign-In configured
+
+**Why This Order:**
+- Container must exist before resolving services
+- RevenueCat must be configured before Superwall (PurchaseController needs it)
+- User authentication happens after all SDKs initialized
+
+### Container Registration
+
+**File:** `/Halloo/Models/Container.swift` (lines 77-81)
+
+```swift
+// Subscription Service - Singleton for RevenueCat subscription management
+registerSingleton(SubscriptionServiceProtocol.self) {
+    print("💰 [Container] Creating RevenueCatSubscriptionService SINGLETON")
+    return RevenueCatSubscriptionService()
+}
+```
+
+**Singleton Pattern:**
+- Single shared instance across app lifecycle
+- Customer info cached for performance
+- Real-time subscription updates via `AsyncStream`
+
+## Usage Patterns
+
+### Pattern 1: Entitlement Gate
+
+**Scenario:** Block feature access unless user has "Remi Unlimited"
+
+```swift
+// In ProfileViewModel.swift
+func createProfile(name: String) async throws {
+    // Check subscription
+    if profiles.count >= 3 && !await SubscriptionManager.shared.hasUnlimitedAccess() {
+        // Show paywall
+        await MainActor.run {
+            SubscriptionManager.shared.presentPaywall(event: "profile_limit")
+        }
+        throw ProfileError.subscriptionRequired
+    }
+
+    // Create profile...
+}
+```
+
+### Pattern 2: User Identification
+
+**Scenario:** Link RevenueCat customer to Firebase Auth user after login
+
+```swift
+// In OnboardingViewModel.swift or AuthService
+func signIn(email: String, password: String) async throws {
+    // Sign in with Firebase
+    let authResult = try await authService.signIn(email: email, password: password)
+
+    // Identify user with RevenueCat
+    let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+    do {
+        try await subscriptionService.identify(userId: authResult.uid)
+        print("✅ User identified with RevenueCat")
+    } catch {
+        print("⚠️ RevenueCat identification failed: \(error)")
+        // Don't block login on subscription service errors
+    }
+}
+```
+
+### Pattern 3: Logout
+
+**Scenario:** Clear RevenueCat customer ID when user signs out
+
+```swift
+func signOut() async throws {
+    // Logout from RevenueCat first
+    let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+    try? await subscriptionService.logout()
+
+    // Then sign out from Firebase
+    try await authService.signOut()
+}
+```
+
+### Pattern 4: Customer Center
+
+**Scenario:** Show subscription management UI in settings
+
+```swift
+struct SettingsView: View {
+    @State private var showCustomerCenter = false
+    @State private var hasActiveSubscription = false
+
+    var body: some View {
+        List {
+            Section("Subscription") {
+                if hasActiveSubscription {
+                    Button("Manage Subscription") {
+                        showCustomerCenter = true
+                    }
+                } else {
+                    Button("Upgrade to Unlimited") {
+                        SubscriptionManager.shared.presentPaywall(event: "settings_upgrade")
+                    }
+                }
+
+                Button("Restore Purchases") {
+                    Task { await restorePurchases() }
+                }
+            }
+        }
+        .sheet(isPresented: $showCustomerCenter) {
+            CustomerCenterView()
+        }
+        .task {
+            hasActiveSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+        }
+    }
+}
+```
+
+### Pattern 5: Conditional UI
+
+**Scenario:** Show different UI based on subscription status
+
+```swift
+struct DashboardView: View {
+    @State private var hasUnlimitedAccess = false
+
+    var body: some View {
+        VStack {
+            // Free features (always visible)
+            BasicStatsView()
+
+            // Premium features (gated)
+            if hasUnlimitedAccess {
+                AdvancedAnalyticsView()
+                UnlimitedProfilesView()
+            } else {
+                UpgradeBanner()
+            }
+        }
+        .task {
+            hasUnlimitedAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+        }
+    }
+}
+```
+
+## Entitlement: "Remi Unlimited"
+
+### Configuration
+
+**RevenueCat Dashboard Setup:**
+1. Create entitlement: `"Remi Unlimited"`
+2. Create products: `monthly`, `yearly`
+3. Attach products to entitlement
+4. Configure pricing in App Store Connect
+
+**Superwall Dashboard Setup:**
+1. Create paywalls with product variables
+2. Configure placement events (e.g., `"profile_limit"`, `"task_limit"`)
+3. Set up targeting rules and A/B tests
+
+### Code Usage
+
+**Entitlement ID:** `"Remi Unlimited"` (defined in `SubscriptionManager.unlimitedEntitlementID`)
+
+**Check Entitlement:**
+```swift
+let hasAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+// OR
+let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+let hasAccess = await subscriptionService.hasActiveEntitlement(for: "Remi Unlimited")
+```
+
+## Build Configuration
+
+### Test Store vs Production
+
+**Automatic Switching:**
+- **Debug builds** (`#if DEBUG`): Use Test Store API key
+- **Release builds** (`#else`): Use production API key
+
+**Test Store Key:**
+- `test_JxDSDtqZjJxdAqlujuzvhPtVHSO`
+- Works immediately without App Store Connect setup
+- Safe to commit to source control
+- Allows testing purchase flows in development
+
+**Production Key:**
+- Must be replaced before App Store submission
+- Found in RevenueCat Dashboard → Settings → API Keys → Apple App Store
+- Format: `appl_...` or similar (NOT `test_...`)
+- **⚠️ NEVER commit production keys to public repos**
+
+**Safety Mechanism:**
+```swift
+#if !DEBUG
+guard REVENUECAT_API_KEY != "YOUR_PRODUCTION_KEY_HERE" else {
+    fatalError("🚨 CRITICAL: Replace production RevenueCat API key before release!")
+}
+#endif
+```
+
+This ensures app crashes in Release mode if production key isn't configured, preventing accidental Test Store deployment.
+
+## Error Handling
+
+### Common Patterns
+
+**1. Graceful Degradation:**
+```swift
+do {
+    let customerInfo = try await subscriptionService.fetchCustomerInfo()
+    hasAccess = customerInfo.entitlements["Remi Unlimited"]?.isActive == true
+} catch {
+    print("⚠️ Failed to check subscription: \(error)")
+    // Don't block user - use cached state or assume free tier
+    hasAccess = false
+}
+```
+
+**2. User-Facing Errors:**
+```swift
+do {
+    let success = await SubscriptionManager.shared.restorePurchases()
+    if success {
+        showAlert("Purchases restored successfully!")
+    } else {
+        showAlert("No purchases found to restore.")
+    }
+} catch {
+    showAlert("Failed to restore purchases. Please try again.")
+}
+```
+
+**3. Network Failure Handling:**
+- RevenueCat caches customer info locally
+- Cached data used if network unavailable
+- Gracefully handle fetch failures without blocking user
+
+## Performance Considerations
+
+### Caching
+
+**Customer Info Cache:**
+- RevenueCat caches customer info locally
+- `fetchCustomerInfo()` uses cache-first strategy
+- Network request only if cache stale or missing
+
+**Entitlement Checks:**
+- Cache subscription status in ViewModel `@Published` properties
+- Avoid repeated `hasUnlimitedAccess()` calls in render loops
+- Use `.task { }` modifier to load once on view appear
+
+**Example:**
+```swift
+// ❌ BAD - Repeated network calls
+var body: some View {
+    if await SubscriptionManager.shared.hasUnlimitedAccess() {
+        PremiumFeature()
+    }
+}
+
+// ✅ GOOD - Cached state
+@State private var hasAccess = false
+
+var body: some View {
+    if hasAccess {
+        PremiumFeature()
+    }
+}
+.task {
+    hasAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+}
+```
+
+### AsyncStream Listener
+
+**Real-Time Updates:**
+```swift
+// In RevenueCatSubscriptionService
+for await customerInfo in Purchases.shared.customerInfoStream {
+    self._currentCustomerInfo = customerInfo
+}
+```
+
+- Automatically updates when subscription changes
+- No polling required
+- Minimal battery impact
+
+## Security Best Practices
+
+### API Key Management
+
+**Current Approach:**
+- Test Store key in source code (safe)
+- Production key placeholder with crash protection
+- Build configuration switches keys automatically
+
+**Enhanced Security (Optional):**
+Use `.xcconfig` files for production keys:
+
+```
+// Config/Release.xcconfig (add to .gitignore)
+REVENUECAT_API_KEY = appl_YOUR_PRODUCTION_KEY
+SUPERWALL_API_KEY = pk_YOUR_PRODUCTION_KEY
+```
+
+### Receipt Validation
+
+**Handled by RevenueCat:**
+- Server-side receipt validation
+- Fraud detection
+- Automatic renewal handling
+- No client-side validation needed
+
+## Testing
+
+### Test Store Purchases
+
+**Setup:**
+1. Use Test Store API key (already configured in Debug builds)
+2. Create sandbox tester accounts in App Store Connect
+3. Sign out of real Apple ID on test device
+4. Sign in with sandbox tester during purchase
+
+**Test Flows:**
+- New subscription purchase
+- Subscription upgrade (monthly → yearly)
+- Subscription downgrade (yearly → monthly)
+- Restore purchases
+- Subscription cancellation
+- Subscription renewal
+
+### StoreKit Configuration
+
+**File:** `StoreKit.storekit` (in project root)
+
+- Defines test products for Xcode simulator
+- Products: `monthly`, `yearly`
+- Prices: $9.99/month, $89.99/year
+- Used automatically in simulator builds
+
+## Troubleshooting
+
+### Issue: Purchases Not Working
+
+**Symptoms:** Purchase sheet doesn't appear or fails immediately
+
+**Solutions:**
+1. Verify API key is correct (test mode or production)
+2. Check StoreKit configuration in Xcode scheme
+3. Ensure products configured in RevenueCat Dashboard
+4. Verify App Store Connect product IDs match
+
+### Issue: Entitlement Not Activating
+
+**Symptoms:** Purchase succeeds but entitlement still shows inactive
+
+**Solutions:**
+1. Wait 5-10 seconds for RevenueCat server sync
+2. Force refresh: `try await subscriptionService.fetchCustomerInfo()`
+3. Check RevenueCat Dashboard → Customers → Find user
+4. Verify entitlement attached to product in dashboard
+
+### Issue: User ID Not Linking
+
+**Symptoms:** Purchases don't persist across devices/logins
+
+**Solutions:**
+1. Ensure `identify(userId:)` called after authentication
+2. Check console logs for identification errors
+3. Verify Firebase Auth UID used (not email or phone)
+4. Call `identify()` on every login (idempotent operation)
+
+## Related Files
+
+### Implementation Files
+- `/Halloo/Core/App.swift` (lines 99-171) - SDK configuration
+- `/Halloo/Core/PurchaseController.swift` - Superwall ↔ RevenueCat bridge
+- `/Halloo/Services/SubscriptionServiceProtocol.swift` - Service contract
+- `/Halloo/Services/RevenueCatSubscriptionService.swift` - Implementation
+- `/Halloo/Utilities/SubscriptionManager.swift` - High-level utilities
+- `/Halloo/Views/SubscriptionViews/CustomerCenterView.swift` - UI
+- `/Halloo/Models/Container.swift` (lines 77-81) - DI registration
+
+### Documentation Files
+- `/Halloo/docs/REVENUECAT_INTEGRATION_GUIDE.md` - Full integration guide
+- `/Halloo/docs/REVENUECAT_CODE_EXAMPLES.md` - Practical code examples
+- `/Halloo/docs/PRODUCTION_DEPLOYMENT.md` - Pre-release checklist
+- `/Halloo/docs/architecture/App-Structure.md` - Architecture overview
+
+### External Resources
+- [RevenueCat Documentation](https://www.revenuecat.com/docs)
+- [Superwall Documentation](https://docs.superwall.com)
+- [RevenueCat Dashboard](https://app.revenuecat.com)
+- [Superwall Dashboard](https://superwall.com/dashboard)
+
+---
+
+*Last Updated: 2025-11-18*

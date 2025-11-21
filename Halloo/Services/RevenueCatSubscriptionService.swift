@@ -8,7 +8,7 @@
 //    • Check entitlements for "Remi Unlimited" premium access
 //    • Handle purchases, restoration, and customer info sync
 //    • Integrate with Superwall for paywall presentation
-//  Dependencies: Foundation, Combine, RevenueCat
+//  Dependencies: Foundation, RevenueCat
 //
 //  Business Context: Powers premium subscription features using RevenueCat SDK
 //  Critical Paths: SDK configuration → User identification → Entitlement checking → Purchase handling
@@ -17,7 +17,6 @@
 //
 
 import Foundation
-import Combine
 import RevenueCat
 
 /// RevenueCat-powered subscription service implementation
@@ -35,7 +34,7 @@ import RevenueCat
 ///
 /// ## Thread Safety:
 /// - All async methods are @MainActor to ensure UI updates on main thread
-/// - Uses Combine for reactive subscription status updates
+/// - Uses AsyncStream for reactive subscription status updates
 ///
 /// ## Error Handling:
 /// - Wraps RevenueCat errors with descriptive messages
@@ -45,15 +44,11 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
     // MARK: - Properties
 
-    private let customerInfoSubject = CurrentValueSubject<CustomerInfo?, Never>(nil)
-    private var cancellables = Set<AnyCancellable>()
-
-    var customerInfoPublisher: AnyPublisher<CustomerInfo?, Never> {
-        customerInfoSubject.eraseToAnyPublisher()
-    }
+    private var _currentCustomerInfo: CustomerInfo?
+    private var customerInfoTask: _Concurrency.Task<Void, Never>?
 
     var currentCustomerInfo: CustomerInfo? {
-        customerInfoSubject.value
+        _currentCustomerInfo
     }
 
     // MARK: - Initialization
@@ -75,7 +70,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
         // Identify user if userId provided
         if let userId = userId {
-            Task {
+            _Concurrency.Task {
                 do {
                     try await identify(userId: userId)
                 } catch {
@@ -88,7 +83,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         setupCustomerInfoListener()
 
         // Fetch initial customer info
-        Task {
+        _Concurrency.Task {
             do {
                 let customerInfo = try await fetchCustomerInfo()
                 print("✅ Initial customer info fetched: \(customerInfo.entitlements.active.keys)")
@@ -101,13 +96,13 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
     // MARK: - Customer Info Listener
 
     private func setupCustomerInfoListener() {
-        // Listen to customer info updates from RevenueCat
-        Purchases.shared.customerInfoStream
-            .sink { [weak self] customerInfo in
+        // Listen to customer info updates from RevenueCat using AsyncStream
+        customerInfoTask = _Concurrency.Task { [weak self] in
+            for await customerInfo in Purchases.shared.customerInfoStream {
                 print("📡 Customer info updated: \(customerInfo.entitlements.active.keys)")
-                self?.customerInfoSubject.send(customerInfo)
+                self?._currentCustomerInfo = customerInfo
             }
-            .store(in: &cancellables)
+        }
     }
 
     // MARK: - Entitlement Checking
@@ -145,7 +140,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
-            customerInfoSubject.send(customerInfo)
+            _currentCustomerInfo = customerInfo
 
             print("✅ Customer info fetched successfully")
             print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")
@@ -164,7 +159,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
         do {
             let (customerInfo, _) = try await Purchases.shared.logIn(userId)
-            customerInfoSubject.send(customerInfo)
+            _currentCustomerInfo = customerInfo
 
             print("✅ User identified successfully with RevenueCat")
             print("   - App user ID: \(customerInfo.originalAppUserId)")
@@ -180,7 +175,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
         do {
             let customerInfo = try await Purchases.shared.logOut()
-            customerInfoSubject.send(customerInfo)
+            _currentCustomerInfo = customerInfo
 
             print("✅ User logged out successfully")
             print("   - Now anonymous with ID: \(customerInfo.originalAppUserId)")
@@ -197,7 +192,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
-            customerInfoSubject.send(customerInfo)
+            _currentCustomerInfo = customerInfo
 
             print("✅ Purchases restored successfully")
             print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")

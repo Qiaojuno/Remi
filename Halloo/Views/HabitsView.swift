@@ -136,12 +136,15 @@ struct HabitsView: View {
             ZStack {
                 // Main content
                 ScrollView {
-                    VStack(spacing: 10) { // Match DashboardView spacing
+                    VStack(spacing: 0) { // Use explicit Spacers for precise control
 
                         // 🏠 HEADER: App branding + account access (conditionally rendered)
                         if showHeader {
                             headerSection
                                 .padding(.horizontal, geometry.size.width * 0.04)
+
+                            Spacer()
+                                .frame(height: 10)
                         }
 
                         // Empty state when no profiles exist
@@ -156,13 +159,46 @@ struct HabitsView: View {
                                     .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
                             }
 
-                            // 📋 HABITS MANAGEMENT: Week filter + habits list + delete button merged (iOS Clock app style)
-                            // Spacing above merged card (previously occupied by section title)
+                            // 📋 HABITS MANAGEMENT: Separated week filter and habits list
+                            // Spacing above week selector card
                             Spacer()
-                                .frame(height: 8)
+                                .frame(height: 16)
 
-                            // Edge-to-edge design (no horizontal padding)
-                            mergedHabitsCard
+                            // Week selector card (separated)
+                            weekSelectorCard
+                                .padding(.horizontal, geometry.size.width * 0.04)
+
+                            // Spacing before habits section
+                            Spacer()
+                                .frame(height: 3)
+
+                            // Individual habit cards
+                            if filteredHabits.isEmpty {
+                                // Empty state
+                                emptyStateNoHabits
+                                    .padding(.horizontal, geometry.size.width * 0.04)
+                            } else {
+                                ForEach(filteredHabits, id: \.id) { habit in
+                                    HabitCardView(
+                                        habit: habit,
+                                        profile: getProfileForHabit(habit),
+                                        selectedDays: selectedDays,
+                                        onTap: {
+                                            HapticFeedback.light()
+                                            deleteHabitFromSelectedDays(habit: habit)
+                                        }
+                                    )
+                                    .padding(.horizontal, geometry.size.width * 0.04)
+
+                                    // Spacing between habit cards
+                                    Spacer()
+                                        .frame(height: 3)
+                                }
+                            }
+
+                            // Delete profile button as its own card
+                            deleteProfileButtonCard
+                                .padding(.horizontal, geometry.size.width * 0.04)
                         }
 
                         // Bottom padding to prevent content from hiding behind navigation
@@ -348,59 +384,114 @@ struct HabitsView: View {
         .frame(height: 500)
     }
 
-    // MARK: - 📋 Merged Habits Card (iOS Clock App Style)
-    /// Single edge-to-edge card containing week filter + habits list + delete button
-    /// Matches native iOS list patterns (Clock, Reminders, Settings)
-    private var mergedHabitsCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Week selector at top
-            weekSelectorSection
-                .padding(.horizontal, 12) // Internal padding only
-                .padding(.top, 16)
-                .padding(.bottom, 16)
-
-            // Habits list below (no divider - seamless transition)
-            habitsListSection
-
-            // Delete profile button at the very bottom
-            deleteProfileButtonContent
+    // MARK: - 📋 Week Selector Card (Separated)
+    /// Standalone card containing only the week filter
+    /// No shadow for cleaner appearance
+    private var weekSelectorCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
+            Text("Repeating Messages")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.black)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+
+            // Week selector buttons
+            weekSelectorSection
+                .padding(.horizontal, 12)
         }
+        .padding(.vertical, 16)
         .background(Color.white)
+        .cornerRadius(10)
         .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
     }
-    
-    // MARK: - Week Selector Component (3-letter abbreviations with depth effect)
-    private var weekSelectorSection: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { dayIndex in
-                    let isSelected = selectedDays.contains(dayIndex)
 
+    // MARK: - 📋 Empty State - No Habits
+    /// Displayed when no habits match the selected day filters
+    private var emptyStateNoHabits: some View {
+        VStack(spacing: 12) {
+            Text("No habits scheduled for selected days")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(Color(hex: "9f9f9f"))
+                .padding(.vertical, 40)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.white)
+        .cornerRadius(10)
+    }
+
+    // MARK: - 🗑️ Delete Profile Button Card
+    /// Delete profile button as standalone card
+    private var deleteProfileButtonCard: some View {
+        Button(action: {
+            guard !isDeleteButtonCoolingDown else {
+                return
+            }
+
+            HapticFeedback.medium()
+            showingProfileDeleteConfirmation = true
+        }) {
+            HStack {
+                Text("Delete Profile")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Text("🚨")
+                    .font(.system(size: 22))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+        }
+        .background(Color.black)
+        .cornerRadius(10)
+        .disabled(isDeleteButtonCoolingDown)
+        .alert("Delete Profile", isPresented: $showingProfileDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                confirmDeleteProfile()
+            }
+        } message: {
+            if let profile = selectedProfile {
+                let habitCount = filteredHabits.count
+                Text("Are you sure you want to delete '\(profile.name)' and all \(habitCount) associated habit\(habitCount == 1 ? "" : "s")? This action cannot be undone.")
+            } else {
+                Text("No profile selected.")
+            }
+        }
+    }
+    
+    // MARK: - Week Selector Component (3-letter abbreviations, pill buttons)
+    private var weekSelectorSection: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<7, id: \.self) { dayIndex in
+                let isSelected = selectedDays.contains(dayIndex)
+
+                Button(action: {
+                    if selectedDays.contains(dayIndex) {
+                        selectedDays.remove(dayIndex)
+                    } else {
+                        selectedDays.insert(dayIndex)
+                    }
+                }) {
                     Text(weekDays[dayIndex])
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(isSelected ? Color.black : Color(hex: "9f9f9f")) // Black when selected, light grey when not
-                        .frame(width: (geometry.size.width / 7), height: 39) // Responsive width, fixed height
+                        .foregroundColor(isSelected ? Color.white : Color(hex: "9f9f9f")) // White when selected, light grey when not
+                        .frame(width: 39, height: 39)
                         .background(
                             Circle()
-                                .fill(isSelected ? Color.white : Color(hex: "E8E8E8")) // White (raised) when selected, dark grey (divot) when not
-                                .frame(width: 39, height: 39)
+                                .fill(isSelected ? Color.black : Color.white) // Black when selected, white when not
                         )
                         .overlay(
-                            // Subtle light grey stroke when selected
+                            // Grey stroke when unselected
                             Circle()
-                                .stroke(isSelected ? Color(hex: "E8E8E8") : Color.clear, lineWidth: 1)
-                                .frame(width: 39, height: 39)
+                                .stroke(isSelected ? Color.clear : Color(hex: "E8E8E8"), lineWidth: 1)
                         )
-                        .contentShape(Circle())
-                        .onTapGesture {
-                            if selectedDays.contains(dayIndex) {
-                                selectedDays.remove(dayIndex)
-                            } else {
-                                selectedDays.insert(dayIndex)
-                            }
-                        }
+                }
+
+                // Add flexible spacing between buttons (except after last)
+                if dayIndex < 6 {
+                    Spacer(minLength: 2)
                 }
             }
         }
@@ -428,31 +519,18 @@ struct HabitsView: View {
                             profile: getProfileForHabit(habit),
                             selectedDays: selectedDays
                         )
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.white)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                deleteHabitFromSelectedDays(habit: habit)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+                        .onTapGesture {
+                            HapticFeedback.light()
+                            deleteHabitFromSelectedDays(habit: habit)
                         }
-                        .overlay(
-                            VStack {
-                                Spacer()
-                                if habit.id != filteredHabits.last?.id {
-                                    Divider()
-                                        .overlay(Color(hex: "f8f3f3"))
-                                        .padding(.horizontal, 4)
-                                }
-                            }
-                        )
                     }
                 }
                 .listStyle(.plain)
                 .scrollDisabled(true)
-                .frame(height: CGFloat(filteredHabits.count) * 60) // Reduced from 90pt to 60pt for minimal design
+                .frame(height: CGFloat(filteredHabits.count) * 72) // Accounts for rounded backgrounds + spacing
                 .animation(.easeInOut(duration: 0.3), value: selectedDays)
             }
         }
@@ -835,6 +913,135 @@ struct HabitRowWithCustomSwipe: View {
     }
 }
 
+// MARK: - Habit Card View Component
+/// Individual habit as standalone card (matches other cards in view)
+struct HabitCardView: View {
+    let habit: Task
+    let profile: ElderlyProfile?
+    let selectedDays: Set<Int>
+    let onTap: () -> Void
+
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var profileViewModel: ProfileViewModel
+
+    private let habitColors: [Color] = [
+        Color(hex: "B9E3FF"),
+        Color.red.opacity(0.6),
+        Color.green.opacity(0.6),
+        Color.purple.opacity(0.6),
+        Color.orange.opacity(0.6)
+    ]
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                // Emoji with colored circle background
+                ZStack {
+                    Circle()
+                        .fill(habitColor)
+                        .frame(width: 40, height: 40)
+
+                    Text(getHabitEmoji(habit))
+                        .font(.system(size: 20))
+                }
+
+                // Title + Frequency
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(habit.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.black)
+                        .lineLimit(1)
+
+                    Text(smartFrequencyText(for: habit))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(Color(hex: "9f9f9f"))
+                }
+
+                Spacer()
+
+                // Time
+                Text(DateFormatters.formatTime(habit.scheduledTime))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(.black)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(Color.white)
+        .cornerRadius(10)
+        .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
+    }
+
+    private var habitColor: Color {
+        let hash = abs(habit.id.hashValue)
+        let colorIndex = hash % habitColors.count
+        return habitColors[colorIndex]
+    }
+
+    private func getHabitEmoji(_ habit: Task) -> String {
+        if habit.requiresPhoto {
+            return "📷"
+        } else if habit.requiresText {
+            return "💬"
+        } else {
+            return "📷"
+        }
+    }
+
+    private func smartFrequencyText(for habit: Task) -> String {
+        let scheduledDays = getScheduledDays(for: habit)
+        let dayCount = scheduledDays.count
+
+        switch dayCount {
+        case 7:
+            return "Daily"
+        case 5:
+            let weekdays = [1, 2, 3, 4, 5]
+            if scheduledDays == weekdays {
+                return "Weekdays"
+            }
+            fallthrough
+        case 2:
+            let weekend = [0, 6]
+            if scheduledDays == weekend {
+                return "Weekends"
+            }
+            fallthrough
+        case 1:
+            let dayIndex = scheduledDays.first ?? 0
+            let dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+            return "Every \(dayNames[dayIndex])"
+        case 6:
+            let allDays = Set([0, 1, 2, 3, 4, 5, 6])
+            let missingDay = allDays.subtracting(scheduledDays).first ?? 0
+            let dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+            return "Daily except \(dayNames[missingDay])"
+        case 2...5:
+            let dayAbbreviations = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+            let dayStrings = scheduledDays.map { dayAbbreviations[$0] }
+            return dayStrings.joined(separator: ", ")
+        default:
+            return "Custom"
+        }
+    }
+
+    private func getScheduledDays(for habit: Task) -> [Int] {
+        switch habit.frequency {
+        case .daily:
+            return [0, 1, 2, 3, 4, 5, 6]
+        case .weekdays:
+            return [1, 2, 3, 4, 5]
+        case .weekly:
+            let taskWeekday = Calendar.current.component(.weekday, from: habit.scheduledTime)
+            return [taskWeekday - 1]
+        case .custom:
+            return habit.customDays.map { $0.toIndex() }.sorted()
+        case .once:
+            return []
+        }
+    }
+}
+
 // MARK: - Simplified Habit Row View Component
 struct HabitRowViewSimple: View {
     let habit: Task
@@ -885,7 +1092,12 @@ struct HabitRowViewSimple: View {
                 .font(.system(size: 13, weight: .regular))
                 .foregroundColor(.black)
         }
-        .frame(height: 60)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(hex: "F8F8F8"))
+        )
     }
 
     // MARK: - Computed Properties

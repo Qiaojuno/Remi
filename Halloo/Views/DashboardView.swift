@@ -405,7 +405,8 @@ struct DashboardView: View {
                         }
                     }
                 } else {
-                    Text("\(viewModel.todaysUpcomingTasks.count) upcoming")
+                    let count = viewModel.todaysUpcomingTasks.count
+                    Text("\(count) upcoming message\(count == 1 ? "" : "s")")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.black)
                 }

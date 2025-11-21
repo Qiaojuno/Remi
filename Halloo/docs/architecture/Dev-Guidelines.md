@@ -1,8 +1,252 @@
 # Hallo iOS App - Development Guidelines & Patterns
-# Last Updated: 2025-11-06
+# Last Updated: 2025-11-18
 # Critical patterns and fixes for future development
 
-## RECENT LESSONS LEARNED (2025-11-06)
+## RECENT LESSONS LEARNED (2025-11-18)
+
+### Subscription Integration Pattern - RevenueCat + Superwall
+
+**Critical Pattern:** Use SubscriptionManager for entitlement checks and paywall presentation
+
+**Problem:** Direct SDK usage creates tight coupling and boilerplate
+```swift
+// ❌ WRONG - Direct RevenueCat SDK usage everywhere
+let customerInfo = try await Purchases.shared.customerInfo()
+if customerInfo.entitlements["Remi Unlimited"]?.isActive == true {
+    // Premium feature
+}
+
+// Repeated in 10+ files, hard to maintain
+```
+
+**Solution:** Use SubscriptionManager singleton
+```swift
+// ✅ CORRECT - Centralized subscription logic
+let hasAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+if !hasAccess {
+    SubscriptionManager.shared.presentPaywall(event: "premium_feature")
+    return
+}
+
+// Clean, consistent, easy to test
+```
+
+**Why This Matters:**
+- **Consistency**: Single source of truth for entitlement ID ("Remi Unlimited")
+- **Maintainability**: Change entitlement logic in one place
+- **Testing**: Mock SubscriptionManager easily vs mocking RevenueCat SDK
+- **Performance**: Built-in caching prevents repeated network calls
+
+**When to Use:**
+- ✅ Check premium access before feature execution
+- ✅ Show paywall when entitlement missing
+- ✅ Restore purchases (settings screen)
+- ✅ Display subscription status (Customer Center)
+
+**Performance:**
+- Cache entitlement status in ViewModel `@Published` properties
+- Avoid calling `hasUnlimitedAccess()` in view body (use `.task {}`)
+- RevenueCat caches customer info locally (fast)
+
+**File Reference:** `/Halloo/Utilities/SubscriptionManager.swift`, `/Halloo/Services/RevenueCatSubscriptionService.swift`
+
+---
+
+### User Identification Pattern - Link RevenueCat to Firebase Auth
+
+**Critical Pattern:** Always call `identify(userId:)` after successful authentication
+
+**Problem:** Purchases not syncing across devices/logins
+```swift
+// ❌ WRONG - RevenueCat not linked to user account
+func signIn() async throws {
+    try await authService.signIn(email: email, password: password)
+    // Missing: RevenueCat user identification
+}
+
+// Result: Purchases tied to anonymous ID, lost on logout/reinstall
+```
+
+**Solution:** Identify user immediately after authentication
+```swift
+// ✅ CORRECT - Link RevenueCat customer to Firebase UID
+func signIn() async throws {
+    let authResult = try await authService.signIn(email: email, password: password)
+
+    // Identify user with RevenueCat
+    let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+    do {
+        try await subscriptionService.identify(userId: authResult.uid)
+        print("✅ User identified with RevenueCat")
+    } catch {
+        print("⚠️ RevenueCat identification failed: \(error)")
+        // Don't block login on subscription service errors
+    }
+}
+```
+
+**Why This Matters:**
+- **Cross-device sync**: Purchases persist across user's devices
+- **Account restoration**: User can restore purchases after reinstall
+- **Support**: RevenueCat Dashboard shows purchases by user ID
+- **Analytics**: Track conversion rates per user
+
+**When to Call:**
+- ✅ After successful email/password sign-in
+- ✅ After successful Apple Sign-In
+- ✅ After successful Google Sign-In
+- ✅ On app launch if user already authenticated
+
+**Logout Pattern:**
+```swift
+func signOut() async throws {
+    // Logout from RevenueCat first (clears customer ID)
+    let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+    try? await subscriptionService.logout()
+
+    // Then sign out from Firebase
+    try await authService.signOut()
+}
+```
+
+**File Reference:** `/Halloo/Core/App.swift:126-129`, `/Halloo/Services/SubscriptionServiceProtocol.swift`
+
+---
+
+### Build Configuration Pattern - Test Store vs Production API Keys
+
+**Critical Pattern:** Use `#if DEBUG` for automatic API key switching
+
+**Problem:** Accidentally shipping test API keys to production
+```swift
+// ❌ WRONG - Hardcoded API key, no build distinction
+let REVENUECAT_API_KEY = "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"
+
+Purchases.configure(withAPIKey: REVENUECAT_API_KEY)
+
+// Ships to App Store with Test Store key!
+```
+
+**Solution:** Build configuration with safety check
+```swift
+// ✅ CORRECT - Automatic key switching with production validation
+let REVENUECAT_API_KEY: String = {
+    #if DEBUG
+    return "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"  // Test Store
+    #else
+    return "YOUR_PRODUCTION_KEY_HERE"  // ⚠️ MUST REPLACE
+    #endif
+}()
+
+// Crash if production key not replaced (prevents shipping with test key)
+#if !DEBUG
+guard REVENUECAT_API_KEY != "YOUR_PRODUCTION_KEY_HERE" else {
+    fatalError("🚨 CRITICAL: Replace production RevenueCat API key before release!")
+}
+#endif
+
+Purchases.configure(withAPIKey: REVENUECAT_API_KEY)
+```
+
+**Why This Matters:**
+- **Safety**: App crashes in Release mode if production key missing
+- **Development**: Test Store works immediately without App Store Connect
+- **Security**: Test Store keys safe to commit, production keys must be replaced
+- **Compliance**: Prevents accidental test mode in production
+
+**API Key Locations:**
+- Test Store: RevenueCat Dashboard → Test Apps → iOS
+- Production: RevenueCat Dashboard → Settings → API Keys → Apple App Store
+
+**Before App Store Submission:**
+1. Replace `"YOUR_PRODUCTION_KEY_HERE"` with actual production key
+2. Test Release build (ensure no crash)
+3. Verify production mode logs ("PRODUCTION MODE")
+4. Remove test key comments/notes
+
+**File Reference:** `/Halloo/Core/App.swift:99-136`, `/Halloo/docs/PRODUCTION_DEPLOYMENT.md`
+
+---
+
+### Entitlement Caching Pattern - Avoid Repeated Network Calls
+
+**Critical Pattern:** Cache subscription status in ViewModel state
+
+**Problem:** Checking entitlement on every render causes lag
+```swift
+// ❌ WRONG - Network call on every view render
+struct PremiumFeatureView: View {
+    var body: some View {
+        if await SubscriptionManager.shared.hasUnlimitedAccess() {  // ⚠️ Won't compile
+            Text("Premium Content")
+        }
+    }
+}
+
+// OR (even worse)
+var body: some View {
+    Group {
+        if checkSubscription() {  // Called 60 times per second!
+            Text("Premium")
+        }
+    }
+}
+```
+
+**Solution:** Load once with `.task`, cache in `@State`
+```swift
+// ✅ CORRECT - Cache subscription status
+struct PremiumFeatureView: View {
+    @State private var hasAccess = false
+    @State private var isLoading = true
+
+    var body: some View {
+        if isLoading {
+            ProgressView()
+        } else if hasAccess {
+            Text("Premium Content")
+        } else {
+            Button("Unlock Premium") {
+                SubscriptionManager.shared.presentPaywall(event: "premium_feature")
+            }
+        }
+    }
+    .task {
+        hasAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+        isLoading = false
+    }
+}
+```
+
+**Why This Matters:**
+- **Performance**: Single network call vs 60+ calls per second
+- **Battery**: Reduces unnecessary API requests
+- **User Experience**: No lag/flicker from async checks
+- **RevenueCat Caching**: SDK caches customer info, but still async
+
+**ViewModel Pattern:**
+```swift
+class MyFeatureViewModel: ObservableObject {
+    @Published var hasUnlimitedAccess = false
+
+    init() {
+        Task {
+            await checkSubscription()
+        }
+    }
+
+    @MainActor
+    func checkSubscription() async {
+        hasUnlimitedAccess = await SubscriptionManager.shared.hasUnlimitedAccess()
+    }
+}
+```
+
+**File Reference:** `/Halloo/Utilities/SubscriptionManager.swift`, `/Halloo/docs/REVENUECAT_CODE_EXAMPLES.md`
+
+---
+
+## PREVIOUS LESSONS LEARNED (2025-11-06)
 
 ### Image Privacy Pattern - EXIF Metadata Stripping
 

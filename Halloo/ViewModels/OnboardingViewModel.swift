@@ -61,10 +61,10 @@ final class OnboardingViewModel: ObservableObject {
     /// 
     /// Tracks progression through the educational and setup process:
     /// - .welcome: Introduction to elderly care coordination concepts
-    /// - .signUp: Account creation with family context
-    /// - .quiz: Care needs assessment and elderly preference gathering
-    /// - .preferences: Notification and communication setup
-    /// - .complete: Onboarding finished, ready for elderly profile creation
+    /// - Quiz steps: Care needs assessment and elderly preference gathering
+    /// - .saveYourProgress: Authentication gate
+    /// - .step6Paywall: Subscription selection
+    /// - .preferences: Profile creation view
     @Published var currentStep: OnboardingStep = .welcome
     
     /// Family's responses to elderly care assessment questions
@@ -98,10 +98,11 @@ final class OnboardingViewModel: ObservableObject {
     /// Used by families to understand and resolve onboarding obstacles.
     @Published var errorMessage: String?
     
-    /// Whether onboarding workflow has been successfully completed
-    /// 
-    /// Determines if family can proceed to elderly profile creation.
-    /// Updated when all onboarding steps are finished and user preferences saved.
+    /// Whether quiz flow has been completed
+    ///
+    /// ✅ ARCHITECTURE: This is NOT a navigation gate (see ContentView for navigation logic)
+    /// This tracks quiz completion for analytics/personalization only
+    /// Navigation is controlled by authService.isAuthenticated in ContentView
     @Published var isComplete = false
     
     /// Visual progress indicator for onboarding workflow completion
@@ -216,16 +217,10 @@ final class OnboardingViewModel: ObservableObject {
     ///
     /// Validates step-specific requirements:
     /// - .welcome: Always ready to proceed (introduction step)
-    /// - .signUp: Requires valid account creation form completion
-    /// - .step1WhoFor: Always ready after selection
-    /// - .step2Connection: Always ready after selection
-    /// - .step3NameRelationship: Always ready after name and relationship entered
-    /// - .step4WhatMatters: Optional question, no validation
-    /// - .step5SocialProof: No validation needed
-    /// - .step5EmotionalHook: Requires emotional value selection
+    /// - Quiz steps: Validation based on step type (most allow progression)
+    /// - .saveYourProgress: Requires authentication
     /// - .step6Paywall: Always can proceed after selecting plan
-    /// - .preferences: Always ready (optional configuration step)
-    /// - .complete: Cannot proceed further (terminal step)
+    /// - .preferences: Always ready (profile creation view)
     var canProceed: Bool {
         switch currentStep {
         case .welcome:
@@ -246,6 +241,8 @@ final class OnboardingViewModel: ObservableObject {
             return true  // Informational screen - no validation needed
         case .notificationPermission:
             return true  // Permission request - no validation needed
+        case .personalizedPlan:
+            return true  // Summary screen - no validation needed
         case .step7SocialProof:
             return true  // Social proof screen - no validation needed
         case .saveYourProgress:
@@ -254,23 +251,8 @@ final class OnboardingViewModel: ObservableObject {
             return true // Always can proceed after selecting plan
         case .profileSetupConfirmation:
             return true
-        // Deprecated cases
-        case .step2Connection:
-            return true
-        case .step3NameRelationship:
-            return true
-        case .step4WhatMatters:
-            return true
-        case .step5NotificationPromise:
-            return true
-        case .step6SocialProof:
-            return true
-        case .signUp:
-            return isValidSignUpForm
         case .preferences:
             return true
-        case .complete:
-            return false
         }
     }
     
@@ -301,7 +283,7 @@ final class OnboardingViewModel: ObservableObject {
     /// Calculates progress based on actual quiz flow steps (not all enum cases)
     /// Used for progress bars and completion indicators.
     var progressPercentage: Double {
-        let totalSteps: Double = 11  // Actual quiz flow steps (notification permission not counted)
+        let totalSteps: Double = 12  // Actual quiz flow steps (notification permission not counted)
         let stepNumber: Double
 
         switch currentStep {
@@ -314,12 +296,12 @@ final class OnboardingViewModel: ObservableObject {
         case .step5WhatMatters: stepNumber = 6
         case .step6NotificationPromise: stepNumber = 7
         case .notificationPermission: stepNumber = 7  // Same as previous step - not counted
-        case .step7SocialProof: stepNumber = 8
-        case .saveYourProgress: stepNumber = 9
-        case .step6Paywall: stepNumber = 10
-        case .profileSetupConfirmation: stepNumber = 11
-        // Deprecated steps default to 0
-        case .step2Connection, .step3NameRelationship, .step4WhatMatters, .step5NotificationPromise, .step6SocialProof, .signUp, .preferences, .complete: stepNumber = 0
+        case .personalizedPlan: stepNumber = 8
+        case .step7SocialProof: stepNumber = 9
+        case .saveYourProgress: stepNumber = 10
+        case .step6Paywall: stepNumber = 11
+        case .profileSetupConfirmation: stepNumber = 12
+        case .preferences: stepNumber = 12  // Same as profileSetupConfirmation
         }
 
         return stepNumber / totalSteps
@@ -457,9 +439,13 @@ final class OnboardingViewModel: ObservableObject {
             updateProgress()
             print("🧪 nextStep: Advanced from step 6 (Notification Promise) to notification permission")
         case .notificationPermission:
+            currentStep = .personalizedPlan
+            updateProgress()
+            print("🧪 nextStep: Advanced from notification permission to personalized plan")
+        case .personalizedPlan:
             currentStep = .step7SocialProof
             updateProgress()
-            print("🧪 nextStep: Advanced from notification permission to step 7 (Social Proof)")
+            print("🧪 nextStep: Advanced from personalized plan to step 7 (Social Proof)")
         case .step7SocialProof:
             currentStep = .saveYourProgress
             updateProgress()
@@ -477,30 +463,9 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .preferences
             updateProgress()
             print("🧪 nextStep: Advanced from profile setup confirmation to preferences")
-        // Deprecated cases - redirect to new flow
-        case .step2Connection:
-            currentStep = .step3MedicationProblem
-            updateProgress()
-        case .step3NameRelationship:
-            currentStep = .step4HabitFocus
-            updateProgress()
-        case .step4WhatMatters:
-            currentStep = .step5WhatMatters
-            updateProgress()
-        case .step5NotificationPromise:
-            currentStep = .step6NotificationPromise
-            updateProgress()
-        case .step6SocialProof:
-            currentStep = .step7SocialProof
-            updateProgress()
-        case .signUp:
-            // Deprecated flow - redirect to quiz
-            startQuiz()
         case .preferences:
             // Show CreateProfileView - don't auto-complete
             print("🧪 nextStep: Reached preferences step - should show CreateProfileView")
-            break
-        case .complete:
             break
         }
     }
@@ -534,8 +499,11 @@ final class OnboardingViewModel: ObservableObject {
         case .notificationPermission:
             currentStep = .step6NotificationPromise
             updateProgress()
-        case .step7SocialProof:
+        case .personalizedPlan:
             currentStep = .step6NotificationPromise  // Skip notification permission screen
+            updateProgress()
+        case .step7SocialProof:
+            currentStep = .personalizedPlan
             updateProgress()
         case .saveYourProgress:
             currentStep = .step7SocialProof
@@ -546,113 +514,16 @@ final class OnboardingViewModel: ObservableObject {
         case .profileSetupConfirmation:
             currentStep = .step6Paywall
             updateProgress()
-        // Deprecated cases
-        case .step2Connection:
-            currentStep = .step1WhoFor
-            updateProgress()
-        case .step3NameRelationship:
-            currentStep = .step2ReminderFrequency
-            updateProgress()
-        case .step4WhatMatters:
-            currentStep = .step3bProofScreen
-            updateProgress()
-        case .step5NotificationPromise:
-            currentStep = .step4HabitFocus
-            updateProgress()
-        case .step6SocialProof:
-            currentStep = .step5WhatMatters
-            updateProgress()
-        case .signUp:
-            currentStep = .welcome
-            updateProgress()
         case .preferences:
             currentStep = .profileSetupConfirmation
             updateProgress()
-        case .complete:
-            currentStep = .preferences
-            updateProgress()
         }
     }
 
-    func skipToEnd() {
-        currentStep = .complete
-        isComplete = true
-    }
-    
-    /// Handle successful authentication and navigation logic
-    /// NEW ARCHITECTURE: Only check subscription status, not onboarding completion
-    func handleSuccessfulAuthentication(authResult: AuthResult) async {
-        print("🔐 handleSuccessfulAuthentication called for UID: \(authResult.uid)")
-
-        do {
-            print("📊 Checking if user exists in database...")
-
-            // Add small delay to ensure Firestore is ready after auth
-            try? await _Concurrency.Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-
-            // Check if user exists in database
-            let existingUser = try await databaseService.getUser(authResult.uid)
-            print("✅ Database check completed. User found: \(existingUser != nil)")
-
-            if let user = existingUser {
-                print("👤 Existing user found. Subscription: \(user.subscriptionStatus)")
-
-                // Check subscription status (ONLY gate we check)
-                if user.subscriptionStatus == .active || user.isTrialActive {
-                    // User has active subscription or trial - go to dashboard
-                    print("✅ User has active subscription, navigating to dashboard")
-                    await MainActor.run {
-                        var transaction = Transaction()
-                        transaction.disablesAnimations = true
-                        withTransaction(transaction) {
-                            isComplete = true
-                        }
-                    }
-                } else {
-                    // User needs to subscribe - show paywall
-                    print("💳 User needs subscription, showing paywall")
-                    await MainActor.run {
-                        currentStep = .step6Paywall
-                    }
-                }
-            } else {
-                // New user signing in - create User record with trial
-                print("🆕 New user detected, creating user document with trial...")
-                let newUser = User(
-                    id: authResult.uid,
-                    email: authResult.email ?? "",
-                    fullName: authResult.displayName ?? "",
-                    phoneNumber: "",
-                    createdAt: Date(),
-                    subscriptionStatus: .trial,
-                    trialEndDate: Calendar.current.date(byAdding: .day, value: 7, to: Date()),
-                    quizAnswers: userAnswers, // Save quiz answers if collected
-                    profileCount: 0,
-                    taskCount: 0,
-                    updatedAt: Date(),
-                    lastSyncTimestamp: nil
-                )
-                try? await databaseService.createUser(newUser)
-                print("✅ New user document created with 7-day trial")
-
-                // New users get trial - go to dashboard
-                await MainActor.run {
-                    isComplete = true
-                }
-            }
-
-            print("🎉 handleSuccessfulAuthentication completed successfully")
-        } catch {
-            print("❌ Error in handleSuccessfulAuthentication: \(error)")
-            print("❌ Error type: \(type(of: error))")
-            print("❌ Error description: \(error.localizedDescription)")
-
-            await MainActor.run {
-                errorMessage = "Failed to complete sign in: \(error.localizedDescription)"
-                logger.error("Post-authentication user check failed: \(error.localizedDescription)")
-            }
-        }
-    }
+    // ✅ REMOVED: handleSuccessfulAuthentication()
+    // ARCHITECTURE: ContentView handles navigation via authService.isAuthenticated
+    // No need to manage isComplete or navigation state in OnboardingViewModel
+    // Firebase creates user document automatically in FirebaseAuthenticationService
 
     // MARK: - Profile Setup Actions
 
@@ -663,9 +534,10 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     /// Skip profile setup and go to main app
+    /// ✅ ARCHITECTURE: isComplete triggers navigation to dashboard via ContentView
     func skipProfileSetup() {
-        // Mark onboarding as complete and go to main app
-        currentStep = .complete
+        // Mark onboarding as complete (no need to change currentStep)
+        isComplete = true
     }
     
     // MARK: - Family Account Creation & Trial Activation
@@ -854,67 +726,75 @@ final class OnboardingViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Sign In Alternative
+    // MARK: - Sign In Methods
+    /// ✅ ARCHITECTURE: Authentication only - no navigation management
+    /// ContentView will automatically react to authService.isAuthenticated changes
     func signInWithApple() async {
         isLoading = true
         errorMessage = nil
 
         do {
-            let authResult = try await authService.signInWithApple()
-
-            // Delegate to handleSuccessfulAuthentication for consistent logic
-            await handleSuccessfulAuthentication(authResult: authResult)
+            print("🍎 [OnboardingVM] Starting Apple Sign In...")
+            _ = try await authService.signInWithApple()
+            print("✅ [OnboardingVM] Apple Sign In successful - authService will trigger navigation")
+            // ✅ No navigation logic needed - ContentView reacts to authService.isAuthenticated
 
         } catch {
-            errorMessage = error.localizedDescription
-            logger.error("Apple Sign In failed: \(error.localizedDescription)")
+            print("❌ [OnboardingVM] Apple Sign In failed: \(error.localizedDescription)")
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                logger.error("Apple Sign In failed: \(error.localizedDescription)")
+            }
         }
 
-        isLoading = false
+        await MainActor.run {
+            isLoading = false
+        }
     }
-    
+
     func signInWithGoogle() async {
         isLoading = true
         errorMessage = nil
 
         do {
-            let authResult = try await authService.signInWithGoogle()
-
-            // Delegate to handleSuccessfulAuthentication for consistent logic
-            await handleSuccessfulAuthentication(authResult: authResult)
+            print("🔐 [OnboardingVM] Starting Google Sign In...")
+            _ = try await authService.signInWithGoogle()
+            print("✅ [OnboardingVM] Google Sign In successful - authService will trigger navigation")
+            // ✅ No navigation logic needed - ContentView reacts to authService.isAuthenticated
 
         } catch {
-            errorMessage = error.localizedDescription
-            logger.error("Google Sign In failed: \(error.localizedDescription)")
+            print("❌ [OnboardingVM] Google Sign In failed: \(error.localizedDescription)")
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                logger.error("Google Sign In failed: \(error.localizedDescription)")
+            }
         }
 
-        isLoading = false
+        await MainActor.run {
+            isLoading = false
+        }
     }
 }
 
 // MARK: - Onboarding Models
+/// ✅ CLEANED UP: Removed deprecated enum cases (not persisted, safe to remove)
 enum OnboardingStep: String, CaseIterable {
     case welcome = "welcome"
-    case step1WhoFor = "step1WhoFor"  // Who would you like to help?
-    case step2ReminderFrequency = "step2ReminderFrequency"  // How often do they need reminders? (NEW)
-    case step3MedicationProblem = "step3MedicationProblem"  // Problem: Medication adherence crisis
-    case step3bProofScreen = "step3bProofScreen"  // Proof Screen (chart showing 40%)
-    case step4HabitFocus = "step4HabitFocus"  // What would you like to remind them about? (MOVED FROM STEP 2)
-    case step5WhatMatters = "step5WhatMatters"  // What matters most (emotional) - MOVED FROM STEP 4
-    case step6NotificationPromise = "step6NotificationPromise"  // Reassurance / notification promise - MOVED FROM STEP 5
-    case notificationPermission = "notificationPermission"  // Request notification permission (soft ask)
-    case step7SocialProof = "step7SocialProof"  // Testimonials - MOVED FROM STEP 6
-    case saveYourProgress = "saveYourProgress"  // Auth gate before paywall
+    case step1WhoFor = "step1WhoFor"
+    case step2ReminderFrequency = "step2ReminderFrequency"
+    case step3MedicationProblem = "step3MedicationProblem"
+    case step3bProofScreen = "step3bProofScreen"
+    case step4HabitFocus = "step4HabitFocus"
+    case step5WhatMatters = "step5WhatMatters"
+    case step6NotificationPromise = "step6NotificationPromise"
+    case notificationPermission = "notificationPermission"
+    case loadingPlan = "loadingPlan"  // Loading screen with progress
+    case personalizedPlan = "personalizedPlan"  // Summary of quiz answers
+    case step7SocialProof = "step7SocialProof"
+    case saveYourProgress = "saveYourProgress"  // Auth gate
     case step6Paywall = "step6Paywall"
     case profileSetupConfirmation = "profileSetupConfirmation"
-    case step2Connection = "step2Connection"  // Deprecated - renamed to step4HabitFocus
-    case step4WhatMatters = "step4WhatMatters"  // Deprecated - renamed to step5WhatMatters
-    case step5NotificationPromise = "step5NotificationPromise"  // Deprecated - renamed to step6NotificationPromise
-    case step6SocialProof = "step6SocialProof"  // Deprecated - renamed to step7SocialProof
-    case step3NameRelationship = "step3NameRelationship"  // Deprecated - kept for compatibility
-    case signUp = "signUp"  // Deprecated - kept for backwards compatibility
-    case preferences = "preferences"  // Deprecated
-    case complete = "complete"
+    case preferences = "preferences"  // Profile creation view
 
     var title: String {
         switch self {
@@ -936,6 +816,10 @@ enum OnboardingStep: String, CaseIterable {
             return "Stay Informed"
         case .notificationPermission:
             return "Notifications"
+        case .loadingPlan:
+            return "Building Your Plan"
+        case .personalizedPlan:
+            return "Your Summary"
         case .step7SocialProof:
             return "Social Proof"
         case .saveYourProgress:
@@ -944,22 +828,8 @@ enum OnboardingStep: String, CaseIterable {
             return "Choose Your Plan"
         case .profileSetupConfirmation:
             return "Profile Setup"
-        case .step2Connection:
-            return "Connection" // Deprecated
-        case .step4WhatMatters:
-            return "What Matters" // Deprecated
-        case .step5NotificationPromise:
-            return "Stay Informed" // Deprecated
-        case .step6SocialProof:
-            return "Social Proof" // Deprecated
-        case .step3NameRelationship:
-            return "Proof Screen"
-        case .signUp:
-            return "Create Account"
         case .preferences:
             return "Preferences"
-        case .complete:
-            return "You're all set!"
         }
     }
 
@@ -983,6 +853,10 @@ enum OnboardingStep: String, CaseIterable {
             return "Remi keeps you in the loop"
         case .notificationPermission:
             return "Never miss a moment"
+        case .loadingPlan:
+            return "Analyzing your answers"
+        case .personalizedPlan:
+            return "See your personalized reminder strategy"
         case .step7SocialProof:
             return "Families everywhere use Remi"
         case .saveYourProgress:
@@ -991,22 +865,8 @@ enum OnboardingStep: String, CaseIterable {
             return "Start your personalized memory plan"
         case .profileSetupConfirmation:
             return "Ready to create your first profile?"
-        case .step2Connection:
-            return "How often do you think about them?" // Deprecated
-        case .step4WhatMatters:
-            return "What matters most to you" // Deprecated
-        case .step5NotificationPromise:
-            return "Remi keeps you in the loop" // Deprecated
-        case .step6SocialProof:
-            return "Families everywhere use Remi" // Deprecated
-        case .step3NameRelationship:
-            return "Proof screen"
-        case .signUp:
-            return "Create your account to get started"
         case .preferences:
             return "Customize your notification settings"
-        case .complete:
-            return "Start creating profiles for your elderly family members"
         }
     }
 }

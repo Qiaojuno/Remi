@@ -8,10 +8,9 @@ struct User: Codable, Identifiable, Hashable {
     let fullName: String
     let phoneNumber: String
     let createdAt: Date
-    let isOnboardingComplete: Bool
     let subscriptionStatus: SubscriptionStatus
     let trialEndDate: Date?
-    let quizAnswers: [String: String]?
+    let quizAnswers: [String: String]? // Optional - kept for analytics/personalization
 
     // Auto-calculated fields (updated by DatabaseService)
     var profileCount: Int
@@ -32,15 +31,18 @@ struct User: Codable, Identifiable, Hashable {
     /// End of current SMS quota period (quota resets after this date)
     var smsQuotaPeriodEnd: Date
 
+    /// ✅ ARCHITECTURE: Subscription managed by RevenueCat (not app-side)
+    /// - subscriptionStatus: Deprecated (kept for backward compatibility only)
+    /// - trialEndDate: Deprecated (RevenueCat handles trials via product config)
+    /// New users should check subscription via RevenueCat SDK, not these fields
     init(
         id: String,
         email: String,
         fullName: String,
         phoneNumber: String,
         createdAt: Date,
-        isOnboardingComplete: Bool = false,
-        subscriptionStatus: SubscriptionStatus = .trial,
-        trialEndDate: Date? = nil,
+        subscriptionStatus: SubscriptionStatus = .active, // Default to active (RevenueCat controls access)
+        trialEndDate: Date? = nil, // Deprecated - don't use for new users
         quizAnswers: [String: String]? = nil,
         profileCount: Int = 0,
         taskCount: Int = 0,
@@ -56,7 +58,6 @@ struct User: Codable, Identifiable, Hashable {
         self.fullName = fullName
         self.phoneNumber = phoneNumber
         self.createdAt = createdAt
-        self.isOnboardingComplete = isOnboardingComplete
         self.subscriptionStatus = subscriptionStatus
         self.trialEndDate = trialEndDate
         self.quizAnswers = quizAnswers
@@ -74,7 +75,7 @@ struct User: Codable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, email, fullName, phoneNumber, createdAt
-        case isOnboardingComplete, subscriptionStatus, trialEndDate, quizAnswers
+        case subscriptionStatus, trialEndDate, quizAnswers
         case profileCount, taskCount, updatedAt, lastSyncTimestamp
         case smsQuotaLimit, smsQuotaUsed, smsQuotaPeriodStart, smsQuotaPeriodEnd
     }
@@ -89,7 +90,6 @@ struct User: Codable, Identifiable, Hashable {
         email = try container.decode(String.self, forKey: .email)
         fullName = try container.decode(String.self, forKey: .fullName)
         phoneNumber = try container.decode(String.self, forKey: .phoneNumber)
-        isOnboardingComplete = try container.decode(Bool.self, forKey: .isOnboardingComplete)
         subscriptionStatus = try container.decode(SubscriptionStatus.self, forKey: .subscriptionStatus)
 
         // Optional fields
@@ -161,7 +161,6 @@ struct User: Codable, Identifiable, Hashable {
         try container.encode(fullName, forKey: .fullName)
         try container.encode(phoneNumber, forKey: .phoneNumber)
         try container.encode(createdAt, forKey: .createdAt)
-        try container.encode(isOnboardingComplete, forKey: .isOnboardingComplete)
         try container.encode(subscriptionStatus, forKey: .subscriptionStatus)
         try container.encodeIfPresent(trialEndDate, forKey: .trialEndDate)
         try container.encodeIfPresent(quizAnswers, forKey: .quizAnswers)

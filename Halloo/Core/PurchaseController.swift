@@ -36,59 +36,58 @@ import RevenueCat
 /// ## Thread Safety:
 /// - All methods are thread-safe and use async/await
 /// - RevenueCat SDK handles internal synchronization
-final class PurchaseController: PurchaseControllerProtocol {
+final class PurchaseController: SuperwallKit.PurchaseController {
 
     // MARK: - PurchaseController Protocol
 
     /// Handle purchase request from Superwall paywall
     /// - Parameter product: StoreKit product to purchase
     /// - Returns: Purchase result with customer info and transaction
-    func purchase(product: SK1Product) async -> PurchaseResult {
+    func purchase(product: SuperwallKit.StoreProduct) async -> SuperwallKit.PurchaseResult {
         print("💰 [PurchaseController] Purchase requested for product: \(product.productIdentifier)")
 
         do {
-            // Delegate purchase to RevenueCat
-            let result = try await Purchases.shared.purchase(product: product)
+            // Convert Superwall StoreProduct to RevenueCat StoreProduct
+            // RevenueCat requires StoreKit 2 products
+            guard let sk2Product = product.sk2Product else {
+                print("❌ [PurchaseController] SK2 product not found - ensure Superwall is configured with StoreKit 2")
+                return .failed(NSError(domain: "PurchaseController", code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "StoreKit 2 product required"]))
+            }
+
+            let storeProduct = RevenueCat.StoreProduct(sk2Product: sk2Product)
+            let result = try await Purchases.shared.purchase(product: storeProduct)
+
+            // Check if user cancelled
+            if result.userCancelled {
+                print("⚠️ [PurchaseController] User cancelled purchase")
+                return .cancelled
+            }
 
             print("✅ [PurchaseController] Purchase successful")
             print("   - Product ID: \(product.productIdentifier)")
-            print("   - Transaction ID: \(result.transaction?.transactionIdentifier ?? "unknown")")
             print("   - Active entitlements: \(result.customerInfo.entitlements.active.keys)")
 
-            // Return success with customer info and transaction
             return .purchased
 
         } catch let error as ErrorCode {
-            print("❌ [PurchaseController] Purchase failed with RevenueCat error: \(error)")
+            print("❌ [PurchaseController] RevenueCat error: \(error)")
 
-            // Handle specific RevenueCat errors
-            switch error.code {
-            case .purchaseCancelledError:
-                print("   - User cancelled purchase")
-                return .cancelled
-
-            case .productAlreadyPurchasedError:
-                print("   - Product already purchased")
-                return .purchased
-
-            case .networkError:
-                print("   - Network error during purchase")
-                return .failed(error)
-
-            default:
-                print("   - Unexpected error: \(error.localizedDescription)")
+            if error == .paymentPendingError {
+                return .pending
+            } else {
                 return .failed(error)
             }
 
         } catch {
-            print("❌ [PurchaseController] Purchase failed with unexpected error: \(error)")
+            print("❌ [PurchaseController] Purchase failed: \(error.localizedDescription)")
             return .failed(error)
         }
     }
 
     /// Restore previous purchases
     /// - Returns: Restore result with customer info
-    func restorePurchases() async -> RestorationResult {
+    func restorePurchases() async -> SuperwallKit.RestorationResult {
         print("♻️ [PurchaseController] Restore purchases requested")
 
         do {

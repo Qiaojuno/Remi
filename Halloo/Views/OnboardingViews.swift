@@ -24,7 +24,7 @@ struct WelcomeCardStack: View {
 
     // Mock task examples (randomized from common habits)
     private let mockTasks = [
-        "take your medication",
+        "take your medication 🌷",
         "go for a walk",
         "drink some water"
     ]

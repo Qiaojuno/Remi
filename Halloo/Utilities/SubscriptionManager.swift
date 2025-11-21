@@ -71,6 +71,17 @@ final class SubscriptionManager: ObservableObject {
     /// Check if user has any active subscription
     /// - Returns: True if user has at least one active subscription
     func hasActiveSubscription() async -> Bool {
+        #if DEBUG
+        // ⚠️ DEBUG BYPASS: Always grant access in debug builds (for testing without products)
+        // Remove or set to false when testing actual purchases
+        let debugBypass = true
+
+        if debugBypass {
+            print("⚠️ [SubscriptionManager] DEBUG MODE: Bypassing subscription check (always granting access)")
+            return true
+        }
+        #endif
+
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
             let hasActive = !customerInfo.entitlements.active.isEmpty

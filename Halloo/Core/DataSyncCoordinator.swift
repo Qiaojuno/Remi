@@ -957,7 +957,6 @@ class DataConflictResolver {
             fullName: local.fullName,
             phoneNumber: local.phoneNumber,
             createdAt: local.createdAt,
-            isOnboardingComplete: local.isOnboardingComplete,
             subscriptionStatus: remote.subscriptionStatus, // Prefer remote subscription status
             trialEndDate: remote.trialEndDate,
             quizAnswers: local.quizAnswers

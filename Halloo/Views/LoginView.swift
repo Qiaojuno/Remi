@@ -135,20 +135,14 @@ struct LoginView: View {
         do {
             let authService = container.resolve(AuthenticationServiceProtocol.self)
 
-            // Cast to FirebaseAuthenticationService to access processAppleSignIn method
-            if let firebaseAuthService = authService as? FirebaseAuthenticationService {
-                let result = try await firebaseAuthService.processAppleSignIn(authorization: authorization)
+            // Use the high-level signInWithApple method (handles nonce internally)
+            let result = try await authService.signInWithApple()
 
-                await MainActor.run {
-                    isSigningIn = false
+            await MainActor.run {
+                isSigningIn = false
 
-                    // Trigger navigation to dashboard via callback
-                    onAuthenticationSuccess()
-                }
-            } else {
-                await MainActor.run {
-                    showError("Apple Sign In not supported with current authentication service")
-                }
+                // Trigger navigation to dashboard via callback
+                onAuthenticationSuccess()
             }
         } catch {
             await MainActor.run {
@@ -184,7 +178,7 @@ struct LoginView: View {
         }
     }
     
-    // MARK: - Helper Methods
+    // MARK: - Helper Methods t
 
     private func showError(_ message: String) {
         isSigningIn = false
