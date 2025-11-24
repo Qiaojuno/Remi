@@ -412,6 +412,20 @@ struct HabitCreationCard: View {
                 }
             }
 
+            // Timezone indicator - shows recipient's timezone
+            if let profileId = selectedProfileId,
+               let profile = appState.profiles.first(where: { $0.id == profileId }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                    Text("Reminders sent in \(profile.displayTimeZone.abbreviation() ?? profile.timeZone) (\(profile.name)'s timezone)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 4)
+            }
+
             // Error message display (30-minute validation)
             if let timeError = taskViewModel.timeError {
                 HStack(alignment: .top, spacing: 8) {

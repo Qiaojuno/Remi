@@ -35,6 +35,41 @@ struct ProfileCreationCard: View {
     @State private var showPhotoOptions = false
     @State private var imageSourceType: UIImagePickerController.SourceType = .photoLibrary
     @State private var isCreating = false // Loading state
+    @State private var selectedTimezone: TimezoneOption = .eastern // Default to Eastern
+
+    // MARK: - North American Timezone Options
+    enum TimezoneOption: String, CaseIterable {
+        case eastern = "America/New_York"
+        case central = "America/Chicago"
+        case mountain = "America/Denver"
+        case pacific = "America/Los_Angeles"
+        case alaska = "America/Anchorage"
+        case hawaii = "Pacific/Honolulu"
+
+        var displayName: String {
+            switch self {
+            case .eastern: return "Eastern"
+            case .central: return "Central"
+            case .mountain: return "Mountain"
+            case .pacific: return "Pacific"
+            case .alaska: return "Alaska"
+            case .hawaii: return "Hawaii"
+            }
+        }
+
+        var abbreviation: String {
+            TimeZone(identifier: rawValue)?.abbreviation() ?? rawValue
+        }
+
+        var timeZone: TimeZone {
+            TimeZone(identifier: rawValue) ?? TimeZone.current
+        }
+
+        /// Initialize from a TimeZone identifier, defaulting to Eastern if not found
+        static func from(identifier: String) -> TimezoneOption {
+            TimezoneOption(rawValue: identifier) ?? .eastern
+        }
+    }
 
     @FocusState private var isTextFieldFocused: Bool
 
@@ -123,6 +158,9 @@ struct ProfileCreationCard: View {
 
                         // Phone Section
                         phoneSectionInCard
+
+                        // Timezone Section
+                        timezoneSectionInCard
                     }
                     .padding(16)
                     .background(Color(hex: "F8F8F8"))
@@ -273,6 +311,64 @@ struct ProfileCreationCard: View {
         }
     }
 
+    // MARK: - Timezone Section (Inside Card)
+    private var timezoneSectionInCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Their Timezone")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.black)
+
+            // Horizontal scrolling timezone pills
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(TimezoneOption.allCases, id: \.self) { option in
+                        timezoneButton(for: option)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 4) // Prevent pills from being clipped
+            }
+
+            // Show current time in selected timezone
+            Text("Current time: \(currentTimeInSelectedTimezone)")
+                .font(.system(size: 12))
+                .foregroundColor(.gray)
+        }
+    }
+
+    private func timezoneButton(for option: TimezoneOption) -> some View {
+        Button {
+            HapticFeedback.light()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedTimezone = option
+            }
+            isTextFieldFocused = false
+        } label: {
+            Text(option.displayName)
+                .font(.system(size: 14, weight: selectedTimezone == option ? .semibold : .regular))
+                .foregroundColor(selectedTimezone == option ? .white : .black)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(selectedTimezone == option ? Color.black : Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(selectedTimezone == option ? Color.clear : Color.gray.opacity(0.3), lineWidth: 1)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    /// Shows the current time in the selected timezone for user reference
+    private var currentTimeInSelectedTimezone: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.timeZone = selectedTimezone.timeZone
+        return formatter.string(from: Date()) + " " + (selectedTimezone.timeZone.abbreviation() ?? "")
+    }
+
     // MARK: - Create Button (Below Card)
     private var createButtonInside: some View {
         Button(action: handleCreateProfile) {
@@ -340,6 +436,7 @@ struct ProfileCreationCard: View {
         hasStartedTypingPhone = false
         selectedPhoto = nil
         isCreating = false
+        selectedTimezone = .eastern // Reset to default
     }
 
     private func formatPhoneNumber(_ value: String) -> String {
@@ -383,6 +480,7 @@ struct ProfileCreationCard: View {
         profileViewModel.profileName = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
         profileViewModel.phoneNumber = phoneNumber
         profileViewModel.hasSelectedPhoto = selectedPhoto != nil
+        profileViewModel.timeZone = selectedTimezone.timeZone // Pass selected timezone
 
         // Set default relationship if not already set
         if profileViewModel.relationship.isEmpty {

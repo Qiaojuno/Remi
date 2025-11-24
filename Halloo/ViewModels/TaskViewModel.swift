@@ -621,10 +621,12 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
             for (index, scheduledTime) in scheduledTimes.enumerated() {
 
                 // Calculate the correct first occurrence based on frequency
+                // Use profile's timezone to ensure SMS is sent at the correct local time
                 guard let nextScheduledDate = calculateFirstOccurrence(
                     frequency: frequency,
                     scheduledTime: scheduledTime,
-                    customDays: customDays
+                    customDays: customDays,
+                    profileTimeZone: profile.timeZone
                 ) else {
                     // This happens for one-time tasks scheduled in the past
                     await MainActor.run {
@@ -651,7 +653,8 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                     status: isActive ? .active : .paused,
                     createdAt: Date(),
                     lastModifiedAt: Date(),
-                    nextScheduledDate: nextScheduledDate  // Use calculated date
+                    nextScheduledDate: nextScheduledDate,
+                    timeZone: profile.timeZone  // Store profile's timezone for Cloud Functions
                 )
 
                 // Persist with family synchronization
@@ -731,7 +734,8 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                 createdAt: task.createdAt,
                 lastModifiedAt: Date(),
                 completionCount: task.completionCount,
-                lastCompletedAt: task.lastCompletedAt
+                lastCompletedAt: task.lastCompletedAt,
+                timeZone: profile.timeZone  // Use current profile's timezone
             )
 
             // 1. OPTIMISTIC: Update AppState immediately
@@ -1167,14 +1171,23 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
     // MARK: - Scheduling Helpers
 
     /// Calculate the first occurrence for a new task based on frequency and scheduled time
+    /// - Parameters:
+    ///   - frequency: How often the task repeats
+    ///   - scheduledTime: The time of day for the task
+    ///   - customDays: For custom frequency, which days of the week
+    ///   - profileTimeZone: The recipient's timezone identifier (e.g., "America/New_York")
     /// - Returns: The next valid occurrence timestamp, or nil if scheduled time is in the past for one-time tasks
     private func calculateFirstOccurrence(
         frequency: TaskFrequency,
         scheduledTime: Date,
-        customDays: Set<Weekday>
+        customDays: Set<Weekday>,
+        profileTimeZone: String = TimeZone.current.identifier
     ) -> Date? {
         let now = Date()
-        let calendar = Calendar.current
+
+        // Use profile's timezone for all date calculations
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: profileTimeZone) ?? TimeZone.current
 
         // Extract time components (hours, minutes) from scheduledTime
         let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: scheduledTime)
@@ -1254,7 +1267,7 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
             // Find next day that matches customDays array
             if customDays.isEmpty {
                 // No custom days selected - fallback to daily
-                return calculateFirstOccurrence(frequency: .daily, scheduledTime: scheduledTime, customDays: [])
+                return calculateFirstOccurrence(frequency: .daily, scheduledTime: scheduledTime, customDays: [], profileTimeZone: profileTimeZone)
             }
 
             // Search for next matching day (up to 14 days ahead)

@@ -10,6 +10,7 @@
 2. [Data Migration - Fix Task ProfileIds](#data-migration---fix-task-profileids)
 3. [Archived Photos Feature - 90-Day Retention](#archived-photos-feature---90-day-retention)
 4. [Real-Time Gallery Updates Fix](#real-time-gallery-updates-fix)
+5. [Timezone Support for North America](#timezone-support-for-north-america)
 
 ---
 
@@ -2552,4 +2553,310 @@ SUPERWALL_API_KEY = pk_YOUR_PRODUCTION_KEY
 
 ---
 
-*Last Updated: 2025-11-18*
+# Timezone Support for North America
+
+**Implementation Date:** 2025-11-24
+**Status:** ✅ Production Ready
+
+## Issue
+
+SMS reminders were being sent based on the device timezone (iOS) or hardcoded Pacific Time (Cloud Functions), causing incorrect delivery times when family members and recipients were in different timezones.
+
+**Example Problem:**
+- Family member in NYC creates "Take meds at 9 AM" for parent in LA
+- Without timezone support: SMS sent at 6 AM PST (9 AM EST converted incorrectly)
+- Parent woken up 3 hours early
+
+## Solution
+
+Implemented complete timezone support across iOS app and Cloud Functions, ensuring SMS reminders are sent at the recipient's local time regardless of where the family member creating the habit is located.
+
+### Implementation Details
+
+#### 1. Profile Model - Timezone Field
+**File:** `/Halloo/Models/ElderlyProfile.swift` (lines 102-103)
+
+Added timezone field with graceful fallback for backward compatibility:
+
+```swift
+// Graceful fallback for old profiles without timezone field
+timeZone = (try? container.decode(String.self, forKey: .timeZone))
+    ?? TimeZone.current.identifier
+```
+
+**Impact:** Zero crashes from old data, automatic fallback to device timezone.
+
+---
+
+#### 2. Task Model - Timezone Field
+**File:** `/Halloo/Models/Task.swift` (lines 26, 57)
+
+Added timezone field to tasks with backward-compatible decoder:
+
+```swift
+let timeZone: String  // Profile's timezone for scheduling (line 26)
+
+// Backward compatibility decoder (line 57)
+timeZone = (try? container.decode(String.self, forKey: .timeZone))
+    ?? TimeZone.current.identifier
+```
+
+**Impact:** All new tasks store recipient's timezone, old tasks fall back gracefully.
+
+---
+
+#### 3. iOS Date Calculations - Timezone-Aware
+**File:** `/Halloo/ViewModels/TaskViewModel.swift` (lines 1180-1190)
+
+Updated `calculateFirstOccurrence()` to use profile's timezone:
+
+```swift
+private func calculateFirstOccurrence(
+    frequency: TaskFrequency,
+    scheduledTime: Date,
+    customDays: Set<Weekday>,
+    profileTimeZone: String = TimeZone.current.identifier  // ✅ Accepts timezone
+) -> Date? {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: profileTimeZone) ?? .current  // ✅ Uses profile TZ
+
+    // All date calculations now use recipient's timezone
+}
+```
+
+**Call Site (line 625):**
+```swift
+guard let nextScheduledDate = calculateFirstOccurrence(
+    frequency: frequency,
+    scheduledTime: scheduledTime,
+    customDays: customDays,
+    profileTimeZone: selectedProfile.timeZone  // ✅ Pass profile timezone
+) else {
+    // error handling
+}
+```
+
+**Impact:** First occurrence calculated in recipient's timezone, not device timezone.
+
+---
+
+#### 4. Cloud Functions - moment-timezone
+**File:** `functions/package.json` (line 17)
+
+Added moment-timezone dependency:
+
+```json
+{
+  "dependencies": {
+    "moment-timezone": "^0.5.46"
+  }
+}
+```
+
+**File:** `functions/index.js` (line 7)
+
+Imported moment-timezone:
+
+```javascript
+const moment = require('moment-timezone');
+```
+
+---
+
+#### 5. Cloud Functions - Timezone-Aware Calculations
+**File:** `functions/index.js` (lines 1376-1454)
+
+Completely rewrote `calculateNextOccurrence()` with timezone support:
+
+```javascript
+function calculateNextOccurrence(habit, profileTimeZone = 'America/Los_Angeles') {
+  // Use habit's timezone if available, otherwise profile's, with PST fallback
+  const tz = habit.timeZone || profileTimeZone || 'America/Los_Angeles';
+
+  // Get current date in profile's timezone
+  const currentDate = moment(habit.nextScheduledDate.toDate()).tz(tz);
+  const scheduledTime = moment(habit.scheduledTime.toDate()).tz(tz);
+
+  const hours = scheduledTime.hours();
+  const minutes = scheduledTime.minutes();
+  const seconds = scheduledTime.seconds();
+
+  switch (habit.frequency) {
+    case 'daily':
+      const nextDaily = currentDate.clone().add(1, 'day');
+      nextDaily.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
+      return nextDaily.toDate();
+
+    case 'weekdays':
+      let nextWeekday = currentDate.clone().add(1, 'day');
+      nextWeekday.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
+      while (nextWeekday.day() === 0 || nextWeekday.day() === 6) {
+        nextWeekday.add(1, 'day');
+      }
+      return nextWeekday.toDate();
+
+    case 'weekly':
+      const nextWeekly = currentDate.clone().add(7, 'days');
+      nextWeekly.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
+      return nextWeekly.toDate();
+
+    case 'custom':
+      // Custom day logic with timezone-aware calculations
+      // ... (full implementation in code)
+
+    case 'once':
+      return moment().add(100, 'years').toDate();
+
+    default:
+      const defaultNext = currentDate.clone().add(1, 'day');
+      defaultNext.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
+      return defaultNext.toDate();
+  }
+}
+```
+
+**Call Sites Updated:**
+- Line 1037: `calculateNextOccurrence(habit, profile.timeZone)`
+- Line 1188: `calculateNextOccurrence(habit, habit.timeZone)`
+- Line 1590: `calculateNextOccurrence(habit, habit.timeZone)`
+
+**Impact:** All SMS scheduling now uses correct recipient timezone with automatic DST handling.
+
+---
+
+#### 6. UI Updates - Timezone Selection & Indicators
+
+**Profile Creation Timezone Picker:**
+**File:** `/Halloo/Views/Onboarding/ProfileCreationCard.swift`
+
+Added timezone picker with 6 North American timezones:
+- America/New_York (Eastern)
+- America/Chicago (Central)
+- America/Denver (Mountain)
+- America/Los_Angeles (Pacific)
+- America/Anchorage (Alaska)
+- Pacific/Honolulu (Hawaii)
+
+**Habit Creation Timezone Indicator:**
+**File:** `/Halloo/Views/Onboarding/HabitCreationCard.swift`
+
+Shows recipient's timezone to user:
+```
+"Reminders sent in PST (Mom's timezone)"
+```
+
+**Impact:** Clear visual feedback preventing timezone confusion.
+
+---
+
+### How It Works for Users
+
+**Scenario: Family member in NYC creates habit for parent in LA**
+
+1. **Profile Creation:**
+   - User selects "Los Angeles" timezone from picker
+   - Profile saved with `timeZone: "America/Los_Angeles"`
+
+2. **Habit Creation:**
+   - User creates "Take meds at 9:00 AM daily"
+   - UI shows: "Reminders sent in PST (Mom's timezone)"
+   - iOS calculates first occurrence using LA timezone
+   - Habit saved with `timeZone: "America/Los_Angeles"`
+
+3. **SMS Delivery:**
+   - Cloud Function runs every 5 minutes
+   - Finds habit with `nextScheduledDate` due
+   - Uses moment-timezone to calculate next occurrence in PST
+   - Sends SMS at 9:00 AM PST (12:00 PM EST)
+   - Updates `nextScheduledDate` for next day at 9:00 AM PST
+
+4. **Result:**
+   - Parent in LA gets SMS at 9:00 AM local time ✅
+   - Family member sees confirmation at 12:00 PM EST ✅
+   - System works correctly across timezones ✅
+
+---
+
+### Backward Compatibility
+
+**Zero Migration Needed:**
+- Old profiles without timezone → Fall back to device timezone
+- Old tasks without timezone → Fall back to device timezone
+- New profiles → Require timezone selection
+- New tasks → Automatically use profile's timezone
+
+**Graceful Degradation:**
+```swift
+// ElderlyProfile.swift:102-103
+timeZone = (try? container.decode(String.self, forKey: .timeZone))
+    ?? TimeZone.current.identifier
+
+// Task.swift:57
+timeZone = (try? container.decode(String.self, forKey: .timeZone))
+    ?? TimeZone.current.identifier
+```
+
+---
+
+### Testing Results
+
+All test scenarios verified:
+
+1. **Same Timezone:** PST user → PST recipient → SMS at 9 AM PST ✅
+2. **West to East:** PST user → EST recipient → SMS at 9 AM EST (6 AM PST) ✅
+3. **East to West:** EST user → PST recipient → SMS at 9 AM PST (12 PM EST) ✅
+4. **Central Timezone:** EST user → CST recipient → SMS at 9 AM CST ✅
+5. **DST Transition:** Habit at 9 AM → Still 9 AM after spring forward ✅
+6. **Backward Compat:** Old profiles load without crashes ✅
+7. **Backward Compat:** Old tasks load without crashes ✅
+
+---
+
+### Supported Timezones
+
+**North America (6 timezones):**
+- `America/New_York` - Eastern (EST/EDT)
+- `America/Chicago` - Central (CST/CDT)
+- `America/Denver` - Mountain (MST/MDT)
+- `America/Los_Angeles` - Pacific (PST/PDT)
+- `America/Anchorage` - Alaska (AKST/AKDT)
+- `Pacific/Honolulu` - Hawaii (HST)
+
+All timezones support automatic DST transitions via moment-timezone.
+
+---
+
+### Related Files
+
+**iOS (Swift):**
+- `/Halloo/Models/ElderlyProfile.swift` (lines 102-103) - Timezone field with fallback
+- `/Halloo/Models/Task.swift` (lines 26, 57, 82, 105) - Timezone field implementation
+- `/Halloo/ViewModels/TaskViewModel.swift` (lines 1180-1190) - Timezone-aware calculations
+- `/Halloo/ViewModels/TaskViewModel.swift` (line 625, 629) - Pass timezone to calculations
+- `/Halloo/Views/Onboarding/ProfileCreationCard.swift` - Timezone picker UI
+- `/Halloo/Views/Onboarding/HabitCreationCard.swift` - Timezone indicator UI
+
+**Cloud Functions (Node.js):**
+- `functions/package.json` (line 17) - moment-timezone dependency
+- `functions/index.js` (line 7) - moment-timezone import
+- `functions/index.js` (lines 1376-1454) - calculateNextOccurrence with timezone
+- `functions/index.js` (lines 1037, 1188, 1590) - Call sites with timezone parameter
+
+**Documentation:**
+- `/Halloo/docs/TIMEZONE-SUPPORT.md` - Original planning document (now marked completed)
+- `/Halloo/docs/TIMEZONE_IMPLEMENTATION.md` - Step-by-step implementation guide (completed)
+- `/Halloo/docs/RECURRING-TASK-SYSTEM.md` - Updated with timezone section
+- `/Halloo/docs/firebase/SCHEMA.md` - Updated Profile and Task schemas
+
+---
+
+### Future Enhancements
+
+1. **International Timezones:** Expand beyond North America for global users
+2. **Auto-Detect Timezone:** Use phone number area code to suggest timezone
+3. **Timezone Changes:** Handle user moving to different timezone
+4. **Timezone History:** Track timezone changes for audit trail
+
+---
+
+**Last Updated: 2025-11-24**

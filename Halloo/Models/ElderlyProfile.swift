@@ -99,7 +99,8 @@ struct ElderlyProfile: Codable, Identifiable, Hashable {
         phoneNumber = try container.decode(String.self, forKey: .phoneNumber)
         relationship = try container.decode(String.self, forKey: .relationship)
         isEmergencyContact = try container.decode(Bool.self, forKey: .isEmergencyContact)
-        timeZone = try container.decode(String.self, forKey: .timeZone)
+        timeZone = (try? container.decode(String.self, forKey: .timeZone))
+            ?? TimeZone.current.identifier
         notes = try container.decode(String.self, forKey: .notes)
         status = try container.decode(ProfileStatus.self, forKey: .status)
         createdAt = try container.decode(Date.self, forKey: .createdAt)

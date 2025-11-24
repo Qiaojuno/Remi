@@ -23,6 +23,7 @@ struct Task: Codable, Identifiable, Hashable {
     var lastCompletedAt: Date?
     var nextScheduledDate: Date
     var lastSMSSentAt: Date?  // Track when SMS reminder was last sent
+    let timeZone: String  // Profile's timezone for scheduling (e.g., "America/New_York")
 
     // Custom decoder to handle old documents missing new fields
     init(from decoder: Decoder) throws {
@@ -51,6 +52,9 @@ struct Task: Codable, Identifiable, Hashable {
 
         // nextScheduledDate: use stored value or fall back to scheduledTime
         nextScheduledDate = try container.decodeIfPresent(Date.self, forKey: .nextScheduledDate) ?? scheduledTime
+
+        // Backward compatibility: old tasks without timezone fall back to device timezone
+        timeZone = (try? container.decode(String.self, forKey: .timeZone)) ?? TimeZone.current.identifier
     }
 
     init(
@@ -74,7 +78,8 @@ struct Task: Codable, Identifiable, Hashable {
         completionCount: Int = 0,
         lastCompletedAt: Date? = nil,
         nextScheduledDate: Date? = nil,
-        lastSMSSentAt: Date? = nil
+        lastSMSSentAt: Date? = nil,
+        timeZone: String = TimeZone.current.identifier
     ) {
         self.id = id
         self.userId = userId
@@ -97,6 +102,7 @@ struct Task: Codable, Identifiable, Hashable {
         self.lastCompletedAt = lastCompletedAt
         self.nextScheduledDate = nextScheduledDate ?? scheduledTime
         self.lastSMSSentAt = lastSMSSentAt
+        self.timeZone = timeZone
     }
 }
 

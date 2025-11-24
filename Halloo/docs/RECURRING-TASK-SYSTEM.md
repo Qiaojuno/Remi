@@ -16,6 +16,7 @@ struct Task {
     let customDays: [Weekday]           // For .custom frequency: [.monday, .wednesday]
     var nextScheduledDate: Date         // CALCULATED next occurrence timestamp
     let startDate: Date                 // When this task/habit started
+    let timeZone: String                // Recipient's timezone (e.g., "America/New_York") - Added 2025-11-24
 }
 ```
 
@@ -26,10 +27,11 @@ struct Task {
 - `customDays`: Which days of week (for custom frequency)
 - `scheduledTime`: The time component (hours/minutes)
 - `startDate`: When the habit was created
+- `timeZone`: Recipient's timezone for accurate local time delivery (Added 2025-11-24)
 
 **2. Dynamic Data (Updates After Each SMS)**
 - `nextScheduledDate`: The actual next occurrence timestamp
-- Updated by Cloud Function after sending each SMS
+- Updated by Cloud Function after sending each SMS (using recipient's timezone)
 
 ---
 
@@ -262,16 +264,19 @@ for (let i = 1; i <= 14; i++) {
 ## Code Locations
 
 ### iOS (Swift)
-- **TaskViewModel.swift** (lines 1143-1255): `calculateFirstOccurrence()` function
-- **TaskViewModel.swift** (lines 648-659): Validation for past times
-- **TaskViewModel.swift** (line 682): Pass calculated `nextScheduledDate` to Task initializer
-- **Task.swift** (line 23): `nextScheduledDate` field
+- **TaskViewModel.swift** (lines 1180-1190): `calculateFirstOccurrence()` function with timezone support
+- **TaskViewModel.swift** (line 625): Call to calculateFirstOccurrence with profileTimeZone parameter
+- **TaskViewModel.swift** (line 629): Pass timezone to Task initializer
+- **Task.swift** (line 26): `timeZone` field
+- **Task.swift** (line 57): Backward-compatible timezone decoder
+- **ElderlyProfile.swift** (lines 102-103): Timezone field with graceful fallback
 - **TaskFrequency.swift**: Frequency enum definitions
 
 ### Cloud Functions (JavaScript)
-- **functions/index.js** (lines 646-655): Update `nextScheduledDate` after SMS
-- **functions/index.js** (lines 703-784): `calculateNextOccurrence()` function
-- **functions/index.js** (lines 513-520): Query for habits due in 2-minute window
+- **functions/index.js** (line 7): Import moment-timezone
+- **functions/index.js** (lines 1376-1454): `calculateNextOccurrence()` function with timezone-aware calculations
+- **functions/index.js** (line 1037, 1188, 1590): All call sites pass timezone parameter
+- **functions/package.json** (line 17): moment-timezone dependency
 
 ---
 
@@ -332,12 +337,43 @@ Once you're done, share a picture — it'll make me smile 😊
 
 ---
 
+## Timezone Support (Added 2025-11-24)
+
+### How Timezone Works
+
+SMS reminders are sent at the **recipient's local time**, regardless of where the family member creating the habit is located.
+
+**Example:**
+- Family member in New York creates habit: "Take meds at 9:00 AM"
+- Recipient in Los Angeles has timezone set to "America/Los_Angeles"
+- SMS sent at 9:00 AM Pacific Time (12:00 PM Eastern Time)
+
+### Implementation Details
+
+1. **Profile Creation**: Users select recipient's timezone from 6 North American options
+2. **Habit Creation**: UI shows "Reminders sent in PST (Mom's timezone)"
+3. **iOS Calculations**: `calculateFirstOccurrence()` uses profile's timezone
+4. **Cloud Functions**: `calculateNextOccurrence()` uses moment-timezone for accurate scheduling
+5. **Backward Compatibility**: Old habits without timezone fall back to device timezone
+
+### Supported Timezones
+- America/New_York (Eastern)
+- America/Chicago (Central)
+- America/Denver (Mountain)
+- America/Los_Angeles (Pacific)
+- America/Anchorage (Alaska)
+- Pacific/Honolulu (Hawaii)
+
+For full details, see `/Halloo/docs/TIMEZONE-SUPPORT.md` and `/Halloo/docs/TIMEZONE_IMPLEMENTATION.md`
+
+---
+
 ## Future Enhancements
 
 1. **End dates**: Support `endDate` to stop recurring tasks
 2. **Completion tracking**: Mark one-time tasks as complete after SMS
 3. **Snooze/skip**: Allow user to skip next occurrence
-4. **Timezone handling**: Handle user timezone changes
+4. **International timezones**: Expand beyond North America (currently +1 only)
 5. **Multiple times per day**: Support multiple scheduled times for same habit
 6. **Bi-weekly, monthly**: Add more frequency options
 7. **Message personalization**: Learn recipient's preferred message style over time
@@ -345,6 +381,8 @@ Once you're done, share a picture — it'll make me smile 😊
 
 ---
 
-**Last Updated**: November 4, 2025
+**Last Updated**: November 24, 2025
 **Implementation**: TaskViewModel.swift, functions/index.js
-**Recent Changes**: Added friendly randomized message generation system (ffd2878)
+**Recent Changes**:
+- Added timezone support for North America (2025-11-24)
+- Added friendly randomized message generation system (ffd2878)

@@ -115,9 +115,16 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 - `id` → MUST be consistent (phone number OR UUID, never random)
 - `userId` → MUST match parent document path `{firebaseUID}`
 - `phoneNumber` → Required, E.164 format (+1XXXXXXXXXX)
+- `timeZone` → Required, IANA timezone identifier (e.g., "America/New_York")
 - `status` → Enum: `pendingConfirmation`, `confirmed`, `inactive`
 - `createdAt` → Required
 - `confirmedAt` → Set when SMS confirmation received
+
+**Timezone Field (Added 2025-11-24):**
+- Field is now required for new profiles (graceful fallback for old profiles)
+- iOS decoder: `timeZone = (try? container.decode(String.self, forKey: .timeZone)) ?? TimeZone.current.identifier`
+- Ensures SMS sent at recipient's local time, not sender's timezone
+- Supported: 6 North American timezones (EST, CST, MST, PST, AKST, HST)
 
 ---
 
@@ -153,7 +160,8 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
   "completionCount": 5,
   "lastCompletedAt": "2025-10-03T09:05:00Z",
   "nextScheduledDate": "2025-10-04T09:00:00Z",
-  "lastSentMessage": "Hello Mom 🌞 A gentle reminder to Take Morning Medication\n\nSnap a quick photo when you finish — it always brightens the day 🌿"  // NEW: Last SMS sent (added ffd2878)
+  "lastSentMessage": "Hello Mom 🌞 A gentle reminder to Take Morning Medication\n\nSnap a quick photo when you finish — it always brightens the day 🌿",  // Last SMS sent (added ffd2878)
+  "timeZone": "America/New_York"              // Recipient's timezone for scheduling (added 2025-11-24)
 }
 ```
 
@@ -163,7 +171,15 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 - `profileId` → MUST match parent profile document ID
 - `scheduledTime` → Required
 - `nextScheduledDate` → Required for query optimization
+- `timeZone` → Required, IANA timezone identifier from recipient's profile (added 2025-11-24)
 - `lastSentMessage` → Optional, stores the actual SMS text sent to recipient (randomized friendly message)
+
+**Timezone Field (Added 2025-11-24):**
+- Stores recipient's timezone for accurate SMS delivery scheduling
+- iOS decoder: `timeZone = (try? container.decode(String.self, forKey: .timeZone)) ?? TimeZone.current.identifier`
+- Cloud Functions use this field with moment-timezone for next occurrence calculations
+- Backward compatible: old habits without timezone fall back to device timezone
+- Ensures SMS sent at correct local time (e.g., 9 AM PST for LA recipient, regardless of sender location)
 
 ---
 
