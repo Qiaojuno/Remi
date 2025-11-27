@@ -40,6 +40,8 @@ struct HabitCreationCard: View {
     @State private var tempSelectedTime = Date()
     @State private var isCreating = false // Loading state
     @State private var showingEmojiPicker = false // Emoji picker state
+    @State private var showingPendingConfirmationAlert = false // Pending profile alert
+    @State private var pendingProfileName: String = "" // Name of pending profile for alert
 
     // Emoji options for habit
     private let emojiOptions = ["😊", "💊", "🏃", "📚", "💪", "🧘", "🥗", "💧", "🛏️", "🧠", "❤️", "🎯", "✨", "🌟", "🔥"]
@@ -76,8 +78,19 @@ struct HabitCreationCard: View {
                 }
             }
             .ignoresSafeArea()
+
+            // Pending confirmation popup overlay
+            if showingPendingConfirmationAlert {
+                PendingConfirmationCard(
+                    isPresented: $showingPendingConfirmationAlert,
+                    profileName: pendingProfileName
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .zIndex(100)
+            }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isPresented)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingPendingConfirmationAlert)
         .sheet(isPresented: $showingTimePicker) {
             TimePickerSheet(
                 selectedTime: $tempSelectedTime,
@@ -188,10 +201,18 @@ struct HabitCreationCard: View {
     private func profileRow(for profile: ElderlyProfile) -> some View {
         let isSelected = selectedProfileId == profile.id
         let profileSlot = appState.profiles.firstIndex(where: { $0.id == profile.id }) ?? 0
+        let isPending = profile.status == .pendingConfirmation
 
         return Button(action: {
             HapticFeedback.light()
-            selectedProfileId = profile.id
+
+            // Check if profile is pending SMS confirmation
+            if isPending {
+                pendingProfileName = profile.name
+                showingPendingConfirmationAlert = true
+            } else {
+                selectedProfileId = profile.id
+            }
         }) {
             HStack(spacing: 14) {
                 // Profile picture on left
@@ -203,17 +224,33 @@ struct HabitCreationCard: View {
                 )
 
                 // Name in bold on right
-                Text(profile.name)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.black)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.name)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(isPending ? .gray : .black)
+
+                    // Show pending status indicator
+                    if isPending {
+                        Text("Waiting for confirmation")
+                            .font(.system(size: 12))
+                            .foregroundColor(.orange)
+                    }
+                }
 
                 Spacer()
 
-                // Selection indicator - green checkmark
-                if isSelected {
+                // Selection indicator - green checkmark (only for confirmed profiles)
+                if isSelected && !isPending {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 22))
                         .foregroundColor(.green)
+                }
+
+                // Pending indicator - clock icon
+                if isPending {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.orange)
                 }
             }
             .padding(.horizontal, 16)
@@ -662,6 +699,77 @@ struct EmojiPickerSheet: View {
     }
 }
 
+// MARK: - Pending Confirmation Card
+/**
+ * PENDING CONFIRMATION CARD: Popup alert when user selects an unconfirmed profile
+ *
+ * PURPOSE: Informs user that they cannot create habits for a profile until
+ * the recipient confirms the SMS connection by replying "YES"
+ *
+ * DESIGN: Centered white card with Message Bubble mascot, matching app style
+ */
+struct PendingConfirmationCard: View {
+    @Binding var isPresented: Bool
+    let profileName: String
+
+    var body: some View {
+        ZStack {
+            // Dimmed background (tap to dismiss) - no animation
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    isPresented = false
+                }
+                .animation(.none, value: isPresented)
+
+            // Centered card - with animation
+            VStack(spacing: 20) {
+                // Message Bubble mascot
+                Image("Message Bubble")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .padding(.top, 8)
+
+                // Title
+                Text("Waiting for \(profileName)")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.center)
+
+                // Explanation text
+                Text("They need to reply YES to the confirmation text before you can create habits for them.")
+                    .font(.system(size: 15))
+                    .foregroundColor(Color(hex: "666666"))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 8)
+
+                // Got it button
+                Button(action: {
+                    HapticFeedback.light()
+                    isPresented = false
+                }) {
+                    Text("Got it")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Color.black)
+                        .cornerRadius(14)
+                }
+                .padding(.top, 4)
+            }
+            .padding(24)
+            .background(Color.white)
+            .cornerRadius(20)
+            .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 5)
+            .padding(.horizontal, 32)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isPresented)
+        }
+    }
+}
+
 // MARK: - Preview
 // Note: TimePickerSheet is defined in TaskViews.swift and reused here
 #Preview {
@@ -688,4 +796,11 @@ struct EmojiPickerSheet: View {
         ))
         .environmentObject(Container.shared.makeTaskViewModel())
     }
+}
+
+#Preview("Pending Confirmation Card") {
+    PendingConfirmationCard(
+        isPresented: .constant(true),
+        profileName: "Grandma Rose"
+    )
 }
