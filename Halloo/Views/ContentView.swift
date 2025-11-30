@@ -28,6 +28,7 @@ extension EnvironmentValues {
 struct ContentView: View {
     // MARK: - Environment
     @Environment(\.container) private var container
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - State Management
     // Phase 1: READ-ONLY AppState integration (keeping existing ViewModels temporarily)
@@ -65,6 +66,11 @@ struct ContentView: View {
 
     @State private var authCancellables = Set<AnyCancellable>()
 
+    // MARK: - Background/Foreground Refresh
+    @State private var backgroundedAt: Date?
+    @State private var showRefreshLoadingScreen: Bool = false
+    private let refreshThresholdSeconds: TimeInterval = 300 // 5 minutes
+
     // MARK: - Computed Properties
 
     /// Controls whether tab swiping is enabled
@@ -96,6 +102,9 @@ struct ContentView: View {
                 if let newValue = newValue {
                     handleOnboardingCompletion(newValue)
                 }
+            }
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                handleScenePhaseChange(from: oldPhase, to: newPhase)
             }
     }
     
@@ -132,7 +141,17 @@ struct ContentView: View {
 
     @ViewBuilder
     private var authenticatedContent: some View {
-        mainAppFlow
+        ZStack {
+            mainAppFlow
+
+            // Overlay loading screen when refreshing after returning from background
+            if showRefreshLoadingScreen {
+                LoadingView()
+                    .transition(.opacity)
+                    .zIndex(100)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showRefreshLoadingScreen)
     }
     
     
@@ -648,6 +667,34 @@ struct ContentView: View {
             selectedTab = 0
         }
     }
+
+    /// Handle app backgrounding/foregrounding - refresh data if away 5+ minutes
+    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        switch newPhase {
+        case .background:
+            backgroundedAt = Date()
+        case .active:
+            defer { backgroundedAt = nil }
+            guard authService?.isAuthenticated == true,
+                  let backgrounded = backgroundedAt,
+                  Date().timeIntervalSince(backgrounded) >= refreshThresholdSeconds else { return }
+
+            showRefreshLoadingScreen = true
+            _Concurrency.Task {
+                async let refresh: Void = appState.refreshUserData()
+                async let delay: Void = { try? await _Concurrency.Task.sleep(nanoseconds: 2_000_000_000) }()
+                _ = await (refresh, delay)
+                await MainActor.run {
+                    self.profileViewModel?.populateGalleryEventTrackingSet(from: appState.galleryEvents)
+                    showRefreshLoadingScreen = false
+                }
+            }
+        case .inactive:
+            break
+        @unknown default:
+            break
+        }
+    }
     
     
     // MARK: - UI Configuration
@@ -681,7 +728,7 @@ struct LoadingView: View {
             Image("Remi Logo")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 360) // Doubled from 180
+                .frame(width: 120)
 
             ProgressView()
                 .scaleEffect(1.2)
