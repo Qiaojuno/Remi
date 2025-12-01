@@ -72,7 +72,6 @@ final class ImageCacheService: ObservableObject {
         guard let url = url, !url.isEmpty else { return }
         cache.removeObject(forKey: url as NSString)
         loadedImages.remove(url)
-        print("🗑️ [ImageCache] Removed cached image for URL: \(url.prefix(50))...")
     }
 
     /// Get cached image for a gallery event (by event ID)
@@ -91,8 +90,6 @@ final class ImageCacheService: ObservableObject {
     ///
     /// - Parameter profiles: Array of profiles with photoURL to cache
     func preloadProfileImages(_ profiles: [ElderlyProfile]) async {
-        print("🖼️ [ImageCache] Pre-loading \(profiles.count) profile images...")
-
         // Load all profile images in parallel
         await withTaskGroup(of: Void.self) { group in
             for profile in profiles {
@@ -104,7 +101,6 @@ final class ImageCacheService: ObservableObject {
 
                 // Skip if already cached
                 if cache.object(forKey: urlString as NSString) != nil {
-                    print("✅ [ImageCache] Already cached: \(profile.name)")
                     continue
                 }
 
@@ -113,8 +109,6 @@ final class ImageCacheService: ObservableObject {
                 }
             }
         }
-
-        print("✅ [ImageCache] Profile images pre-loaded - \(loadedImages.count) total cached")
     }
 
     /// Pre-load gallery photos into cache
@@ -124,10 +118,6 @@ final class ImageCacheService: ObservableObject {
     ///
     /// - Parameter events: Array of gallery events with photos to cache
     func preloadGalleryPhotos(_ events: [GalleryHistoryEvent]) async {
-        print("🖼️ [ImageCache] Pre-loading gallery photos...")
-
-        var photoCount = 0
-
         // Load all gallery photos in parallel
         await withTaskGroup(of: Void.self) { group in
             for event in events {
@@ -145,7 +135,6 @@ final class ImageCacheService: ObservableObject {
                         continue
                     }
 
-                    photoCount += 1
                     group.addTask {
                         await self.loadAndCacheImage(url: url, key: urlString, profileName: "Gallery-\(event.id)")
                     }
@@ -164,15 +153,12 @@ final class ImageCacheService: ObservableObject {
                         continue
                     }
 
-                    photoCount += 1
                     group.addTask {
                         await self.cacheImageFromData(photoData, key: cacheKey, eventId: event.id)
                     }
                 }
             }
         }
-
-        print("✅ [ImageCache] Gallery photos pre-loaded - \(photoCount) new, \(loadedImages.count) total cached")
     }
 
     /// Cache a UIImage from Data (for photoData from MMS responses)
@@ -194,8 +180,6 @@ final class ImageCacheService: ObservableObject {
             cache.setObject(image, forKey: key as NSString, cost: cost)
             loadedImages.insert(key)
         }
-
-        print("✅ [ImageCache] Cached photoData image for event \(eventId) (\(cost / 1024)KB)")
     }
 
     /// Load a single image and cache it
@@ -229,10 +213,8 @@ final class ImageCacheService: ObservableObject {
                 loadedImages.insert(key)
             }
 
-            print("✅ [ImageCache] Cached image for \(profileName) (\(cost / 1024)KB)")
-
         } catch {
-            print("❌ [ImageCache] Failed to load image for \(profileName): \(error)")
+            print("❌ [ImageCache] Failed to load image for \(profileName): \(error.localizedDescription)")
         }
     }
 
@@ -249,6 +231,5 @@ final class ImageCacheService: ObservableObject {
     func clearCache() {
         cache.removeAllObjects()
         loadedImages.removeAll()
-        print("🗑️ [ImageCache] Cache cleared")
     }
 }

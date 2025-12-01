@@ -43,7 +43,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     init() {
         // Delay auth listener setup to avoid crash during initialization
         // Will be set up when initializeAuthState() is called
-        print("🔥 FirebaseAuthenticationService: init() completed (listener not yet set up)")
     }
 
     deinit {
@@ -79,8 +78,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     }
     
     func signInWithApple() async throws -> AuthResult {
-        print("🍎 Starting Apple Sign-In flow...")
-
         // Generate nonce for security
         let nonce = randomNonceString()
         let sha256Nonce = sha256(nonce)
@@ -187,7 +184,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
         // This is required for profile creation (updateUserProfileCount needs it)
         // ✅ ARCHITECTURE: Subscription managed by RevenueCat (no app-side trial)
         if isNewUser {
-            print("📝 Creating user document for new Apple user...")
             let newUser = User(
                 id: firebaseUser.uid,
                 email: firebaseUser.email ?? appleIDCredential.email ?? "",
@@ -217,52 +213,36 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     }
     
     func signInWithGoogle() async throws -> AuthResult {
-        print("🔐 Starting Google Sign-In flow...")
-
         // Get the app's root view controller
         guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let presentingViewController = await windowScene.windows.first?.rootViewController else {
-            print("❌ Failed to get root view controller")
             throw AuthenticationError.unknownError("Unable to get root view controller")
         }
-        print("✅ Got root view controller")
 
         do {
-            print("📱 Presenting Google Sign-In...")
             // Start the Google Sign-In flow
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
             let user = result.user
-            print("✅ Google Sign-In successful - User: \(user.profile?.email ?? "unknown")")
 
             // Get the ID token and access token
             guard let idToken = user.idToken?.tokenString else {
-                print("❌ Failed to get ID token from Google")
                 throw AuthenticationError.unknownError("Failed to get ID token from Google")
             }
-            print("✅ Got ID token")
 
             let accessToken = user.accessToken.tokenString
-            print("✅ Got access token")
 
             // Create Firebase credential
             let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: accessToken)
-            print("✅ Created Firebase credential")
 
-            print("🔥 Signing into Firebase...")
             // Sign in with Firebase
             let authResult = try await auth.signIn(with: credential)
             let firebaseUser = authResult.user
             let isNewUser = authResult.additionalUserInfo?.isNewUser ?? false
-            print("✅ Firebase sign-in successful")
-            print("   UID: \(firebaseUser.uid)")
-            print("   Email: \(firebaseUser.email ?? "unknown")")
-            print("   Is new user: \(isNewUser)")
 
             // CRITICAL: Ensure user document exists in Firestore
             // This is required for profile creation (updateUserProfileCount needs it)
             // ✅ ARCHITECTURE: Subscription managed by RevenueCat (no app-side trial)
             if isNewUser {
-                print("📝 Creating user document for new Google user...")
                 let newUser = User(
                     id: firebaseUser.uid,
                     email: firebaseUser.email ?? "",
@@ -281,7 +261,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                 try await createUserDocument(newUser)
             }
 
-            print("🎉 Google Sign-In complete!")
             return AuthResult(
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
@@ -291,9 +270,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
             )
 
         } catch {
-            print("❌ Google Sign-In error: \(error)")
-            print("❌ Error type: \(type(of: error))")
-            print("❌ Error description: \(error.localizedDescription)")
+            print("❌ Google Sign-In failed: \(error.localizedDescription)")
             throw AuthenticationError.unknownError("Google Sign In failed: \(error.localizedDescription)")
         }
     }
@@ -364,7 +341,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     }
     
     func initializeAuthState() async {
-        print("🔥 FirebaseAuthenticationService: Setting up auth state listener")
         // Set up the auth state listener first
         setupAuthStateListener()
 
@@ -377,7 +353,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                     authBoolSubject.send(true)
                 }
             } catch {
-                print("❌ Error creating user from Firebase user: \(error)")
+                print("❌ FirebaseAuth failed to create user from Firebase user: \(error.localizedDescription)")
                 await MainActor.run {
                     authStateSubject.send(nil)
                     authBoolSubject.send(false)
@@ -460,15 +436,13 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                             self?.authStateSubject.send(user)
                             self?.authBoolSubject.send(true)
                             self?.isAuthenticated = true  // ✅ Update @Published property
-                            print("🔐 Auth listener: User logged in, isAuthenticated = true")
                         }
                     } catch {
-                        print("❌ Error in auth state listener: \(error)")
+                        print("❌ FirebaseAuth listener error: \(error.localizedDescription)")
                         await MainActor.run { [weak self] in
                             self?.authStateSubject.send(nil)
                             self?.authBoolSubject.send(false)
                             self?.isAuthenticated = false  // ✅ Update @Published property
-                            print("🔐 Auth listener: Error, isAuthenticated = false")
                         }
                     }
                 } else {
@@ -476,7 +450,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                         self?.authStateSubject.send(nil)
                         self?.authBoolSubject.send(false)
                         self?.isAuthenticated = false  // ✅ Update @Published property
-                        print("🔐 Auth listener: User logged out, isAuthenticated = false")
                     }
                 }
             }
@@ -549,7 +522,6 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
         ]
         
         try await userRef.setData(userData)
-        print("✅ User document created in Firestore: \(user.id)")
     }
 }
 
@@ -601,13 +573,12 @@ class SignInWithAppleCoordinator: NSObject, ASAuthorizationControllerDelegate, A
     // MARK: - ASAuthorizationControllerDelegate
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        print("✅ [AppleSignIn] Authorization successful")
         continuation?.resume(returning: authorization)
         continuation = nil
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        print("❌ [AppleSignIn] Authorization failed: \(error.localizedDescription)")
+        print("❌ AppleSignIn failed: \(error.localizedDescription)")
         continuation?.resume(throwing: error)
         continuation = nil
     }

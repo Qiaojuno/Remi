@@ -233,6 +233,18 @@ final class OnboardingViewModel: ObservableObject {
             return true  // Informational screen - no validation needed
         case .step3bProofScreen:
             return true  // Informational screen - no validation needed
+        case .step4aTechComfort:
+            return true
+        case .step4CurrentReminders:
+            return true
+        case .step4bSatisfaction:
+            return true
+        case .step5aCurrentFrustration:
+            return true
+        case .empathyBreak:
+            return true  // Informational screen - no validation needed
+        case .reminderTiming:
+            return true
         case .step4HabitFocus:
             return true
         case .step5WhatMatters:
@@ -241,6 +253,10 @@ final class OnboardingViewModel: ObservableObject {
             return true  // Informational screen - no validation needed
         case .notificationPermission:
             return true  // Permission request - no validation needed
+        case .planReadyTeaser:
+            return true  // Teaser screen - user clicks to continue
+        case .loadingPlan:
+            return true  // Loading screen - auto-advances
         case .personalizedPlan:
             return true  // Summary screen - no validation needed
         case .step7SocialProof:
@@ -283,7 +299,7 @@ final class OnboardingViewModel: ObservableObject {
     /// Calculates progress based on actual quiz flow steps (not all enum cases)
     /// Used for progress bars and completion indicators.
     var progressPercentage: Double {
-        let totalSteps: Double = 12  // Actual quiz flow steps (notification permission not counted)
+        let totalSteps: Double = 16  // Actual quiz flow steps (notification permission, teaser, loading not counted)
         let stepNumber: Double
 
         switch currentStep {
@@ -291,15 +307,23 @@ final class OnboardingViewModel: ObservableObject {
         case .step1WhoFor: stepNumber = 1
         case .step2ReminderFrequency: stepNumber = 2
         case .step3MedicationProblem: stepNumber = 3
-        case .step4HabitFocus: stepNumber = 4
-        case .step3bProofScreen: stepNumber = 5
-        case .step5WhatMatters: stepNumber = 6
-        case .step6NotificationPromise: stepNumber = 7
-        case .notificationPermission: stepNumber = 7  // Same as previous step - not counted
-        case .personalizedPlan: stepNumber = 8
-        case .step7SocialProof: stepNumber = 9
-        case .saveYourProgress: stepNumber = 10
-        case .step6Paywall: stepNumber = 11
+        case .step4aTechComfort: stepNumber = 4
+        case .step4CurrentReminders: stepNumber = 5
+        case .step4bSatisfaction: stepNumber = 6
+        case .step5aCurrentFrustration: stepNumber = 7
+        case .empathyBreak: stepNumber = 7  // Empathy break - not counted in progress
+        case .reminderTiming: stepNumber = 8
+        case .step4HabitFocus: stepNumber = 9
+        case .step3bProofScreen: stepNumber = 10
+        case .step5WhatMatters: stepNumber = 11
+        case .step6NotificationPromise: stepNumber = 12
+        case .notificationPermission: stepNumber = 12  // Same as previous step - not counted
+        case .step7SocialProof: stepNumber = 13  // Rating (moved before plan)
+        case .planReadyTeaser: stepNumber = 13  // Teaser - not counted in progress
+        case .loadingPlan: stepNumber = 13  // Loading screen - not counted in progress
+        case .personalizedPlan: stepNumber = 13  // Plan summary - not counted (same as rating)
+        case .saveYourProgress: stepNumber = 14
+        case .step6Paywall: stepNumber = 15
         case .profileSetupConfirmation: stepNumber = 12
         case .preferences: stepNumber = 12  // Same as profileSetupConfirmation
         }
@@ -394,13 +418,11 @@ final class OnboardingViewModel: ObservableObject {
     func startQuiz() {
         currentStep = .step1WhoFor
         updateProgress()
-        print("🚀 startQuiz: Starting quiz flow from welcome screen")
     }
 
     /// Skip quiz and go directly to login (Login button)
     func goToLogin() {
         currentStep = .saveYourProgress // This is the auth gate
-        print("🔐 goToLogin: Skipping quiz, going directly to login")
     }
 
     func nextStep() {
@@ -413,59 +435,69 @@ final class OnboardingViewModel: ObservableObject {
         case .step1WhoFor:
             currentStep = .step2ReminderFrequency
             updateProgress()
-            print("🧪 nextStep: Advanced from step 1 to step 2 (Reminder Frequency)")
         case .step2ReminderFrequency:
             currentStep = .step3MedicationProblem
             updateProgress()
-            print("🧪 nextStep: Advanced from step 2 (Reminder Frequency) to step 3 (Medication Problem)")
         case .step3MedicationProblem:
+            currentStep = .step4aTechComfort
+            updateProgress()
+        case .step4aTechComfort:
+            currentStep = .step4CurrentReminders
+            updateProgress()
+        case .step4CurrentReminders:
+            currentStep = .step4bSatisfaction
+            updateProgress()
+        case .step4bSatisfaction:
+            currentStep = .step5aCurrentFrustration
+            updateProgress()
+        case .step5aCurrentFrustration:
+            currentStep = .empathyBreak
+            updateProgress()
+        case .empathyBreak:
+            currentStep = .reminderTiming
+            updateProgress()
+        case .reminderTiming:
             currentStep = .step4HabitFocus
             updateProgress()
-            print("🧪 nextStep: Advanced from step 3 (Medication Problem) to step 4 (Habit Focus)")
         case .step4HabitFocus:
             currentStep = .step3bProofScreen
             updateProgress()
-            print("🧪 nextStep: Advanced from step 4 (Habit Focus) to step 3b (Proof Screen)")
         case .step3bProofScreen:
             currentStep = .step5WhatMatters
             updateProgress()
-            print("🧪 nextStep: Advanced from step 3b (Proof) to step 5 (What Matters)")
         case .step5WhatMatters:
             currentStep = .step6NotificationPromise
             updateProgress()
-            print("🧪 nextStep: Advanced from step 5 (What Matters) to step 6 (Notification Promise)")
         case .step6NotificationPromise:
             currentStep = .notificationPermission
             updateProgress()
-            print("🧪 nextStep: Advanced from step 6 (Notification Promise) to notification permission")
         case .notificationPermission:
-            currentStep = .personalizedPlan
-            updateProgress()
-            print("🧪 nextStep: Advanced from notification permission to personalized plan")
-        case .personalizedPlan:
             currentStep = .step7SocialProof
             updateProgress()
-            print("🧪 nextStep: Advanced from personalized plan to step 7 (Social Proof)")
         case .step7SocialProof:
+            currentStep = .planReadyTeaser
+            updateProgress()
+        case .planReadyTeaser:
+            currentStep = .loadingPlan
+            updateProgress()
+        case .loadingPlan:
+            currentStep = .personalizedPlan
+            updateProgress()
+        case .personalizedPlan:
             currentStep = .saveYourProgress
             updateProgress()
-            print("🧪 nextStep: Advanced from step 7 (Social Proof) to Save Your Progress (auth gate)")
         case .saveYourProgress:
             // After auth, proceed to paywall
             currentStep = .step6Paywall
             updateProgress()
-            print("🧪 nextStep: Advanced from Save Your Progress to paywall")
         case .step6Paywall:
             currentStep = .profileSetupConfirmation
             updateProgress()
-            print("🧪 nextStep: Advanced from paywall to profile setup confirmation")
         case .profileSetupConfirmation:
             currentStep = .preferences
             updateProgress()
-            print("🧪 nextStep: Advanced from profile setup confirmation to preferences")
         case .preferences:
             // Show CreateProfileView - don't auto-complete
-            print("🧪 nextStep: Reached preferences step - should show CreateProfileView")
             break
         }
     }
@@ -484,8 +516,26 @@ final class OnboardingViewModel: ObservableObject {
         case .step3MedicationProblem:
             currentStep = .step2ReminderFrequency
             updateProgress()
-        case .step4HabitFocus:
+        case .step4aTechComfort:
             currentStep = .step3MedicationProblem
+            updateProgress()
+        case .step4CurrentReminders:
+            currentStep = .step4aTechComfort
+            updateProgress()
+        case .step4bSatisfaction:
+            currentStep = .step4CurrentReminders
+            updateProgress()
+        case .step5aCurrentFrustration:
+            currentStep = .step4bSatisfaction
+            updateProgress()
+        case .empathyBreak:
+            currentStep = .step5aCurrentFrustration
+            updateProgress()
+        case .reminderTiming:
+            currentStep = .empathyBreak
+            updateProgress()
+        case .step4HabitFocus:
+            currentStep = .reminderTiming
             updateProgress()
         case .step3bProofScreen:
             currentStep = .step4HabitFocus
@@ -499,14 +549,23 @@ final class OnboardingViewModel: ObservableObject {
         case .notificationPermission:
             currentStep = .step6NotificationPromise
             updateProgress()
-        case .personalizedPlan:
-            currentStep = .step6NotificationPromise  // Skip notification permission screen
-            updateProgress()
         case .step7SocialProof:
-            currentStep = .personalizedPlan
+            currentStep = .step6NotificationPromise
+            updateProgress()
+        case .planReadyTeaser:
+            // Skip back to rating (not notification permission)
+            currentStep = .step7SocialProof
+            updateProgress()
+        case .loadingPlan:
+            // Loading screen shouldn't have back button, but if somehow triggered, go to teaser
+            currentStep = .planReadyTeaser
+            updateProgress()
+        case .personalizedPlan:
+            // Skip loading screen and teaser when going back - go directly to rating
+            currentStep = .step7SocialProof
             updateProgress()
         case .saveYourProgress:
-            currentStep = .step7SocialProof
+            currentStep = .personalizedPlan
             updateProgress()
         case .step6Paywall:
             currentStep = .saveYourProgress
@@ -653,7 +712,6 @@ final class OnboardingViewModel: ObservableObject {
             )
 
             try await databaseService.updateUser(updatedUser)
-            print("✅ Quiz answers saved for personalization")
 
         } catch {
             errorMessage = error.localizedDescription
@@ -665,11 +723,8 @@ final class OnboardingViewModel: ObservableObject {
     
     /// Proceed to profile creation after successful paywall interaction
     func proceedAfterPaywall() {
-        print("🧪 Proceeding to profile creation after paywall")
-
         // Show the thank you message first, then proceed to profile setup
         currentStep = .profileSetupConfirmation
-        print("🎉 Paywall completed successfully - showing thank you confirmation")
     }
 
     /// Complete the onboarding flow and navigate to dashboard
@@ -683,7 +738,6 @@ final class OnboardingViewModel: ObservableObject {
         // Navigate to dashboard
         await MainActor.run {
             isComplete = true
-            print("✅ Onboarding flow completed - navigating to dashboard")
         }
     }
 
@@ -734,9 +788,7 @@ final class OnboardingViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            print("🍎 [OnboardingVM] Starting Apple Sign In...")
             _ = try await authService.signInWithApple()
-            print("✅ [OnboardingVM] Apple Sign In successful - authService will trigger navigation")
             // ✅ No navigation logic needed - ContentView reacts to authService.isAuthenticated
 
         } catch {
@@ -757,9 +809,7 @@ final class OnboardingViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            print("🔐 [OnboardingVM] Starting Google Sign In...")
             _ = try await authService.signInWithGoogle()
-            print("✅ [OnboardingVM] Google Sign In successful - authService will trigger navigation")
             // ✅ No navigation logic needed - ContentView reacts to authService.isAuthenticated
 
         } catch {
@@ -784,13 +834,20 @@ enum OnboardingStep: String, CaseIterable {
     case step2ReminderFrequency = "step2ReminderFrequency"
     case step3MedicationProblem = "step3MedicationProblem"
     case step3bProofScreen = "step3bProofScreen"
+    case step4aTechComfort = "step4aTechComfort"  // How comfortable is [name] with technology?
+    case step4CurrentReminders = "step4CurrentReminders"  // What reminders do you currently use?
+    case step4bSatisfaction = "step4bSatisfaction"  // How well is this working for you?
+    case step5aCurrentFrustration = "step5aCurrentFrustration"  // What frustrates you most?
+    case empathyBreak = "empathyBreak"  // Empathy moment after pain questions
+    case reminderTiming = "reminderTiming"  // When would a gentle reminder help most?
     case step4HabitFocus = "step4HabitFocus"
     case step5WhatMatters = "step5WhatMatters"
     case step6NotificationPromise = "step6NotificationPromise"
     case notificationPermission = "notificationPermission"
+    case step7SocialProof = "step7SocialProof"  // Give us a Rating (moved before plan)
+    case planReadyTeaser = "planReadyTeaser"  // "Your plan is ready!" announcement
     case loadingPlan = "loadingPlan"  // Loading screen with progress
     case personalizedPlan = "personalizedPlan"  // Summary of quiz answers
-    case step7SocialProof = "step7SocialProof"
     case saveYourProgress = "saveYourProgress"  // Auth gate
     case step6Paywall = "step6Paywall"
     case profileSetupConfirmation = "profileSetupConfirmation"
@@ -808,6 +865,18 @@ enum OnboardingStep: String, CaseIterable {
             return "Medication Problem"
         case .step3bProofScreen:
             return "Proof Screen"
+        case .step4aTechComfort:
+            return "Tech Comfort"
+        case .step4CurrentReminders:
+            return "Current Reminders"
+        case .step4bSatisfaction:
+            return "Satisfaction Level"
+        case .step5aCurrentFrustration:
+            return "Current Frustration"
+        case .empathyBreak:
+            return "We Understand"
+        case .reminderTiming:
+            return "Reminder Timing"
         case .step4HabitFocus:
             return "Habit Focus"
         case .step5WhatMatters:
@@ -816,6 +885,8 @@ enum OnboardingStep: String, CaseIterable {
             return "Stay Informed"
         case .notificationPermission:
             return "Notifications"
+        case .planReadyTeaser:
+            return "Plan Ready"
         case .loadingPlan:
             return "Building Your Plan"
         case .personalizedPlan:
@@ -845,6 +916,18 @@ enum OnboardingStep: String, CaseIterable {
             return "The medication adherence crisis"
         case .step3bProofScreen:
             return "Proof screen"
+        case .step4aTechComfort:
+            return "Understanding their tech comfort level"
+        case .step4CurrentReminders:
+            return "Tell us about your current system"
+        case .step4bSatisfaction:
+            return "How's your current approach working?"
+        case .step5aCurrentFrustration:
+            return "What's the biggest pain point?"
+        case .empathyBreak:
+            return "We're here to help"
+        case .reminderTiming:
+            return "When should we reach out?"
         case .step4HabitFocus:
             return "What would you like to remind them about?"
         case .step5WhatMatters:
@@ -853,6 +936,8 @@ enum OnboardingStep: String, CaseIterable {
             return "Remi keeps you in the loop"
         case .notificationPermission:
             return "Never miss a moment"
+        case .planReadyTeaser:
+            return "We've analyzed your answers"
         case .loadingPlan:
             return "Analyzing your answers"
         case .personalizedPlan:

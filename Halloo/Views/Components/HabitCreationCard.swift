@@ -780,7 +780,7 @@ struct PendingConfirmationCard: View {
         HabitCreationCard(
             isPresented: .constant(true),
             preselectedProfileId: nil,
-            onDismiss: { print("Dismissed") }
+            onDismiss: { }
         )
         .environmentObject(AppState(
             authService: Container.shared.resolve(AuthenticationServiceProtocol.self),

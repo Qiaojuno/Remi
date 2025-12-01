@@ -52,11 +52,7 @@ enum IDGenerator {
     /// - Parameter phoneNumber: Phone number in any format (e.g., "555-123-4567", "+1 (555) 123-4567")
     /// - Returns: E.164 normalized phone number (e.g., "+15551234567")
     static func profileID(phoneNumber: String) -> String {
-        print("ℹ️ [ProfileId] Generating profile ID from phone - input: \(phoneNumber)")
-
         let normalized = phoneNumber.normalizedE164()
-
-        print("✅ [ProfileId] Profile ID generated - input: \(phoneNumber), output: \(normalized), isE164: \(normalized.isE164Format)")
 
         assert(normalized.hasPrefix("+"), "Profile ID must be E.164 format: \(normalized)")
         assert(normalized.count >= 11, "Profile ID too short: \(normalized)")
@@ -184,46 +180,11 @@ extension String {
 #if DEBUG
 extension IDGenerator {
     static func runExamples() {
-        print("=== IDGenerator Examples ===\n")
-
-        // User ID
-        let userId = userID(firebaseUID: "abc123xyz")
-        print("User ID: \(userId)")
-        print("Valid: \(validate(userId: userId))\n")
-
-        // Profile ID
-        let profileId1 = profileID(phoneNumber: "555-123-4567")
-        let profileId2 = profileID(phoneNumber: "+1 (555) 123-4567")
-        print("Profile ID 1: \(profileId1)")
-        print("Profile ID 2: \(profileId2)")
-        print("Same ID: \(profileId1 == profileId2)") // Should be true!
-        print("Valid: \(validate(profileId: profileId1))\n")
-
-        // Habit ID
-        let habitId = habitID()
-        print("Habit ID: \(habitId)")
-        print("Valid: \(validate(habitId: habitId))\n")
-
-        // Message ID
-        let messageId1 = messageID(twilioSID: "SM1234567890abcdef1234567890abcd")
-        let messageId2 = messageID()
-        print("Message ID (Twilio): \(messageId1)")
-        print("Message ID (UUID): \(messageId2)")
-        print("Valid: \(validate(messageId: messageId1))\n")
-
-        // Phone normalization
-        let testNumbers = [
-            "555-123-4567",
-            "+1 (555) 123-4567",
-            "15551234567",
-            "+15551234567",
-            "(555) 123-4567"
-        ]
-        print("Phone Normalization:")
-        for number in testNumbers {
-            let normalized = number.normalizedE164()
-            print("  \(number) → \(normalized) (E.164: \(normalized.isE164Format))")
-        }
+        // Example code removed - use unit tests instead
+        _ = userID(firebaseUID: "abc123xyz")
+        _ = profileID(phoneNumber: "555-123-4567")
+        _ = habitID()
+        _ = messageID(twilioSID: "SM1234567890abcdef1234567890abcd")
     }
 }
 #endif

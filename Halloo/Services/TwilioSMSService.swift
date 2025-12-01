@@ -25,16 +25,11 @@ class TwilioSMSService: SMSServiceProtocol {
 
     // MARK: - Initialization
     init() {
-        print("✅ TwilioSMSService initialized (using Cloud Functions backend)")
-
         // NOTE: Emulator disabled - using production Cloud Functions
         // To re-enable emulator, uncomment the code below
         // #if DEBUG
         // functions.useEmulator(withHost: "127.0.0.1", port: 5001)
-        // print("🔧 Using Firebase Functions Emulator at 127.0.0.1:5001")
         // #endif
-
-        print("🌐 Using production Cloud Functions at us-central1")
     }
 
     // MARK: - SMS Delivery
@@ -45,8 +40,6 @@ class TwilioSMSService: SMSServiceProtocol {
         profileId: String,
         messageType: SMSMessageType
     ) async throws -> SMSDeliveryResult {
-
-        print("📱 [Twilio] Sending SMS to \(phoneNumber) via Cloud Function")
 
         // Validate phone number format before calling backend
         guard validatePhoneNumber(phoneNumber) else {
@@ -72,8 +65,6 @@ class TwilioSMSService: SMSServiceProtocol {
                   let statusString = response["status"] as? String else {
                 throw SMSError.unknownError("Invalid response from Cloud Function")
             }
-
-            print("✅ [Twilio] SMS sent successfully: \(messageId)")
 
             // Map Twilio status to our enum
             let status: SMSDeliveryStatus
@@ -131,8 +122,6 @@ class TwilioSMSService: SMSServiceProtocol {
         messageType: SMSMessageType
     ) async throws -> [SMSDeliveryResult] {
 
-        print("📱 [Twilio] Sending batch SMS to \(phoneNumbers.count) recipients")
-
         var results: [SMSDeliveryResult] = []
 
         // Send sequentially to avoid rate limiting
@@ -150,7 +139,7 @@ class TwilioSMSService: SMSServiceProtocol {
                 // TODO: Re-enable with proper async sleep once available
 
             } catch {
-                print("❌ [Twilio] Failed to send to \(phoneNumber): \(error)")
+                print("❌ [Twilio] Failed to send batch SMS to \(phoneNumber): \(error.localizedDescription)")
 
                 // Add failed result
                 results.append(SMSDeliveryResult(
@@ -294,8 +283,6 @@ class TwilioSMSService: SMSServiceProtocol {
         receivedAt: Date,
         attachments: [SMSAttachment]?
     ) async throws -> ProcessedSMSResponse {
-
-        print("📱 [Twilio] Processing incoming response from \(phoneNumber)")
 
         // Note: Incoming messages are handled by twilioWebhook Cloud Function
         // and stored in Firestore. This method processes them from Firestore.
@@ -445,12 +432,10 @@ class TwilioSMSService: SMSServiceProtocol {
 
     func blockPhoneNumber(_ phoneNumber: String) async throws {
         // TODO: Update Firestore profile with opt-out status
-        print("📱 [Twilio] Blocking phone number: \(phoneNumber)")
     }
 
     func unblockPhoneNumber(_ phoneNumber: String) async throws {
         // TODO: Update Firestore profile to remove opt-out status
-        print("📱 [Twilio] Unblocking phone number: \(phoneNumber)")
     }
 
     func checkSMSQuota(for userId: String) async throws -> SMSQuotaStatus {
@@ -473,7 +458,6 @@ class TwilioSMSService: SMSServiceProtocol {
 
     func resetQuota(for userId: String) async throws {
         // TODO: Reset quota in Firestore
-        print("📱 [Twilio] Resetting quota for user: \(userId)")
     }
 
     func updateTwilioCredentials(accountSid: String, authToken: String, phoneNumber: String) async throws {

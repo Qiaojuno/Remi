@@ -173,8 +173,8 @@ struct CreateActionOption: View {
 
         CreateActionCard(
             isPresented: .constant(true),
-            onCreateHabit: { print("Create Habit") },
-            onCreateProfile: { print("Create Profile") }
+            onCreateHabit: { },
+            onCreateProfile: { }
         )
         .environmentObject(AppState(
             authService: Container.shared.resolve(AuthenticationServiceProtocol.self),

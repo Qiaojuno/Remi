@@ -439,7 +439,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
     /// Called by ContentView after TaskViewModel initialization
     func setAppState(_ appState: AppState) {
         self.appState = appState
-        print("✅ [TaskViewModel] AppState reference injected")
     }
 
     // MARK: - Setup Methods
@@ -500,15 +499,12 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
     }
 
     private func handleProfileUpdate(_ profile: ElderlyProfile) {
-        print("📩 [TaskViewModel] Profile update received: \(profile.id)")
-
         // PHASE 4: availableProfiles now reads from AppState.confirmedProfiles
         // No need to manually update local array - AppState handles it
 
         // If currently selected profile was updated, refresh it
         if selectedProfile?.id == profile.id {
             if profile.status == .inactive {
-                print("⚠️ [TaskViewModel] Selected profile became inactive - clearing selection")
                 selectedProfile = nil
                 selectedProfileId = nil
             } else {
@@ -752,8 +748,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                                 task.customDays != Array(customDays) ||
                                 task.status != updatedTask.status
 
-            print("✅ [TaskViewModel] Task updated in Firebase")
-
             await MainActor.run {
                 self.resetForm()
                 self.showingEditTask = false
@@ -895,7 +889,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
             // Create gallery event for task completion
             let galleryEvent = GalleryHistoryEvent.fromSMSResponse(smsResponse)
             try await databaseService.createGalleryHistoryEvent(galleryEvent)
-            print("✅ [TaskViewModel] Created gallery event for task completion: \(task.title)")
 
             // Update task completion count
             let updatedTask = Task(
@@ -947,14 +940,12 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
         // PHASE 4: AppState handles task updates via DataSyncCoordinator
         // This handler is redundant now - AppState.handleTaskUpdate() already updates the array
         // Keeping for backward compatibility but making it a no-op
-        print("📩 [TaskViewModel] Task update received: \(updatedTask.title) - AppState handles update")
     }
-    
+
     private func handleTaskResponse(_ response: SMSResponse) {
         // PHASE 4: AppState handles SMS responses via DataSyncCoordinator
         // AppState.handleSMSResponse() already updates the task
         // Keeping for backward compatibility but making it a no-op
-        print("📩 [TaskViewModel] SMS response received for task \(response.taskId ?? "unknown") - AppState handles update")
     }
     
     // MARK: - Validation Methods

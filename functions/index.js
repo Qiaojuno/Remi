@@ -115,7 +115,7 @@ exports.sendSMS = onCall({
       to: to
     });
 
-    console.log(`✅ SMS sent successfully: ${twilioMessage.sid}`);
+    // SMS sent successfully - no log needed (tracked in Firestore)
 
     // Increment user's SMS quota usage
     await admin.firestore().collection('users').doc(userId).update({
@@ -161,7 +161,6 @@ exports.sendSMS = onCall({
           isOptOut: false
         });
 
-      console.log(`✅ Saved outbound message to messages collection for gallery`);
     }
 
     return {
@@ -199,20 +198,25 @@ exports.twilioWebhook = onRequest(
     secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber]  // Access to credentials for signature validation, photo download, and sending replies
   },
   async (req, res) => {
-    console.log('📱 Twilio webhook received');
+    // SECURITY CHECK #1: Verify request is from Twilio using HMAC-SHA1 signature
+    const twilioSignature = req.headers['x-twilio-signature'];
+    if (!twilioSignature) {
+      console.error('❌ Missing X-Twilio-Signature header');
+      return res.status(403).send('Forbidden');
+    }
 
-    // SECURITY CHECK #1: Verify request is from Twilio
-    // TEMPORARILY DISABLED - TODO: Fix signature validation
-    // const twilioSignature = req.headers['x-twilio-signature'];
-    // const url = 'https://twiliowebhook-skvlnwbfba-uc.a.run.app';
-    // const authToken = twilioAuthToken.value();
-    // const isValidRequest = twilio.validateRequest(authToken, twilioSignature, url, req.body);
-    // if (!isValidRequest) {
-    //   console.error('❌ Invalid Twilio signature');
-    //   return res.status(403).send('Forbidden');
-    // }
+    // Build URL dynamically to handle Cloud Function redeployments
+    // Use x-forwarded-proto for correct protocol behind load balancer
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const url = `${protocol}://${req.headers.host}${req.url}`;
 
-    console.log('⚠️ Signature validation temporarily disabled for debugging');
+    const authToken = twilioAuthToken.value();
+    const isValidRequest = twilio.validateRequest(authToken, twilioSignature, url, req.body);
+
+    if (!isValidRequest) {
+      console.error('❌ Invalid Twilio signature', { url });
+      return res.status(403).send('Forbidden');
+    }
 
     // SECURITY CHECK #2: Sanitize inputs
     const {
@@ -253,8 +257,7 @@ exports.twilioWebhook = onRequest(
         userId = profileData.userId;
       }
     } catch (indexError) {
-      console.warn(`⚠️ CollectionGroup query failed (index building?): ${indexError.message}`);
-      console.log('📝 Falling back to manual user search...');
+      console.warn('⚠️ CollectionGroup query failed, using fallback', indexError.message);
 
       // Fallback: Query all users and search their profiles
       const usersSnapshot = await admin.firestore().collection('users').get();
@@ -268,7 +271,6 @@ exports.twilioWebhook = onRequest(
         if (!userProfiles.empty) {
           profileDoc = userProfiles.docs[0];
           userId = userDoc.id;
-          console.log(`✅ Found profile via fallback method for user: ${userId}`);
           break;
         }
       }
@@ -285,8 +287,6 @@ exports.twilioWebhook = onRequest(
     const stopKeywords = ['STOP', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'STOPALL'];
 
     if (stopKeywords.includes(upperMessage)) {
-      console.log(`🛑 Opt-out detected from ${fromPhone}`);
-
       // Update profile to opt-out
       await profileDoc.ref.update({
         smsOptedOut: true,
@@ -316,8 +316,6 @@ exports.twilioWebhook = onRequest(
         direction: 'inbound'
       });
 
-    console.log(`✅ Incoming message stored for user ${userId}`);
-
     // Find recently sent SMS for this profile (within last 30 minutes)
     // Check lastSMSSentAt instead of nextScheduledDate (which gets updated immediately after send)
     const now = new Date();
@@ -328,31 +326,20 @@ exports.twilioWebhook = onRequest(
       .where('status', '==', 'active')
       .get();
 
-    console.log(`🔍 Checking ${allHabitsSnapshot.size} active habits for recent SMS`);
-
     // Filter habits where SMS was sent in last 30 minutes AND not already completed
     const recentHabits = allHabitsSnapshot.docs
       .map(doc => ({ doc, data: doc.data() }))
       .filter(({ data }) => {
-        if (!data.lastSMSSentAt) {
-          console.log(`  ⏭️ ${data.title}: No lastSMSSentAt field`);
-          return false;
-        }
+        if (!data.lastSMSSentAt) return false;
         const sentTime = data.lastSMSSentAt.toDate();
         const inWindow = sentTime >= thirtyMinutesAgo && sentTime <= now;
 
-        // 🔒 DUPLICATE PREVENTION: Check if this habit instance was already completed
-        // If lastCompletedAt is AFTER lastSMSSentAt, the habit was already completed for this SMS
-        // This prevents duplicate "Thanks!" messages when elderly person texts multiple times
+        // DUPLICATE PREVENTION: Check if this habit instance was already completed
         if (data.lastCompletedAt) {
           const completedTime = data.lastCompletedAt.toDate();
-          if (completedTime >= sentTime) {
-            console.log(`  🛑 ${data.title}: Already completed at ${completedTime.toISOString()} (sent at ${sentTime.toISOString()})`);
-            return false; // Skip - already processed this SMS instance
-          }
+          if (completedTime >= sentTime) return false;
         }
 
-        console.log(`  ${inWindow ? '✅' : '❌'} ${data.title}: SMS sent at ${sentTime.toISOString()}, in window? ${inWindow}`);
         return inWindow;
       })
       .sort((a, b) => b.data.lastSMSSentAt.toMillis() - a.data.lastSMSSentAt.toMillis());
@@ -361,9 +348,7 @@ exports.twilioWebhook = onRequest(
       const habitDoc = recentHabits[0].doc;
       const habit = recentHabits[0].data;
 
-      console.log(`📋 Found recent habit: ${habit.title}`);
-
-      // ✅ VALIDATE: Check if response matches habit requirements
+      // VALIDATE: Check if response matches habit requirements
       const hasPhoto = parseInt(numMedia) > 0;
       const hasText = messageBody && messageBody.trim().length > 0;
 
@@ -373,10 +358,6 @@ exports.twilioWebhook = onRequest(
       // Determine if response is valid
       let isValidResponse = true;
       let validationMessage = null;
-
-      console.log(`🔍 Validation check:`);
-      console.log(`   Requires: photo=${requiresPhoto}, text=${requiresText}`);
-      console.log(`   Received: photo=${hasPhoto}, text=${hasText}`);
 
       if (requiresPhoto && !hasPhoto) {
         isValidResponse = false;
@@ -391,8 +372,6 @@ exports.twilioWebhook = onRequest(
 
       // Only proceed if response is valid
       if (!isValidResponse) {
-        console.log(`❌ Invalid response type - sending correction message`);
-
         // Send validation message to user
         try {
           const twilioClient = twilio(twilioAccountSid.value(), twilioAuthToken.value());
@@ -402,10 +381,8 @@ exports.twilioWebhook = onRequest(
             from: twilioPhoneNumber.value(),
             to: fromPhone
           });
-
-          console.log(`📤 Sent validation message: "${validationMessage}"`);
         } catch (smsError) {
-          console.error(`❌ Failed to send validation SMS:`, smsError);
+          console.error('❌ Failed to send validation SMS:', smsError.message);
         }
 
         // Do NOT mark as completed, do NOT create gallery event
@@ -413,13 +390,11 @@ exports.twilioWebhook = onRequest(
         return;
       }
 
-      // ✅ Valid response - mark habit as completed
+      // Valid response - mark habit as completed
       await habitDoc.ref.update({
         lastCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
         completionCount: admin.firestore.FieldValue.increment(1)
       });
-
-      console.log(`✅ Marked habit as completed: ${habit.title}`);
 
       // Create gallery event with correct GalleryHistoryEvent schema
       // Structure must match Swift model: id, userId, profileId, eventType, createdAt, eventData
@@ -438,15 +413,10 @@ exports.twilioWebhook = onRequest(
 
       // Download MMS photo if attached
       if (parseInt(numMedia) > 0) {
-        console.log(`📸 Processing ${numMedia} MMS media attachment(s)...`);
-
         try {
           // Extract media URL from Twilio webhook payload
           const mediaUrl = req.body.MediaUrl0;
           const mediaType = req.body.MediaContentType0 || 'image/jpeg';
-
-          console.log(`📥 Downloading media from: ${mediaUrl}`);
-          console.log(`📄 Media type: ${mediaType}`);
 
           // Fetch photo from Twilio's URL (requires Basic Auth)
           const authHeader = 'Basic ' + Buffer.from(
@@ -478,11 +448,8 @@ exports.twilioWebhook = onRequest(
             taskResponseData.responseType = 'photo';  // Photo only
           }
 
-          console.log(`✅ Downloaded photo: ${photoBuffer.length} bytes (${mediaType})`);
-          console.log(`📋 Response type: ${taskResponseData.responseType}`);
-
         } catch (photoError) {
-          console.error(`❌ Failed to download MMS photo: ${photoError.message}`);
+          console.error('❌ Failed to download MMS photo:', photoError.message);
           // Continue without photo - don't fail entire webhook
           // Response type stays as 'text' if text exists, otherwise task completion still recorded
         }
@@ -503,9 +470,7 @@ exports.twilioWebhook = onRequest(
         }
       });
 
-      console.log(`✅ Created gallery event for habit: ${habit.title}`);
-
-      // ✅ Send simple thank you message for valid response
+      // Send simple thank you message for valid response
       let thankYou = null;
       try {
         const thankYouMessages = [
@@ -518,15 +483,6 @@ exports.twilioWebhook = onRequest(
 
         thankYou = thankYouMessages[Math.floor(Math.random() * thankYouMessages.length)];
 
-        // DEBUG: Log Twilio credentials availability
-        console.log(`🔐 Twilio credentials check:`);
-        console.log(`   AccountSid available: ${!!twilioAccountSid.value()}`);
-        console.log(`   AuthToken available: ${!!twilioAuthToken.value()}`);
-        console.log(`   PhoneNumber available: ${!!twilioPhoneNumber.value()}`);
-        console.log(`   From: ${twilioPhoneNumber.value()}`);
-        console.log(`   To: ${fromPhone}`);
-        console.log(`   Message: "${thankYou}"`);
-
         const twilioClient = twilio(twilioAccountSid.value(), twilioAuthToken.value());
 
         await twilioClient.messages.create({
@@ -535,26 +491,13 @@ exports.twilioWebhook = onRequest(
           to: fromPhone
         });
 
-        console.log(`✅ Sent thank you message: "${thankYou}"`);
-
         // Update gallery event with reply message
         await galleryEventRef.update({
           'eventData.taskResponse._0.replyMessage': thankYou
         });
-
-        console.log(`✅ Stored reply message in gallery event`);
       } catch (smsError) {
-        console.error(`❌ Failed to send thank you SMS:`, smsError);
-        console.error(`❌ Error details:`, {
-          message: smsError.message,
-          code: smsError.code,
-          status: smsError.status,
-          moreInfo: smsError.moreInfo
-        });
-        // Don't throw - webhook should still return 200 OK
+        console.error('❌ Failed to send thank you SMS:', smsError.message);
       }
-    } else {
-      console.log(`⚠️ No recent habit found for this reply`);
     }
 
     res.status(200).send('OK');
@@ -564,22 +507,6 @@ exports.twilioWebhook = onRequest(
     res.status(500).send('Error processing webhook');
   }
 });
-
-/**
- * Helper function to validate Twilio webhook signature (security)
- * Prevents unauthorized requests to your webhook
- */
-function validateTwilioRequest(req) {
-  const twilioSignature = req.headers['x-twilio-signature'];
-  const url = `https://${req.headers.host}${req.url}`;
-
-  return twilio.validateRequest(
-    twilioAuthToken,
-    twilioSignature,
-    url,
-    req.body
-  );
-}
 
 /**
  * Scheduled function to cleanup old gallery events (runs daily at midnight PST)
@@ -610,8 +537,6 @@ exports.cleanupOldGalleryEvents = onSchedule({
       new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
     );
 
-    console.log('🧹 Starting cleanup of gallery events older than', threeMonthsAgo.toDate().toISOString());
-
     try {
       // Query old events across all users using collectionGroup
       const oldEventsSnapshot = await db.collectionGroup('galleryEvents')
@@ -619,10 +544,7 @@ exports.cleanupOldGalleryEvents = onSchedule({
         .limit(500) // Process in batches to avoid timeouts
         .get();
 
-      console.log(`📊 Found ${oldEventsSnapshot.size} old events to process`);
-
       if (oldEventsSnapshot.empty) {
-        console.log('✨ No old events to cleanup');
         return { photosArchived: 0, eventsDeleted: 0 };
       }
 
@@ -649,8 +571,6 @@ exports.cleanupOldGalleryEvents = onSchedule({
             const month = String(eventDate.getMonth() + 1).padStart(2, '0');
             const fileName = `gallery-archive/${userId}/${profileId}/${year}/${month}/${event.id}.jpg`;
 
-            console.log(`📸 Archiving photo: ${fileName}`);
-
             // Convert base64 to buffer
             const photoBuffer = Buffer.from(photoDataBase64, 'base64');
 
@@ -671,18 +591,15 @@ exports.cleanupOldGalleryEvents = onSchedule({
             });
 
             photosArchived++;
-            console.log(`✅ Photo archived successfully: ${fileName}`);
           }
 
           // Delete the Firestore event (text data permanently removed)
           await doc.ref.delete();
           eventsDeleted++;
 
-          console.log(`🗑️ Event deleted: ${event.id} (created ${eventDate.toISOString()})`);
-
         } catch (error) {
           errors++;
-          console.error(`❌ Failed to process event ${doc.id}:`, error.message);
+          console.error('❌ Cleanup event failed:', doc.id, error.message);
           // Continue processing other events even if one fails
         }
       }
@@ -695,7 +612,10 @@ exports.cleanupOldGalleryEvents = onSchedule({
         oldestEventProcessed: threeMonthsAgo.toDate().toISOString()
       };
 
-      console.log('🎉 Cleanup complete:', JSON.stringify(summary, null, 2));
+      // Only log if work was done
+      if (eventsDeleted > 0) {
+        console.log('Cleanup complete:', JSON.stringify(summary));
+      }
 
       return summary;
 
@@ -704,90 +624,6 @@ exports.cleanupOldGalleryEvents = onSchedule({
       throw error;
     }
   });
-
-/**
- * Manual trigger endpoint for testing cleanup (HTTP)
- *
- * Usage:
- * curl -X POST https://us-central1-remi-91351.cloudfunctions.net/manualCleanup \
- *   -H "Content-Type: application/json" \
- *   -d '{"daysOld": 90}'
- */
-exports.manualCleanup = functions.https.onRequest(async (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).send('Method not allowed');
-    return;
-  }
-
-  const daysOld = req.body.daysOld || 90;
-  const cutoffDate = admin.firestore.Timestamp.fromDate(
-    new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000)
-  );
-
-  console.log(`🧪 Manual cleanup triggered for events older than ${daysOld} days`);
-
-  try {
-    const db = admin.firestore();
-    const bucket = admin.storage().bucket();
-
-    const oldEventsSnapshot = await db.collectionGroup('galleryEvents')
-      .where('createdAt', '<', cutoffDate)
-      .limit(100) // Smaller limit for manual testing
-      .get();
-
-    let photosArchived = 0;
-    let eventsDeleted = 0;
-
-    for (const doc of oldEventsSnapshot.docs) {
-      const event = doc.data();
-
-      if (event.eventType === 'taskResponse' &&
-          event.eventData?.taskResponse?.photoData) {
-
-        const photoDataBase64 = event.eventData.taskResponse.photoData;
-        const eventDate = event.createdAt.toDate();
-        const year = eventDate.getFullYear();
-        const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-        const fileName = `gallery-archive/${event.userId}/${event.profileId}/${year}/${month}/${event.id}.jpg`;
-
-        const photoBuffer = Buffer.from(photoDataBase64, 'base64');
-        const file = bucket.file(fileName);
-
-        await file.save(photoBuffer, {
-          contentType: 'image/jpeg',
-          metadata: {
-            metadata: {
-              userId: event.userId,
-              profileId: event.profileId,
-              eventId: event.id,
-              archivedAt: new Date().toISOString()
-            }
-          }
-        });
-
-        photosArchived++;
-      }
-
-      await doc.ref.delete();
-      eventsDeleted++;
-    }
-
-    const result = {
-      success: true,
-      photosArchived,
-      eventsDeleted,
-      daysOld,
-      timestamp: new Date().toISOString()
-    };
-
-    console.log('✅ Manual cleanup complete:', result);
-    res.json(result);
-
-  } catch (error) {
-    console.error('❌ Manual cleanup failed:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 /**
  * Retry utility with exponential backoff for Firestore operations
@@ -803,22 +639,17 @@ async function retryWithBackoff(operation, operationName, maxRetries = 3) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const result = await operation();
-      if (attempt > 1) {
-        console.log(`✅ ${operationName} succeeded on attempt ${attempt}`);
-      }
-      return result;
+      return await operation();
     } catch (error) {
       lastError = error;
 
       if (attempt === maxRetries) {
-        console.error(`❌ ${operationName} failed after ${maxRetries} attempts: ${error.message}`);
+        console.error(`❌ ${operationName} failed after ${maxRetries} attempts:`, error.message);
         throw error;
       }
 
       // Exponential backoff: 100ms, 200ms, 400ms
       const delayMs = 100 * Math.pow(2, attempt - 1);
-      console.warn(`⚠️ ${operationName} failed on attempt ${attempt}/${maxRetries}, retrying in ${delayMs}ms...`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
@@ -845,8 +676,6 @@ exports.sendScheduledTaskReminders = onSchedule({
   timeZone: 'America/Los_Angeles',
   secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber]
 }, async (event) => {
-  console.log('⏰ Running scheduled task reminder check (1-min interval, 5-min catchup window)...');
-
   const now = admin.firestore.Timestamp.now();
   const currentTime = now.toDate();
 
@@ -865,10 +694,7 @@ exports.sendScheduledTaskReminders = onSchedule({
       .where('nextScheduledDate', '<=', now)
       .get();
 
-    console.log(`📋 Found ${habitsSnapshot.size} habits in 5-minute window`);
-
     if (habitsSnapshot.empty) {
-      console.log('✅ No habits due right now');
       return null;
     }
 
@@ -891,15 +717,12 @@ exports.sendScheduledTaskReminders = onSchedule({
       const userId = pathParts[1];
       const profileId = pathParts[3];
 
-      console.log(`📝 Processing habit: ${habit.title} for user ${userId}, profile ${profileId}`);
-
       // Get profile to retrieve phone number
       const profileDoc = await admin.firestore()
         .doc(`users/${userId}/profiles/${profileId}`)
         .get();
 
       if (!profileDoc.exists) {
-        console.warn(`⚠️ Profile not found: ${profileId}`);
         smsSkipped++;
         continue;
       }
@@ -908,21 +731,18 @@ exports.sendScheduledTaskReminders = onSchedule({
 
       // Check if profile is confirmed
       if (profile.status !== 'confirmed') {
-        console.warn(`⚠️ Profile not confirmed: ${profile.name} (status: ${profile.status})`);
         smsSkipped++;
         continue;
       }
 
       // Check if profile has opted out
       if (profile.smsOptedOut === true) {
-        console.log(`🛑 Profile has opted out of SMS: ${profile.name}`);
         smsSkipped++;
         continue;
       }
 
       // Check if phone number exists
       if (!profile.phoneNumber) {
-        console.warn(`⚠️ No phone number for profile: ${profile.name}`);
         smsSkipped++;
         continue;
       }
@@ -932,18 +752,6 @@ exports.sendScheduledTaskReminders = onSchedule({
 
       // Calculate lateness: how many seconds late is this SMS?
       const latenessSeconds = Math.floor((currentTime - scheduledTimeDate) / 1000);
-      const latenessMinutes = Math.floor(latenessSeconds / 60);
-
-      if (latenessSeconds > 120) {
-        // More than 2 minutes late - log as warning
-        console.warn(`⏰ WARNING: Habit "${habit.title}" is ${latenessMinutes}m ${latenessSeconds % 60}s late (scheduled: ${scheduledTimeDate.toISOString()})`);
-      } else if (latenessSeconds > 60) {
-        // Between 1-2 minutes late - expected latency
-        console.log(`⏰ Habit "${habit.title}" is ${latenessSeconds}s late (normal scheduler latency)`);
-      } else {
-        // Less than 60 seconds late - perfect timing
-        console.log(`✅ Habit "${habit.title}" is on-time (lateness: ${latenessSeconds}s)`);
-      }
 
       const smsLogQuery = await admin.firestore()
         .collection(`users/${userId}/smsLogs`)
@@ -954,7 +762,6 @@ exports.sendScheduledTaskReminders = onSchedule({
         .get();
 
       if (!smsLogQuery.empty) {
-        console.log(`✅ SMS already sent for habit ${habit.id} at ${scheduledTimeDate.toISOString()}`);
         smsSkipped++;
         continue;
       }
@@ -975,8 +782,6 @@ exports.sendScheduledTaskReminders = onSchedule({
           from: twilioPhoneNumber.value(),
           to: profile.phoneNumber
         });
-
-        console.log(`✅ SMS sent: ${twilioMessage.sid} to ${profile.name}`);
 
         // Log SMS delivery for audit trail
         await admin.firestore()
@@ -1007,7 +812,7 @@ exports.sendScheduledTaskReminders = onSchedule({
         smssSent++;
 
       } catch (smsError) {
-        console.error(`❌ Failed to send SMS for habit ${habit.id}:`, smsError.message);
+        console.error('❌ SMS send failed:', habit.id, smsError.message);
 
         // Log failure for debugging
         await admin.firestore()
@@ -1038,13 +843,13 @@ exports.sendScheduledTaskReminders = onSchedule({
 
           // Validate the calculated date
           if (!nextOccurrence || isNaN(nextOccurrence.getTime())) {
-            console.error(`❌ Invalid nextOccurrence calculated for habit ${habit.id}`);
+            console.error('❌ Invalid nextOccurrence for habit:', habit.id);
             continue;
           }
 
           // Ensure it's in the future
           if (nextOccurrence <= new Date()) {
-            console.error(`❌ nextOccurrence is in the past for habit ${habit.id}: ${nextOccurrence.toISOString()}`);
+            console.error('❌ nextOccurrence in past for habit:', habit.id);
             continue;
           }
 
@@ -1057,13 +862,11 @@ exports.sendScheduledTaskReminders = onSchedule({
                 lastSentMessage: message  // Store sent message for gallery display
               });
             },
-            `Update nextScheduledDate for habit ${habit.id} ("${habit.title}")`
+            `Update nextScheduledDate for habit ${habit.id}`
           );
 
-          console.log(`📅 Updated nextScheduledDate for "${habit.title}" to ${nextOccurrence.toISOString()}`);
-
         } catch (updateError) {
-          console.error(`❌ CRITICAL: Failed to update nextScheduledDate for habit ${habit.id} after 3 retries:`, updateError.message);
+          console.error('❌ CRITICAL: nextScheduledDate update failed:', habit.id, updateError.message);
           // This is critical - if we can't update the date, the habit is stuck
           // Log to error collection for monitoring and alerting
           await admin.firestore()
@@ -1091,23 +894,17 @@ exports.sendScheduledTaskReminders = onSchedule({
             },
             `Update lastSMSSentAt for one-time habit ${habit.id}`
           );
-          console.log(`⏱️ One-time habit "${habit.title}" - nextScheduledDate NOT updated`);
         } catch (updateError) {
-          console.error(`❌ Failed to update lastSMSSentAt for one-time habit ${habit.id} after retries:`, updateError.message);
+          console.error('❌ lastSMSSentAt update failed:', habit.id, updateError.message);
         }
       }
     }
 
-    const summary = {
-      totalHabits: habitsSnapshot.size,
-      smssSent,
-      smsFailed,
-      smsSkipped,
-      timestamp: new Date().toISOString()
-    };
-
-    console.log('✅ Scheduled task reminder check complete:', JSON.stringify(summary, null, 2));
-    return summary;
+    // Only log summary if SMS was sent or failed
+    if (smssSent > 0 || smsFailed > 0) {
+      console.log('Scheduler:', { sent: smssSent, failed: smsFailed, skipped: smsSkipped });
+    }
+    return { smssSent, smsFailed, smsSkipped };
 
   } catch (error) {
     console.error('❌ Error in sendScheduledTaskReminders:', error);
@@ -1133,8 +930,6 @@ exports.recoverMissedHabits = onSchedule({
   schedule: 'every 60 minutes',
   timeZone: 'America/Los_Angeles'
 }, async (event) => {
-  console.log('🔧 Running missed habit recovery check (hourly safety net)...');
-
   const now = new Date();
   const fiveMinutesAgo = admin.firestore.Timestamp.fromDate(
     new Date(now.getTime() - 5 * 60 * 1000)
@@ -1150,10 +945,7 @@ exports.recoverMissedHabits = onSchedule({
       .where('nextScheduledDate', '<', fiveMinutesAgo)
       .get();
 
-    console.log(`🔍 Found ${stuckHabitsSnapshot.size} habits with nextScheduledDate in the past`);
-
     if (stuckHabitsSnapshot.empty) {
-      console.log('✅ No stuck habits found');
       return null;
     }
 
@@ -1178,15 +970,11 @@ exports.recoverMissedHabits = onSchedule({
         .get();
 
       if (!smsLogQuery.empty) {
-        // SMS was sent, but nextScheduledDate wasn't updated - CRITICAL BUG
-        console.warn(`⚠️ Habit "${habit.title}" (${habit.id}): SMS was sent but nextScheduledDate stuck at ${habit.nextScheduledDate.toDate().toISOString()}`);
         alreadySent++;
       }
 
       // Calculate the NEXT future occurrence (skip the missed one)
-      // Use habit's stored timezone, or PST fallback for old habits without timezone
       const nextOccurrence = calculateNextOccurrence(habit, habit.timeZone);
-      console.log(`🔧 Recovering habit "${habit.title}": advancing from ${habit.nextScheduledDate.toDate().toISOString()} to ${nextOccurrence.toISOString()}`);
 
       // Update with retry logic
       try {
@@ -1202,10 +990,9 @@ exports.recoverMissedHabits = onSchedule({
         );
 
         recovered++;
-        console.log(`✅ Recovered habit "${habit.title}" - next SMS will be ${nextOccurrence.toISOString()}`);
 
       } catch (error) {
-        console.error(`❌ Failed to recover habit ${habit.id}:`, error.message);
+        console.error('❌ Failed to recover habit:', habit.id, error.message);
 
         // Log critical error
         await admin.firestore()
@@ -1222,15 +1009,11 @@ exports.recoverMissedHabits = onSchedule({
       }
     }
 
-    const summary = {
-      stuckHabits: stuckHabitsSnapshot.size,
-      recovered,
-      alreadySent,
-      timestamp: new Date().toISOString()
-    };
-
-    console.log(`📊 Recovery summary:`, summary);
-    return summary;
+    // Only log if recovery work was done
+    if (recovered > 0) {
+      console.log('Recovery:', { stuck: stuckHabitsSnapshot.size, recovered, alreadySent });
+    }
+    return { recovered, alreadySent };
 
   } catch (error) {
     console.error('❌ Missed habit recovery failed:', error);
@@ -1254,8 +1037,6 @@ exports.healthCheckMonitor = onSchedule({
   schedule: 'every 15 minutes',
   timeZone: 'America/Los_Angeles'
 }, async (event) => {
-  console.log('🏥 Running health check monitor...');
-
   const now = new Date();
   const oneHourAgo = admin.firestore.Timestamp.fromDate(
     new Date(now.getTime() - 60 * 60 * 1000)
@@ -1282,12 +1063,6 @@ exports.healthCheckMonitor = onSchedule({
       status: stuckHabitsSnapshot.size === 0 ? 'healthy' : (stuckHabitsSnapshot.size < 5 ? 'warning' : 'critical')
     };
 
-    if (stuckHabitsSnapshot.size > 0) {
-      console.warn(`⚠️ HEALTH: ${stuckHabitsSnapshot.size} habits stuck in the past`);
-    } else {
-      console.log(`✅ HEALTH: No stuck habits`);
-    }
-
     // Check 2: Recent critical errors
     const recentErrorsSnapshot = await admin.firestore()
       .collection('errors')
@@ -1299,17 +1074,6 @@ exports.healthCheckMonitor = onSchedule({
       count: recentErrorsSnapshot.size,
       status: recentErrorsSnapshot.size === 0 ? 'healthy' : (recentErrorsSnapshot.size < 3 ? 'warning' : 'critical')
     };
-
-    if (recentErrorsSnapshot.size > 0) {
-      console.warn(`⚠️ HEALTH: ${recentErrorsSnapshot.size} critical errors in last 15 minutes`);
-      // Log first few errors for context
-      recentErrorsSnapshot.docs.slice(0, 3).forEach(doc => {
-        const error = doc.data();
-        console.warn(`  - ${error.type}: ${error.errorMessage} (habit: ${error.habitTitle || error.habitId})`);
-      });
-    } else {
-      console.log(`✅ HEALTH: No recent critical errors`);
-    }
 
     // Check 3: SMS sending success rate (last hour)
     const recentSMSLogsSnapshot = await admin.firestore()
@@ -1329,12 +1093,6 @@ exports.healthCheckMonitor = onSchedule({
       status: successRate >= 95 ? 'healthy' : (successRate >= 85 ? 'warning' : 'critical')
     };
 
-    if (successRate < 95) {
-      console.warn(`⚠️ HEALTH: SMS success rate is ${successRate}% (${failedSMS}/${totalSMS} failed)`);
-    } else {
-      console.log(`✅ HEALTH: SMS success rate is ${successRate}%`);
-    }
-
     // Check 4: Overall system health
     const criticalCount = Object.values(healthMetrics.checks).filter(check => check.status === 'critical').length;
     const warningCount = Object.values(healthMetrics.checks).filter(check => check.status === 'warning').length;
@@ -1346,17 +1104,13 @@ exports.healthCheckMonitor = onSchedule({
       .collection('healthMetrics')
       .add(healthMetrics);
 
-    // Alert on critical status
+    // Only log if there are issues
     if (healthMetrics.overallStatus === 'critical') {
-      console.error(`🚨 CRITICAL HEALTH ALERT: System has ${criticalCount} critical issues`);
-      console.error(`📊 Health metrics:`, JSON.stringify(healthMetrics, null, 2));
+      console.error('🚨 CRITICAL:', JSON.stringify(healthMetrics.checks));
     } else if (healthMetrics.overallStatus === 'warning') {
-      console.warn(`⚠️ WARNING: System has ${warningCount} warnings`);
-    } else {
-      console.log(`✅ HEALTH: System is healthy`);
+      console.warn('⚠️ Health warning:', JSON.stringify(healthMetrics.checks));
     }
 
-    console.log(`📊 Health check complete - Status: ${healthMetrics.overallStatus}`);
     return healthMetrics;
 
   } catch (error) {
@@ -1534,188 +1288,4 @@ function getTaskReminderMessage(habit, profile) {
   // Build final message
   return `${greeting} ${prompt} ${habit.title}\n\n${instructions}`;
 }
-
-/**
- * Delete old test habits that have wrong schema
- */
-exports.deleteOldTestHabits = onRequest(async (req, res) => {
-  const habitIdsToDelete = [
-    '25491E5B-85EF-4020-AC48-E16AB3652331',  // Tester
-    'A766A797-8DF3-49CD-99F9-ABCF5BDEEA4F',  // Morning
-    'A7FB8471-85C2-49EB-9E7C-99CE3E8A96DD',  // Shajsj
-    'CB9F1F81-B9E3-4643-B24D-CBC263704454'   // Morning alarm
-  ];
-
-  const userId = 'IJue7FhdmbbIzR3WG6Tzhhf2ykD2';
-  const profileId = '+17788143739';
-  const deleted = [];
-
-  for (const habitId of habitIdsToDelete) {
-    await admin.firestore()
-      .doc(`users/${userId}/profiles/${profileId}/habits/${habitId}`)
-      .delete();
-    deleted.push(habitId);
-    console.log(`✅ Deleted habit: ${habitId}`);
-  }
-
-  res.json({ deleted, count: deleted.length });
-});
-
-/**
- * MIGRATION: Fix existing habits with past nextScheduledDate
- */
-exports.fixPastHabits = onRequest(async (req, res) => {
-  try {
-    console.log('🔧 Starting migration to fix past habits...');
-
-    // Get all habits
-    const allHabitsSnapshot = await admin.firestore()
-      .collectionGroup('habits')
-      .get();
-
-    const now = new Date();
-    const fixed = [];
-    const skipped = [];
-
-    for (const doc of allHabitsSnapshot.docs) {
-      const habit = doc.data();
-      const path = doc.ref.path;
-
-      // Check if nextScheduledDate is in the past
-      if (habit.nextScheduledDate && habit.nextScheduledDate.toDate() < now) {
-        console.log(`📅 Fixing: ${habit.title} (${path})`);
-
-        // Calculate new nextScheduledDate based on frequency
-        // Use habit's stored timezone, or PST fallback for old habits
-        const nextOccurrence = calculateNextOccurrence(habit, habit.timeZone);
-
-        await doc.ref.update({
-          nextScheduledDate: admin.firestore.Timestamp.fromDate(nextOccurrence)
-        });
-
-        fixed.push({
-          title: habit.title,
-          oldDate: habit.nextScheduledDate.toDate().toISOString(),
-          newDate: nextOccurrence.toISOString()
-        });
-      } else {
-        skipped.push({
-          title: habit.title,
-          reason: habit.nextScheduledDate ? 'already in future' : 'missing nextScheduledDate'
-        });
-      }
-    }
-
-    console.log(`✅ Migration complete. Fixed: ${fixed.length}, Skipped: ${skipped.length}`);
-
-    res.json({
-      totalHabits: allHabitsSnapshot.size,
-      fixed: fixed.length,
-      skipped: skipped.length,
-      details: { fixed, skipped }
-    });
-
-  } catch (error) {
-    console.error('❌ Error in fixPastHabits:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * DEBUG: Check all habits in database
- */
-exports.debugAllHabits = onRequest(async (req, res) => {
-  try {
-    const now = admin.firestore.Timestamp.now();
-    const ninetySecondsAgo = admin.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 90 * 1000)
-    );
-
-    // Get ALL habits
-    const allHabitsSnapshot = await admin.firestore()
-      .collectionGroup('habits')
-      .get();
-
-    console.log(`📊 Total habits in database: ${allHabitsSnapshot.size}`);
-
-    const habitsInfo = [];
-
-    for (const doc of allHabitsSnapshot.docs) {
-      const habit = doc.data();
-      const path = doc.ref.path;
-
-      const info = {
-        path,
-        title: habit.title,
-        frequency: habit.frequency,
-        status: habit.status,
-        nextScheduledDate: habit.nextScheduledDate ? habit.nextScheduledDate.toDate().toISOString() : 'MISSING',
-        scheduledTime: habit.scheduledTime ? habit.scheduledTime.toDate().toISOString() : 'MISSING',
-        createdAt: habit.createdAt ? habit.createdAt.toDate().toISOString() : 'MISSING'
-      };
-
-      // Check if would match query (90-second window to match new scheduler)
-      if (habit.status === 'active' && habit.nextScheduledDate) {
-        const inWindow = habit.nextScheduledDate >= ninetySecondsAgo && habit.nextScheduledDate <= now;
-        info.wouldMatchQuery = inWindow;
-        info.queryWindow = `${ninetySecondsAgo.toDate().toISOString()} to ${now.toDate().toISOString()}`;
-      } else {
-        info.wouldMatchQuery = false;
-        info.reason = habit.status !== 'active' ? 'status not active' : 'missing nextScheduledDate';
-      }
-
-      habitsInfo.push(info);
-    }
-
-    res.json({
-      totalHabits: allHabitsSnapshot.size,
-      habits: habitsInfo,
-      currentTime: now.toDate().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Error in debugAllHabits:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * Clean up old malformed gallery events
- * DELETE THIS AFTER RUNNING ONCE
- */
-exports.cleanupMalformedGalleryEvents = onRequest(async (req, res) => {
-  try {
-    const userId = 'IJue7FhdmbbIzR3WG6Tzhhf2ykD2';
-
-    const gallerySnapshot = await admin.firestore()
-      .collection(`users/${userId}/gallery_events`)
-      .get();
-
-    const deleted = [];
-
-    for (const doc of gallerySnapshot.docs) {
-      const data = doc.data();
-
-      // Check if document has the OLD malformed schema
-      // Old schema has: habitId, habitTitle, messageText, profileName
-      // New schema has: id, userId, profileId, eventType, eventData
-      if (data.habitId || data.messageText || data.profileName) {
-        await doc.ref.delete();
-        deleted.push(doc.id);
-        console.log(`🗑️ Deleted malformed event: ${doc.id}`);
-      }
-    }
-
-    res.json({
-      message: 'Cleanup complete',
-      deleted: deleted,
-      count: deleted.length
-    });
-
-  } catch (error) {
-    console.error('❌ Error in cleanupMalformedGalleryEvents:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 

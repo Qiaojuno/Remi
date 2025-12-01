@@ -54,19 +54,14 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
     // MARK: - Initialization
 
     init() {
-        print("💰 RevenueCatSubscriptionService: Initialized")
     }
 
     // MARK: - Configuration
 
     func configure(apiKey: String, userId: String?) {
-        print("💰 Configuring RevenueCat with API key: \(apiKey.prefix(10))...")
-
         // Configure RevenueCat SDK
         Purchases.logLevel = .debug // Use .info or .warn in production
         Purchases.configure(withAPIKey: apiKey)
-
-        print("✅ RevenueCat SDK configured successfully")
 
         // Identify user if userId provided
         if let userId = userId {
@@ -74,7 +69,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
                 do {
                     try await identify(userId: userId)
                 } catch {
-                    print("⚠️ Failed to identify user during configuration: \(error.localizedDescription)")
+                    print("❌ RevenueCat failed to identify user: \(error.localizedDescription)")
                 }
             }
         }
@@ -85,10 +80,9 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         // Fetch initial customer info
         _Concurrency.Task {
             do {
-                let customerInfo = try await fetchCustomerInfo()
-                print("✅ Initial customer info fetched: \(customerInfo.entitlements.active.keys)")
+                _ = try await fetchCustomerInfo()
             } catch {
-                print("⚠️ Failed to fetch initial customer info: \(error.localizedDescription)")
+                print("❌ RevenueCat failed to fetch customer info: \(error.localizedDescription)")
             }
         }
     }
@@ -99,7 +93,6 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         // Listen to customer info updates from RevenueCat using AsyncStream
         customerInfoTask = _Concurrency.Task { [weak self] in
             for await customerInfo in Purchases.shared.customerInfoStream {
-                print("📡 Customer info updated: \(customerInfo.entitlements.active.keys)")
                 self?._currentCustomerInfo = customerInfo
             }
         }
@@ -111,11 +104,9 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         do {
             let customerInfo = try await fetchCustomerInfo()
             let hasEntitlement = customerInfo.entitlements[entitlementId]?.isActive == true
-
-            print("💎 Entitlement check for '\(entitlementId)': \(hasEntitlement ? "✅ ACTIVE" : "❌ INACTIVE")")
             return hasEntitlement
         } catch {
-            print("⚠️ Failed to check entitlement '\(entitlementId)': \(error.localizedDescription)")
+            print("❌ RevenueCat failed to check entitlement '\(entitlementId)': \(error.localizedDescription)")
             return false
         }
     }
@@ -124,11 +115,9 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         do {
             let customerInfo = try await fetchCustomerInfo()
             let hasActive = !customerInfo.entitlements.active.isEmpty
-
-            print("💎 Active subscription check: \(hasActive ? "✅ HAS SUBSCRIPTION" : "❌ NO SUBSCRIPTION")")
             return hasActive
         } catch {
-            print("⚠️ Failed to check active subscription: \(error.localizedDescription)")
+            print("❌ RevenueCat failed to check subscription: \(error.localizedDescription)")
             return false
         }
     }
@@ -136,51 +125,32 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
     // MARK: - Customer Info
 
     func fetchCustomerInfo() async throws -> CustomerInfo {
-        print("📡 Fetching customer info from RevenueCat...")
-
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
             _currentCustomerInfo = customerInfo
-
-            print("✅ Customer info fetched successfully")
-            print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")
-            print("   - Active subscriptions: \(customerInfo.activeSubscriptions)")
-            print("   - Original app user ID: \(customerInfo.originalAppUserId)")
-
             return customerInfo
         } catch {
-            print("❌ Failed to fetch customer info: \(error.localizedDescription)")
+            print("❌ RevenueCat failed to fetch customer info: \(error.localizedDescription)")
             throw error
         }
     }
 
     func identify(userId: String) async throws {
-        print("🔐 Identifying user with RevenueCat: \(userId)")
-
         do {
             let (customerInfo, _) = try await Purchases.shared.logIn(userId)
             _currentCustomerInfo = customerInfo
-
-            print("✅ User identified successfully with RevenueCat")
-            print("   - App user ID: \(customerInfo.originalAppUserId)")
-            print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")
         } catch {
-            print("❌ Failed to identify user: \(error.localizedDescription)")
+            print("❌ RevenueCat failed to identify user: \(error.localizedDescription)")
             throw error
         }
     }
 
     func logout() async throws {
-        print("🚪 Logging out from RevenueCat...")
-
         do {
             let customerInfo = try await Purchases.shared.logOut()
             _currentCustomerInfo = customerInfo
-
-            print("✅ User logged out successfully")
-            print("   - Now anonymous with ID: \(customerInfo.originalAppUserId)")
         } catch {
-            print("❌ Failed to logout: \(error.localizedDescription)")
+            print("❌ RevenueCat logout failed: \(error.localizedDescription)")
             throw error
         }
     }
@@ -188,19 +158,12 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
     // MARK: - Purchase Management
 
     func restorePurchases() async throws -> CustomerInfo {
-        print("♻️ Restoring purchases...")
-
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
             _currentCustomerInfo = customerInfo
-
-            print("✅ Purchases restored successfully")
-            print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")
-            print("   - Active subscriptions: \(customerInfo.activeSubscriptions)")
-
             return customerInfo
         } catch {
-            print("❌ Failed to restore purchases: \(error.localizedDescription)")
+            print("❌ RevenueCat failed to restore purchases: \(error.localizedDescription)")
             throw error
         }
     }
@@ -208,21 +171,11 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
     // MARK: - Offerings
 
     func getOfferings() async throws -> Offerings? {
-        print("📦 Fetching offerings from RevenueCat...")
-
         do {
             let offerings = try await Purchases.shared.offerings()
-
-            if let current = offerings.current {
-                print("✅ Current offering fetched: \(current.identifier)")
-                print("   - Available packages: \(current.availablePackages.map { $0.identifier })")
-            } else {
-                print("⚠️ No current offering available")
-            }
-
             return offerings
         } catch {
-            print("❌ Failed to fetch offerings: \(error.localizedDescription)")
+            print("❌ RevenueCat failed to fetch offerings: \(error.localizedDescription)")
             throw error
         }
     }

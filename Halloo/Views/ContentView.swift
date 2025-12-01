@@ -486,24 +486,16 @@ struct ContentView: View {
     // MARK: - Initialization Methods
     @MainActor
     private func initializeViewModels() {
-        print("🔵 [ContentView] initializeViewModels() CALLED")
-
         // Only initialize once - prevent recreating ViewModels on every render
         guard profileViewModel == nil else {
-            print("⚠️ [ContentView] ViewModels already initialized - skipping")
             return
         }
 
-        print("🔵 [ContentView] Initializing ViewModels for FIRST TIME...")
-
         // AppState is now initialized as @StateObject at declaration time
-        print("✅ [ContentView] AppState already initialized as @StateObject")
 
         // Create ViewModels using Container (all factory methods are @MainActor)
         onboardingViewModel = container.makeOnboardingViewModel()
         profileViewModel = container.makeProfileViewModel()
-
-        print("✅ [ContentView] ProfileViewModel created")
 
         // PHASE 2: Inject AppState into ProfileViewModel for write consolidation
         profileViewModel?.setAppState(appState)
@@ -523,100 +515,60 @@ struct ContentView: View {
         // Subscribe to auth state changes
         setupAuthStateObserver()
 
-        // ✅ ARCHITECTURE: Check auth state on launch (no local state update needed)
-        // authService.isAuthenticated is the single source of truth
+        // Check auth state on launch
         _Concurrency.Task {
             // Small delay to ensure Firebase Auth is ready
             try? await _Concurrency.Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
 
             await MainActor.run {
-                print("🔵 [ContentView] Checking auth on launch...")
                 if authService?.isAuthenticated == true {
-                    print("✅ [ContentView] User is authenticated on launch")
                     // Load all user data and setup real-time listeners
                     _Concurrency.Task {
-                        print("🔵 [ContentView] Calling appState.loadUserData()...")
                         await appState.loadUserData()
 
                         // Restore any missing photoURL references from Storage
-                        print("🔍 [ContentView] Checking for missing profile photos...")
                         await self.profileViewModel?.restoreMissingProfilePhotos()
 
                         // DEBUG: Check and clear pending notifications
                         await self.debugAndClearNotifications()
 
-                        // CRITICAL: Re-populate the duplicate prevention Set AFTER data is loaded
-                        // This prevents duplicate gallery events when SMS listener replays old confirmations
+                        // Re-populate the duplicate prevention Set AFTER data is loaded
                         await MainActor.run {
-                            print("🔵 [ContentView] Re-populating gallery event tracking set after data load...")
                             self.profileViewModel?.populateGalleryEventTrackingSet(from: appState.galleryEvents)
                         }
                     }
-                } else {
-                    print("⚠️ [ContentView] User is NOT authenticated on launch")
                 }
             }
         }
     }
 
     /// Debug function to check and clear all pending/delivered notifications
-    /// This helps identify if notifications are being scheduled despite local notifications being disabled
     private func debugAndClearNotifications() async {
         let center = UNUserNotificationCenter.current()
-
-        // Check pending notifications (scheduled but not delivered)
-        let pending = await center.pendingNotificationRequests()
-        print("📱 [Notifications] Pending notifications: \(pending.count)")
-        for request in pending {
-            print("  - ID: \(request.identifier)")
-            print("    Title: \(request.content.title)")
-            print("    Body: \(request.content.body)")
-            if let trigger = request.trigger {
-                print("    Trigger: \(trigger)")
-            }
-        }
-
-        // Check delivered notifications (already shown to user)
-        let delivered = await center.deliveredNotifications()
-        print("📱 [Notifications] Delivered notifications: \(delivered.count)")
-        for notification in delivered {
-            print("  - ID: \(notification.request.identifier)")
-            print("    Title: \(notification.request.content.title)")
-            print("    Body: \(notification.request.content.body)")
-        }
 
         // Clear ALL notifications (both pending and delivered)
         await center.removeAllPendingNotificationRequests()
         await center.removeAllDeliveredNotifications()
-        print("✅ [Notifications] Cleared all pending and delivered notifications")
     }
 
     private func setupAuthStateObserver() {
         guard let authService = authService else { return }
 
-        // ✅ ARCHITECTURE: Subscribe to auth state changes (single source of truth)
-        // No local isAuthenticated state - authService.isAuthenticated drives navigation
         authService.authStatePublisher
             .receive(on: DispatchQueue.main)
             .sink { newAuthState in
                 if newAuthState {
                     // User logged in - load data and setup listeners
-                    print("✅ [ContentView] User logged in - loading data and setting up listeners")
-
-                    // PHASE 1: Load data into AppState (single source of truth)
                     _Concurrency.Task { @MainActor in
                         await self.appState.loadUserData()
 
                         // Restore any missing photoURL references from Storage
-                        print("🔍 [ContentView] Checking for missing profile photos...")
                         await self.profileViewModel?.restoreMissingProfilePhotos()
 
                         // Refresh expired photo URLs with fresh download tokens
-                        print("🔄 [ContentView] Refreshing profile photo URLs...")
                         await self.profileViewModel?.refreshProfilePhotoURLs()
 
-                        // CRITICAL: Re-populate the duplicate prevention Set AFTER data is loaded
-                        // This prevents duplicate gallery events when SMS listener replays old confirmations
+                        // Re-populate the duplicate prevention Set AFTER data is loaded
                         self.profileViewModel?.populateGalleryEventTrackingSet(from: self.appState.galleryEvents)
                     }
 
@@ -624,8 +576,6 @@ struct ContentView: View {
                     self.profileViewModel?.loadProfiles()
                 } else {
                     // User logged out - reset all state and stop listeners
-                    print("🛑 [ContentView] User logged out - resetting state and stopping listeners")
-
                     // Reset AppState (clears data + stops listeners)
                     self.appState.reset()
 

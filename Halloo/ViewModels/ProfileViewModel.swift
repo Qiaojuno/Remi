@@ -387,8 +387,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     }
 
     deinit {
-        print("💀 [ProfileViewModel] DEINIT CALLED - ProfileViewModel is being deallocated!")
-        print("   - Cancellables count: \(cancellables.count)")
     }
 
     // MARK: - AppState Injection (Phase 2)
@@ -397,7 +395,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     /// Called by ContentView after ProfileViewModel initialization
     func setAppState(_ appState: AppState) {
         self.appState = appState
-        print("✅ [ProfileViewModel] AppState reference injected")
 
         // Populate profilesWithGalleryEvents Set from existing gallery events
         // This prevents duplicate gallery events when app relaunches and SMS listener replays old confirmations
@@ -418,11 +415,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     func populateGalleryEventTrackingSet(from existingEvents: [GalleryHistoryEvent]) {
         let profileCreatedEvents = existingEvents.filter { $0.eventType == .profileCreated }
         profilesWithGalleryEvents = Set(profileCreatedEvents.map { $0.profileId })
-
-        print("✅ [ProfileViewModel] Populated gallery event tracking set with \(profilesWithGalleryEvents.count) profile IDs")
-        if !profilesWithGalleryEvents.isEmpty {
-            print("   Profile IDs with gallery events: \(profilesWithGalleryEvents)")
-        }
     }
 
     // MARK: - Setup Methods
@@ -457,7 +449,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         let profileUpdatesCancellable = dataSyncCoordinator.profileUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] updatedProfile in
-                print("📩 [ProfileViewModel] Received profile update: \(updatedProfile.id)")
                 self?.handleProfileUpdate(updatedProfile)
             }
         cancellables.insert(profileUpdatesCancellable)
@@ -488,7 +479,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
                 // When a new gallery event is created, add its profileId to the Set
                 if event.eventType == .profileCreated {
                     self?.profilesWithGalleryEvents.insert(event.profileId)
-                    print("🔵 [ProfileViewModel] Added profile \(event.profileId) to gallery event tracking set (now has \(self?.profilesWithGalleryEvents.count ?? 0) profiles)")
                 }
             }
         cancellables.insert(galleryCancellable)
@@ -681,10 +671,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             // Update AppState
             if let appState = self.appState {
                 appState.addProfile(profile)
-                print("✅ [ProfileViewModel] Profile added to AppState: \(profile.name)")
-            } else {
-                // FALLBACK: Keep old behavior if AppState not injected (Phase 1 compatibility)
-                print("⚠️ [ProfileViewModel] AppState not available, profile will be added via broadcast")
             }
 
             // Update confirmation status and reset form
@@ -787,8 +773,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     private func deleteProfileAsync(_ profile: ElderlyProfile) async {
         // ✅ OPTIMISTIC UI UPDATE: Remove from UI immediately (before async deletion)
         await MainActor.run {
-            print("🎬 [ProfileViewModel] Optimistic delete - removing '\(profile.name)' from UI immediately")
-
             // PHASE 4: AppState is always available - delete directly
             self.deleteProfile(profile.id, profileName: profile.name)
 
@@ -798,9 +782,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
 
         // 🔥 Background deletion (5+ seconds for nested data)
         do {
-            print("🗑️ [ProfileViewModel] Starting background deletion for '\(profile.name)'...")
             try await databaseService.deleteElderlyProfile(profile.id, userId: profile.userId)
-            print("✅ [ProfileViewModel] Background deletion completed for '\(profile.name)'")
 
         } catch {
             // ❌ ERROR RECOVERY: If deletion fails, restore profile to UI
@@ -867,7 +849,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     /// Useful for recovering from bugs where photoURL was accidentally cleared.
     func restoreMissingProfilePhotos() async {
         guard let userId = authService.currentUser?.uid else {
-            print("⚠️ [ProfileViewModel] Cannot restore photos - no authenticated user")
             return
         }
 
@@ -879,8 +860,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
 
             // Check if photo exists in Storage
             if let photoURL = try? await databaseService.getProfilePhotoURL(for: profile.id, userId: profile.userId) {
-                print("✅ [ProfileViewModel] Restored photoURL for '\(profile.name)'")
-
                 // Create updated profile with restored photoURL
                 var updatedProfile = profile
                 updatedProfile.photoURL = photoURL
@@ -898,8 +877,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
                 }
             }
         }
-
-        print("✅ [ProfileViewModel] Photo restoration check complete")
     }
 
     /// Refreshes expired or invalid photo URLs for profiles
@@ -909,7 +886,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     /// Call this when AsyncImage fails to load a profile photo despite having a photoURL.
     func refreshProfilePhotoURLs() async {
         guard let userId = authService.currentUser?.uid else {
-            print("⚠️ [ProfileViewModel] Cannot refresh photos - no authenticated user")
             return
         }
 
@@ -923,10 +899,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             if let freshPhotoURL = try? await databaseService.getProfilePhotoURL(for: profile.id, userId: profile.userId) {
                 // Only update if URL changed
                 if freshPhotoURL != profile.photoURL {
-                    print("🔄 [ProfileViewModel] Refreshing photoURL for '\(profile.name)'")
-                    print("   Old URL token: \(profile.photoURL?.split(separator: "=").last ?? "none")")
-                    print("   New URL token: \(freshPhotoURL.split(separator: "=").last ?? "none")")
-
                     // CRITICAL: Remove old cached image before updating
                     // This ensures the UI will use the new URL instead of stale cache
                     await MainActor.run {
@@ -950,15 +922,12 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
                         // This ensures ProfileImageView immediately shows the updated photo
                         await self.appState?.imageCache.preloadProfileImages([updatedProfile])
 
-                        print("✅ [ProfileViewModel] Refreshed photoURL for '\(profile.name)'")
                     } catch {
                         print("❌ [ProfileViewModel] Failed to refresh photoURL for '\(profile.name)': \(error.localizedDescription)")
                     }
                 }
             }
         }
-
-        print("✅ [ProfileViewModel] Photo URL refresh check complete")
     }
 
     // MARK: - SMS Confirmation Management
@@ -1066,7 +1035,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         // PHASE 4: AppState handles profile updates via DataSyncCoordinator
         // This handler is redundant now - AppState.handleProfileUpdate() already updates the array
         // Keeping for backward compatibility but making it a no-op except for confirmation status
-        print("📩 [ProfileViewModel] Profile update received: \(updatedProfile.name) - AppState handles update")
         updateConfirmationStatuses()
     }
     
@@ -1225,7 +1193,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         _Concurrency.Task {
             do {
                 try await databaseService.updateElderlyProfile(updatedProfile)
-                print("✅ [ProfileViewModel] Opt-out saved to Firestore")
 
                 // Broadcast update to family members
                 dataSyncCoordinator.broadcastProfileUpdate(updatedProfile)
@@ -1265,8 +1232,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             ])
         }
 
-        print("📱 [ProfileViewModel] Requesting re-subscription for \(profile.name)")
-
         // Send new opt-in request SMS
         let message = """
         Hello \(profile.name)! Your family would like to resume sending you helpful daily reminders via text.
@@ -1289,8 +1254,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             confirmationStatus[profile.id] = .pending
             confirmationMessages[profile.id] = "Re-subscription request sent. Waiting for YES reply..."
         }
-
-        print("✅ [ProfileViewModel] Re-subscription SMS sent to \(profile.phoneNumber)")
     }
 
     // MARK: - Validation Methods
@@ -1505,16 +1468,14 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     /// Cleans up any partially created profile data and resets onboarding state.
     /// If profile was already created, it should be deleted from database.
     func cancelProfileOnboarding() {
-        print("🔙 BACK: Cancelling profile onboarding from step: \(profileOnboardingStep)")
         // Clean up partially created profile if it exists
         if let profile = onboardingProfile {
             deleteProfile(profile)
         }
-        
+
         resetOnboardingState()
         showingProfileOnboarding = false
         shouldDismissOnboarding = true // Trigger presentation dismissal
-        print("🔙 BACK: showingProfileOnboarding set to false, dismissal triggered")
     }
     
     /// Completes the profile onboarding flow successfully
@@ -1650,7 +1611,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
 
         // Check if gallery event already created for this profile
         if profilesWithGalleryEvents.contains(profile.id) {
-            print("ℹ️ [ProfileViewModel] Gallery event already created for profile \(profile.name) - skipping duplicate")
             return
         }
 
@@ -1673,8 +1633,6 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
 
                 // Broadcast gallery event update to gallery views
                 self.dataSyncCoordinator.broadcastGalleryEventUpdate(galleryEvent)
-
-                print("✅ [ProfileViewModel] Created gallery event for profile \(profile.name)")
 
             } catch {
                 // Log error but don't interrupt profile confirmation flow

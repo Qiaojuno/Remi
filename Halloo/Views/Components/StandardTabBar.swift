@@ -231,6 +231,6 @@ struct TabBarItem: View {
     StandardTabBar(
         selectedTab: .constant(0),
         isCreateExpanded: .constant(false),
-        onCreateTapped: { print("Create tapped") }
+        onCreateTapped: { }
     )
 }

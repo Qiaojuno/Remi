@@ -200,18 +200,12 @@ final class AppState: ObservableObject {
     /// - Note: Uses Swift concurrency async let for parallel loading
     /// - Throws: Re-throws Firebase errors for display
     func loadUserData() async {
-        print("🔵 [AppState] loadUserData() called")
-
         guard let userId = authService.currentUser?.uid else {
-            print("⚠️ [AppState] Cannot load data - no authenticated user")
             return
         }
 
-        print("🔵 [AppState] User ID: \(userId)")
-
         // Prevent duplicate loads if already loading
         guard !isLoading else {
-            print("⚠️ [AppState] Already loading data, skipping duplicate request")
             return
         }
 
@@ -219,8 +213,6 @@ final class AppState: ObservableObject {
         defer { isLoading = false }
 
         do {
-            print("🔵 [AppState] Starting to load profiles, tasks, and gallery events...")
-
             // Load profiles, tasks, and gallery events in parallel for faster startup
             // IMPORTANT: Gallery events must be loaded BEFORE setupFirebaseListeners()
             // to prevent duplicate gallery events when SMS listener replays old confirmations
@@ -232,30 +224,21 @@ final class AppState: ObservableObject {
             self.tasks = try await tasksTask
             self.galleryEvents = try await galleryEventsTask
 
-            print("✅ [AppState] Loaded data: \(profiles.count) profiles, \(tasks.count) tasks, \(galleryEvents.count) gallery events")
-            print("📊 [AppState] Gallery events IDs: \(galleryEvents.map { $0.id })")
-            print("📊 [AppState] Gallery events types: \(galleryEvents.map { $0.eventType.rawValue })")
-
             // Refresh expired photo URLs with fresh download tokens BEFORE caching
-            print("🔄 [AppState] Refreshing profile photo URLs with fresh tokens...")
             await refreshProfilePhotoURLs()
 
             // Pre-load all photos into memory cache to prevent AsyncImage flicker
             // Load both profile photos and gallery photos in parallel for faster startup
             async let profilePhotosTask: Void = imageCache.preloadProfileImages(profiles)
-            
+
             async let galleryPhotosTask: Void = imageCache.preloadGalleryPhotos(galleryEvents)
 
             _ = await profilePhotosTask
             _ = await galleryPhotosTask
 
-            print("🔵 [AppState] About to call setupFirebaseListeners...")
-
             // Setup Firebase real-time listeners for multi-device sync
             // This enables automatic updates when data changes on other devices or via webhooks
             dataSyncCoordinator.setupFirebaseListeners(userId: userId)
-
-            print("✅ [AppState] setupFirebaseListeners completed")
 
         } catch {
             print("❌ [AppState] Failed to load user data: \(error.localizedDescription)")
@@ -286,7 +269,6 @@ final class AppState: ObservableObject {
     func addProfile(_ profile: ElderlyProfile) {
         // Check for duplicates (prevents double-add from local + listener)
         if let existingIndex = profiles.firstIndex(where: { $0.id == profile.id }) {
-            print("⚠️ [AppState] Profile already exists, updating instead: \(profile.id)")
             profiles[existingIndex] = profile
             dataSyncCoordinator.broadcastProfileUpdate(profile)
             return
@@ -294,8 +276,6 @@ final class AppState: ObservableObject {
 
         profiles.append(profile)
         dataSyncCoordinator.broadcastProfileUpdate(profile)
-
-        print("✅ [AppState] Added profile: \(profile.name) (ID: \(profile.id))")
     }
 
     /// Update an existing profile
@@ -310,10 +290,6 @@ final class AppState: ObservableObject {
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
             profiles[index] = profile
             dataSyncCoordinator.broadcastProfileUpdate(profile)
-
-            print("✅ [AppState] Updated profile: \(profile.name) (ID: \(profile.id))")
-        } else {
-            print("⚠️ [AppState] Profile not found for update: \(profile.id)")
         }
     }
 
@@ -330,8 +306,6 @@ final class AppState: ObservableObject {
 
         // Also remove all tasks associated with this profile
         tasks.removeAll { $0.profileId == profileId }
-
-        print("✅ [AppState] Deleted profile: \(profileId) and associated tasks")
     }
 
     // MARK: - Task Mutations (Called by TaskViewModel)
@@ -349,7 +323,6 @@ final class AppState: ObservableObject {
     func addTask(_ task: Task) {
         // Check for duplicates (prevents double-add from local + listener)
         if let existingIndex = tasks.firstIndex(where: { $0.id == task.id }) {
-            print("⚠️ [AppState] Task already exists, updating instead: \(task.id)")
             tasks[existingIndex] = task
             dataSyncCoordinator.broadcastTaskUpdate(task)
             return
@@ -357,8 +330,6 @@ final class AppState: ObservableObject {
 
         tasks.append(task)
         dataSyncCoordinator.broadcastTaskUpdate(task)
-
-        print("✅ [AppState] Added task: \(task.title) (ID: \(task.id))")
     }
 
     /// Update an existing task
@@ -373,10 +344,6 @@ final class AppState: ObservableObject {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index] = task
             dataSyncCoordinator.broadcastTaskUpdate(task)
-
-            print("✅ [AppState] Updated task: \(task.title) (ID: \(task.id))")
-        } else {
-            print("⚠️ [AppState] Task not found for update: \(task.id)")
         }
     }
 
@@ -390,8 +357,6 @@ final class AppState: ObservableObject {
     /// - Note: Task must already be deleted from Firestore by caller
     func deleteTask(_ taskId: String) {
         tasks.removeAll { $0.id == taskId }
-
-        print("✅ [AppState] Deleted task: \(taskId)")
     }
 
     // MARK: - Photo URL Refresh
@@ -411,10 +376,6 @@ final class AppState: ObservableObject {
     /// 4. Update profile in Firestore and local state
     /// 5. Clear old cached image so fresh one will be downloaded
     private func refreshProfilePhotoURLs() async {
-        print("🔄 [AppState] Checking \(profiles.count) profiles for expired photo URLs...")
-
-        var refreshCount = 0
-
         for profile in profiles {
             // Only refresh if profile has a photoURL (skip profiles without photos)
             guard let oldPhotoURL = profile.photoURL, !oldPhotoURL.isEmpty else {
@@ -424,7 +385,6 @@ final class AppState: ObservableObject {
             do {
                 // Get fresh download URL from Firebase Storage
                 guard let freshPhotoURL = try await databaseService.getProfilePhotoURL(for: profile.id, userId: profile.userId) else {
-                    print("⚠️ [AppState] No photo found in Storage for '\(profile.name)'")
                     continue
                 }
 
@@ -434,10 +394,6 @@ final class AppState: ObservableObject {
 
                 // Only update if token changed (indicates expired URL)
                 if oldToken != newToken {
-                    print("🔄 [AppState] Refreshing expired photoURL for '\(profile.name)'")
-                    print("   Old token: ...\(oldToken.suffix(12))")
-                    print("   New token: ...\(newToken.suffix(12))")
-
                     // Remove old cached image BEFORE updating URL
                     imageCache.removeCachedImage(for: oldPhotoURL)
 
@@ -452,19 +408,12 @@ final class AppState: ObservableObject {
                     if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
                         profiles[index] = updatedProfile
                     }
-
-                    refreshCount += 1
-                    print("✅ [AppState] Refreshed photoURL for '\(profile.name)'")
-                } else {
-                    print("✅ [AppState] Photo URL still valid for '\(profile.name)'")
                 }
 
             } catch {
                 print("❌ [AppState] Failed to refresh photoURL for '\(profile.name)': \(error.localizedDescription)")
             }
         }
-
-        print("✅ [AppState] Photo URL refresh complete - \(refreshCount) URLs updated")
     }
 
     // MARK: - Handlers (Updates from DataSyncCoordinator - Other Devices)
@@ -476,10 +425,8 @@ final class AppState: ObservableObject {
     private func handleProfileUpdate(_ profile: ElderlyProfile) {
         if let index = profiles.firstIndex(where: { $0.id == profile.id }) {
             profiles[index] = profile
-            print("🔄 [AppState] Synced profile update from remote: \(profile.name)")
         } else {
             profiles.append(profile)
-            print("🔄 [AppState] Synced new profile from remote: \(profile.name)")
         }
     }
 
@@ -487,10 +434,8 @@ final class AppState: ObservableObject {
     private func handleTaskUpdate(_ task: Task) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index] = task
-            print("🔄 [AppState] Synced task update from remote: \(task.title)")
         } else {
             tasks.append(task)
-            print("🔄 [AppState] Synced new task from remote: \(task.title)")
         }
     }
 
@@ -504,8 +449,6 @@ final class AppState: ObservableObject {
             var task = tasks[taskIndex]
             task.markCompleted()
             tasks[taskIndex] = task
-
-            print("🔄 [AppState] Task completed via SMS: \(task.title)")
         }
     }
 
@@ -519,15 +462,11 @@ final class AppState: ObservableObject {
         if let index = galleryEvents.firstIndex(where: { $0.id == event.id }) {
             // Event already exists - update it
             galleryEvents[index] = event
-            print("🔄 [AppState] Updated existing gallery event: \(event.id) (type: \(event.eventType.rawValue))")
-            print("   Total events in memory: \(galleryEvents.count)")
         } else {
             // New event - add it
             galleryEvents.append(event)
             // Keep sorted by creation date (most recent first)
             galleryEvents.sort { $0.createdAt > $1.createdAt }
-            print("✅ [AppState] Added new gallery event: \(event.id) (type: \(event.eventType.rawValue))")
-            print("   Total events in memory: \(galleryEvents.count)")
 
             // Pre-cache new photo for card stack performance
             // This ensures the photo is cached before the user swipes to it
@@ -554,8 +493,6 @@ final class AppState: ObservableObject {
     /// Called by ContentView when auth state changes to unauthenticated.
     /// Ensures clean state for next login and prevents memory leaks.
     func reset() {
-        print("🧹 [AppState] Resetting all state and stopping listeners...")
-
         // Clear all user data
         currentUser = nil
         profiles.removeAll()
@@ -576,8 +513,6 @@ final class AppState: ObservableObject {
         // Re-setup subscriptions for next login
         // This ensures when user logs back in, AppState will receive updates
         setupSubscriptions()
-
-        print("✅ [AppState] Reset complete - all data cleared and listeners stopped")
     }
 }
 

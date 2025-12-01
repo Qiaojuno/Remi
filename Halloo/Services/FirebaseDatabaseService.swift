@@ -128,19 +128,13 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     }
 
     func getElderlyProfiles(for userId: String) async throws -> [ElderlyProfile] {
-        print("🔍 [FirebaseDB] Loading profiles for userId: \(userId)")
-        print("🔍 [FirebaseDB] Query path: users/\(userId)/profiles")
-
         let snapshot = try await CollectionPath.userProfiles(userId: userId)
             .collection(in: db)
             .order(by: "createdAt")
             .getDocuments()
 
-        print("🔍 [FirebaseDB] Found \(snapshot.documents.count) profile documents")
-
         let profiles = try snapshot.documents.map { document in
             let profile = try decodeFromFirestore(document.data(), as: ElderlyProfile.self)
-            print("🔍 [FirebaseDB] Profile: '\(profile.name)' (id: \(profile.id), userId: \(profile.userId))")
             return profile
         }
 
@@ -155,12 +149,8 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     }
 
     func deleteElderlyProfile(_ profileId: String, userId: String) async throws {
-        print("ℹ️ [Schema] Profile delete requested - profileId: \(profileId), userId: \(userId)")
-
         // ✅ Use direct path deletion (no collection group query needed)
         try await deleteProfileRecursively(profileId, userId: userId)
-
-        print("✅ [Schema] Profile deleted successfully - profileId: \(profileId)")
     }
 
     func getConfirmedProfiles(for userId: String) async throws -> [ElderlyProfile] {
@@ -329,12 +319,9 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
         return snapshot.documents.compactMap { document in
             do {
-                // Log document structure for debugging
-                let data = document.data()
-                print("🔍 [FirebaseDatabaseService] Task document keys: \(data.keys.joined(separator: ", "))")
-                return try decodeFromFirestore(data, as: Task.self)
+                return try decodeFromFirestore(document.data(), as: Task.self)
             } catch {
-                print("⚠️ [FirebaseDatabaseService] Skipping task \(document.documentID): \(error.localizedDescription)")
+                print("⚠️ [FirebaseDatabaseService] Skipping corrupted task \(document.documentID): \(error.localizedDescription)")
                 return nil
             }
         }
@@ -371,9 +358,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
         } catch {
             #if DEBUG
-            print("❌ [FirebaseDatabaseService] Delete failed with error: \(error)")
-            print("   Error type: \(type(of: error))")
-            print("   Error description: \(error.localizedDescription)")
+            print("❌ [FirebaseDatabaseService] Delete failed: \(error.localizedDescription)")
             #endif
             throw error
         }
@@ -548,16 +533,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
         do {
             _ = try await photoRef.putDataAsync(photoData, metadata: metadata)
-        } catch {
-            print("❌ [Storage] putDataAsync() FAILED with error: \(error.localizedDescription)")
-            throw error
-        }
-
-        do {
             let downloadURL = try await photoRef.downloadURL()
             return downloadURL.absoluteString
         } catch {
-            print("❌ [Storage] downloadURL() FAILED with error: \(error.localizedDescription)")
+            print("❌ [Storage] Profile photo upload failed (\(profileId)): \(error.localizedDescription)")
             throw error
         }
     }
@@ -575,10 +554,8 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
         do {
             let downloadURL = try await photoRef.downloadURL()
-            print("✅ [Storage] Found photo for profile \(profileId): \(downloadURL.absoluteString)")
             return downloadURL.absoluteString
         } catch {
-            print("ℹ️ [Storage] No photo found for profile \(profileId)")
             return nil
         }
     }
@@ -652,8 +629,6 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     func observeUserGalleryEvents(_ userId: String) -> AnyPublisher<[GalleryHistoryEvent], Error> {
         let subject = PassthroughSubject<[GalleryHistoryEvent], Error>()
 
-        print("📸 [FirebaseDatabaseService] Setting up gallery events listener for user: \(userId)")
-
         // Observe gallery_events collection under user
         // CRITICAL: Use limit() to prevent loading all events into memory
         let listener = CollectionPath.userGalleryEvents(userId: userId)
@@ -668,7 +643,6 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                 }
 
                 guard let snapshot = snapshot else {
-                    print("⚠️ [FirebaseDatabaseService] Gallery events listener: no snapshot")
                     subject.send([])
                     return
                 }
@@ -680,43 +654,20 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                     .compactMap { change -> GalleryHistoryEvent? in
                         do {
                             let event = try self.decodeFromFirestore(change.document.data(), as: GalleryHistoryEvent.self)
-                            print("📸 [FirebaseDatabaseService] New gallery event detected: \(event.id) (type: \(event.eventType.rawValue))")
                             return event
                         } catch {
-                            print("❌ [FirebaseDatabaseService] Failed to decode gallery event \(change.document.documentID) - SKIPPING")
-                            print("📄 Raw Firestore data: \(change.document.data())")
-                            print("🔍 Decoding error: \(error)")
-                            if let decodingError = error as? DecodingError {
-                                switch decodingError {
-                                case .keyNotFound(let key, let context):
-                                    print("   Missing key: \(key.stringValue)")
-                                    print("   Context: \(context.debugDescription)")
-                                case .valueNotFound(let type, let context):
-                                    print("   Missing value for type: \(type)")
-                                    print("   Context: \(context.debugDescription)")
-                                case .typeMismatch(let type, let context):
-                                    print("   Type mismatch for: \(type)")
-                                    print("   Context: \(context.debugDescription)")
-                                case .dataCorrupted(let context):
-                                    print("   Data corrupted: \(context.debugDescription)")
-                                @unknown default:
-                                    print("   Unknown decoding error")
-                                }
-                            }
-                            // Return nil to skip this event instead of crashing the listener
+                            print("❌ [FirebaseDatabaseService] Failed to decode gallery event \(change.document.documentID): \(error.localizedDescription)")
                             return nil
                         }
                     }
 
                 // Only send if we have new events
                 if !newEvents.isEmpty {
-                    print("📸 [FirebaseDatabaseService] Sending \(newEvents.count) new gallery events to subscribers")
                     subject.send(newEvents)
                 }
             }
 
         listeners.append(listener)
-        print("✅ [FirebaseDatabaseService] Gallery events listener registered")
         return subject.eraseToAnyPublisher()
     }
 
@@ -731,8 +682,6 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     func observeIncomingSMSMessages(_ userId: String) -> AnyPublisher<SMSResponse, Error> {
         let subject = PassthroughSubject<SMSResponse, Error>()
 
-        print("📱 [FirebaseDatabaseService] Setting up incoming SMS listener for user: \(userId)")
-
         // Use collection group query to observe all messages across user's profiles
         // Only listen for NEW messages (direction: inbound, not yet processed)
         let listener = db.collectionGroup("messages")
@@ -744,18 +693,14 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                 if let error = error {
                     let nsError = error as NSError
                     print("❌ [FirebaseDatabaseService] SMS listener error: \(error.localizedDescription)")
-                    print("   - Error code: \(nsError.code)")
-                    print("   - Error domain: \(nsError.domain)")
                     if nsError.code == 9 {
-                        print("   - ⚠️ FAILED_PRECONDITION: This usually means a Firestore index is missing or still building")
-                        print("   - Check Firebase Console > Firestore > Indexes")
+                        print("   ⚠️ FAILED_PRECONDITION: Firestore index missing or building - check Firebase Console")
                     }
                     subject.send(completion: .failure(error))
                     return
                 }
 
                 guard let snapshot = snapshot else {
-                    print("⚠️ [FirebaseDatabaseService] SMS listener: no snapshot")
                     return
                 }
 
@@ -764,48 +709,31 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                     guard change.type == .added else { continue }
 
                     let data = change.document.data()
-                    print("📩 [FirebaseDatabaseService] New incoming SMS detected:")
-                    print("   - Document ID: \(change.document.documentID)")
-                    print("   - From: \(data["fromPhone"] as? String ?? "unknown")")
-                    print("   - Message: \(data["messageBody"] as? String ?? "empty")")
-                    print("   - Direction: \(data["direction"] as? String ?? "unknown")")
-
                     do {
                         // Convert Firestore message to SMSResponse
                         let smsResponse = try self.convertMessageToSMSResponse(data, documentId: change.document.documentID)
-                        print("✅ [FirebaseDatabaseService] SMS converted to SMSResponse - broadcasting")
                         subject.send(smsResponse)
                     } catch {
-                        print("❌ [FirebaseDatabaseService] Failed to convert message: \(error.localizedDescription)")
+                        print("❌ [FirebaseDatabaseService] Failed to convert SMS message \(change.document.documentID): \(error.localizedDescription)")
                     }
                 }
             }
 
         listeners.append(listener)
-        print("✅ [FirebaseDatabaseService] SMS listener registered")
         return subject.eraseToAnyPublisher()
     }
 
     /// Converts Firestore message document to SMSResponse model
     private func convertMessageToSMSResponse(_ data: [String: Any], documentId: String) throws -> SMSResponse {
-        print("🔍 [FirebaseDatabaseService] Converting message document:")
-        print("   - Raw data keys: \(data.keys.joined(separator: ", "))")
-        print("   - fromPhone: \(data["fromPhone"] ?? "nil")")
-        print("   - profileId: \(data["profileId"] ?? "nil")")
-        print("   - userId: \(data["userId"] ?? "nil")")
-
         // Extract fields from Firestore message
         guard let _ = data["fromPhone"] as? String,
               let messageBody = data["messageBody"] as? String,
               let receivedAtTimestamp = data["receivedAt"] as? Timestamp,
               let userId = data["userId"] as? String,
               let profileId = data["profileId"] as? String else {
-            print("❌ [FirebaseDatabaseService] Missing required fields!")
             throw NSError(domain: "FirebaseDatabaseService", code: -1,
                          userInfo: [NSLocalizedDescriptionKey: "Missing required message fields"])
         }
-
-        print("✅ [FirebaseDatabaseService] Successfully extracted profileId: \(profileId)")
 
         _ = receivedAtTimestamp.dateValue()
         _ = data["twilioSid"] as? String
@@ -978,10 +906,9 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     }
     
     // MARK: - Data Synchronization
-    
+
     func syncUserData(for userId: String) async throws {
         // Placeholder implementation
-        print("Syncing user data for: \(userId)")
     }
     
     func getLastSyncTimestamp(for userId: String) async throws -> Date? {
@@ -1020,7 +947,6 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     
     func importUserData(_ data: UserDataExport, for userId: String) async throws {
         // Placeholder implementation
-        print("Importing user data for: \(userId)")
     }
     
     // MARK: - Helper Methods
@@ -1290,15 +1216,11 @@ extension FirebaseDatabaseService {
         let verifyMessages = try await profileRef.collection("messages").limit(to: 1).getDocuments()
 
         if !verifyHabits.isEmpty || !verifyMessages.isEmpty {
-            print("❌ [Schema] ORPHANED DATA DETECTED - profileId: \(profileId), remainingHabits: \(verifyHabits.documents.count), remainingMessages: \(verifyMessages.documents.count)")
-        } else {
-            print("✅ [Schema] Profile data cleaned up successfully - profileId: \(profileId)")
+            print("❌ [Schema] ORPHANED DATA DETECTED - profileId: \(profileId), habits: \(verifyHabits.documents.count), messages: \(verifyMessages.documents.count)")
         }
 
         // Update user's profile count
         try await updateUserProfileCount(userId)
-
-        print("✅ [Schema] Delete profile recursively completed - deletedHabits: \(habitsSnapshot.documents.count), deletedMessages: \(messagesSnapshot.documents.count), dereferencedPhotoEvents: \(dereferencedPhotos), deletedTextOnlyEvents: \(deletedTextOnlyEvents)")
     }
 }
 

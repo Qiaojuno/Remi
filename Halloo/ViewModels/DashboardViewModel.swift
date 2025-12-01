@@ -429,7 +429,6 @@ final class DashboardViewModel: ObservableObject, AppStateViewModel {
     /// Kept for backward compatibility during Phase 4 transition
     func setProfileViewModel(_ profileViewModel: ProfileViewModel) {
         self.profileViewModel = profileViewModel
-        print("⚠️ [DashboardViewModel] setProfileViewModel() deprecated - use setAppState() instead")
 
         // If AppState not set yet, auto-select from ProfileViewModel
         if appState == nil {
@@ -515,8 +514,6 @@ final class DashboardViewModel: ObservableObject, AppStateViewModel {
         // Update dashboard summary and overdue tasks
         self.updateDashboardSummary()
         self.identifyOverdueTasks()
-
-        print("✅ [DashboardViewModel] Updated \(dashboardTasks.count) tasks from AppState")
     }
     
     deinit {

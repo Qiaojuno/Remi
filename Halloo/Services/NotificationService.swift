@@ -8,7 +8,7 @@ class NotificationService: NotificationServiceProtocol {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             return granted
         } catch {
-            print("Error requesting notification permissions: \(error.localizedDescription)")
+            print("❌ Notification permission request failed: \(error.localizedDescription)")
             return false
         }
     }

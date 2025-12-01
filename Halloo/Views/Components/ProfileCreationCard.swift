@@ -522,7 +522,7 @@ struct ProfileCreationCard: View {
 
         ProfileCreationCard(
             isPresented: .constant(true),
-            onDismiss: { print("Dismissed") }
+            onDismiss: { }
         )
         .environmentObject(AppState(
             authService: Container.shared.resolve(AuthenticationServiceProtocol.self),

@@ -58,12 +58,10 @@ final class SubscriptionManager: ObservableObject {
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
             let hasAccess = customerInfo.entitlements[Self.unlimitedEntitlementID]?.isActive == true
-
-            print("💎 [SubscriptionManager] Unlimited access check: \(hasAccess ? "✅ GRANTED" : "❌ DENIED")")
             return hasAccess
 
         } catch {
-            print("⚠️ [SubscriptionManager] Failed to check unlimited access: \(error.localizedDescription)")
+            print("❌ [SubscriptionManager] Failed to check unlimited access: \(error.localizedDescription)")
             return false
         }
     }
@@ -85,12 +83,10 @@ final class SubscriptionManager: ObservableObject {
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
             let hasActive = !customerInfo.entitlements.active.isEmpty
-
-            print("💎 [SubscriptionManager] Active subscription check: \(hasActive ? "✅ HAS SUBSCRIPTION" : "❌ NO SUBSCRIPTION")")
             return hasActive
 
         } catch {
-            print("⚠️ [SubscriptionManager] Failed to check active subscription: \(error.localizedDescription)")
+            print("❌ [SubscriptionManager] Failed to check active subscription: \(error.localizedDescription)")
             return false
         }
     }
@@ -107,21 +103,13 @@ final class SubscriptionManager: ObservableObject {
         params: [String: Any]? = nil,
         paywallOverrides: PaywallOverrides? = nil
     ) {
-        print("🎨 [SubscriptionManager] Presenting paywall for placement: \(event)")
-
-        Superwall.shared.register(placement: event, params: params, handler: nil, feature: {
-            print("✅ [SubscriptionManager] User has access - feature executed")
-        })
+        Superwall.shared.register(placement: event, params: params, handler: nil, feature: {})
     }
 
     /// Present Superwall paywall with custom identifier (placement)
     /// - Parameter placement: Placement identifier from Superwall dashboard
     func presentPaywallByPlacement(_ placement: String) {
-        print("🎨 [SubscriptionManager] Presenting paywall for placement: \(placement)")
-
-        Superwall.shared.register(placement: placement) {
-            print("✅ [SubscriptionManager] User has access to placement: \(placement)")
-        }
+        Superwall.shared.register(placement: placement) {}
     }
 
     // MARK: - Customer Center (RevenueCat)
@@ -146,7 +134,7 @@ final class SubscriptionManager: ObservableObject {
             return expirationDates.max()
 
         } catch {
-            print("⚠️ [SubscriptionManager] Failed to get expiration date: \(error.localizedDescription)")
+            print("❌ [SubscriptionManager] Failed to get expiration date: \(error.localizedDescription)")
             return nil
         }
     }
@@ -161,7 +149,7 @@ final class SubscriptionManager: ObservableObject {
             return customerInfo.activeSubscriptions.first
 
         } catch {
-            print("⚠️ [SubscriptionManager] Failed to get active product: \(error.localizedDescription)")
+            print("❌ [SubscriptionManager] Failed to get active product: \(error.localizedDescription)")
             return nil
         }
     }
@@ -171,14 +159,8 @@ final class SubscriptionManager: ObservableObject {
     /// Restore previous purchases
     /// - Returns: True if restoration was successful
     func restorePurchases() async -> Bool {
-        print("♻️ [SubscriptionManager] Restoring purchases...")
-
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
-
-            print("✅ [SubscriptionManager] Purchases restored successfully")
-            print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")
-
             return !customerInfo.entitlements.active.isEmpty
 
         } catch {

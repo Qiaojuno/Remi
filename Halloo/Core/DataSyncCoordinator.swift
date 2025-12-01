@@ -167,7 +167,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     /// care task responses, confirmation messages, and help requests for
     /// coordinated family response and care decision-making.
     var smsResponses: AnyPublisher<SMSResponse, Never> {
-        print("🔍 [DataSyncCoordinator] smsResponses publisher accessed - creating new subscription")
         return smsResponsesSubject.eraseToAnyPublisher()
     }
     
@@ -309,8 +308,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     /// Called when user logs out to prevent memory leaks and ensure clean state.
     /// Stops all real-time Firebase listeners and cancels all Combine subscriptions.
     func stopListeners() {
-        print("🛑 [DataSyncCoordinator] Stopping all Firebase listeners and subscriptions")
-
         // Cancel all Firebase listeners and Combine subscriptions
         cancellables.removeAll()
 
@@ -331,8 +328,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
         syncStatus = .idle
         syncProgress = 0.0
         pendingChanges = 0
-
-        print("✅ [DataSyncCoordinator] All listeners stopped and state cleared")
     }
     
     // MARK: - Initialization
@@ -347,12 +342,9 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
         // Enable cross-device notification handling (foreground/background)
         setupNotificationHandling()
 
-        // 🔥 Connect Firebase real-time listeners for instant sync (if user authenticated)
+        // Connect Firebase real-time listeners for instant sync (if user authenticated)
         if let userId = userId {
             setupFirebaseListeners(userId: userId)
-            print("✅ [DataSyncCoordinator] Firebase listeners connected for user: \(userId)")
-        } else {
-            print("⚠️ [DataSyncCoordinator] No userId provided - Firebase listeners not connected")
         }
 
         // Perform initial data sync
@@ -433,10 +425,7 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
                 receiveValue: { [weak self] events in
                     // Broadcast each NEW event to AppState via publisher
                     // Note: Since listener now uses documentChanges, we only receive NEW events
-                    print("📸 [DataSyncCoordinator] Received \(events.count) new gallery events from listener")
-
                     events.forEach { event in
-                        print("📸 [DataSyncCoordinator] Broadcasting gallery event: \(event.id)")
                         self?.galleryEventUpdatesSubject.send(event)
                     }
                 }
@@ -517,10 +506,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     }
     
     func broadcastSMSResponse(_ response: SMSResponse) {
-        print("📢 [DataSyncCoordinator] Broadcasting SMS response:")
-        print("   - Profile ID: \(response.profileId ?? "unknown")")
-        print("   - Is Confirmation: \(response.isConfirmationResponse)")
-        print("   - Text: \(response.textResponse ?? "no text")")
         smsResponsesSubject.send(response)
         updatePendingChanges()
     }
@@ -844,7 +829,7 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     }
     
     private func notifySuccessfulSync(_ operation: SyncOperation) {
-        print("✅ Data sync completed: \(operation.completedItems) items in \(Date().timeIntervalSince(operation.startTime))s")
+        // Sync completed successfully
     }
 
     private func handleSyncError(_ error: Error, operation: SyncOperation) {
