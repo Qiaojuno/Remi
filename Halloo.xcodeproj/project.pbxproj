@@ -22,6 +22,7 @@
 		87A3B6482ECFC58A0083E08C /* Relax.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B6472ECFC58A0083E08C /* Relax.json */; };
 		87A3B64C2ECFCA650083E08C /* Family.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B64B2ECFCA650083E08C /* Family.json */; };
 		87A3B64E2ECFE5B60083E08C /* Like success.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B64D2ECFE5B60083E08C /* Like success.json */; };
+		87A3B6502ED018E70083E08C /* verification.json in Resources */ = {isa = PBXBuildFile; fileRef = 87A3B64F2ED018E70083E08C /* verification.json */; };
 		87E87B5F2E736D970014AEFE /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 87E87B5E2E736D970014AEFE /* SuperwallKit */; };
 		87E87B662E73A1940014AEFE /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 87E87B652E73A1940014AEFE /* GoogleSignIn */; };
 		87E87B682E73A1940014AEFE /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 87E87B672E73A1940014AEFE /* GoogleSignInSwift */; };
@@ -55,6 +56,7 @@
 		87A3B6472ECFC58A0083E08C /* Relax.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Relax.json; sourceTree = "<group>"; };
 		87A3B64B2ECFCA650083E08C /* Family.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Family.json; sourceTree = "<group>"; };
 		87A3B64D2ECFE5B60083E08C /* Like success.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Like success.json"; sourceTree = "<group>"; };
+		87A3B64F2ED018E70083E08C /* verification.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = verification.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -141,6 +143,7 @@
 				87A3AE762EC5AB610083E08C /* Money.json */,
 				87A3B29E2EC7E2D10083E08C /* 5 stars.json */,
 				87A3B29C2EC7DFE50083E08C /* Yoga.json */,
+				87A3B64F2ED018E70083E08C /* verification.json */,
 				87A3B6472ECFC58A0083E08C /* Relax.json */,
 				87A3B64B2ECFCA650083E08C /* Family.json */,
 				87A3B64D2ECFE5B60083E08C /* Like success.json */,
@@ -300,6 +303,7 @@
 				878D39DD2E95A654001D2561 /* StoreKit.storekit in Resources */,
 				87A3B64E2ECFE5B60083E08C /* Like success.json in Resources */,
 				87A3B64C2ECFCA650083E08C /* Family.json in Resources */,
+				87A3B6502ED018E70083E08C /* verification.json in Resources */,
 				87A3B6482ECFC58A0083E08C /* Relax.json in Resources */,
 				87A3B29D2EC7DFE60083E08C /* Yoga.json in Resources */,
 			);

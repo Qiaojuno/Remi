@@ -39,6 +39,24 @@ struct OnboardingContainerView: View {
             case .step3bProofScreen:
                 Step3bView()
 
+            case .step4CurrentReminders:
+                Step4CurrentRemindersView()
+
+            case .step4aTechComfort:
+                Step4aTechComfortView()
+
+            case .step4bSatisfaction:
+                Step4bSatisfactionView()
+
+            case .step5aCurrentFrustration:
+                Step5aCurrentFrustrationView()
+
+            case .empathyBreak:
+                EmpathyBreakView()
+
+            case .reminderTiming:
+                ReminderTimingView()
+
             case .step4HabitFocus:
                 Step4View()
 
@@ -50,6 +68,9 @@ struct OnboardingContainerView: View {
 
             case .notificationPermission:
                 NotificationPermissionView()
+
+            case .planReadyTeaser:
+                PlanReadyTeaserView()
 
             case .loadingPlan:
                 LoadingPlanView()

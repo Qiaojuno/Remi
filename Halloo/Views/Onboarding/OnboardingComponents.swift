@@ -38,8 +38,8 @@ enum OnboardingUI {
     // Animation
     static let optionAnimationDelay: TimeInterval = 0.1
 
-    // Total steps in quiz flow (notification permission not counted)
-    static let totalSteps = 11
+    // Total steps in quiz flow (notification permission, teaser, loading not counted)
+    static let totalSteps = 16
 }
 
 // MARK: - Progress Bar
@@ -225,15 +225,7 @@ struct QuizMultiSelectButton: View {
             HapticFeedback.medium()
         }) {
             HStack(spacing: 12) {
-                Text(emoji)
-                    .font(.system(size: 24))
-
-                Text(text)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.black)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Checkbox on the right
+                // Checkbox on the left
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(Color.black.opacity(0.2), lineWidth: 2)
@@ -249,6 +241,15 @@ struct QuizMultiSelectButton: View {
                             .foregroundColor(.white)
                     }
                 }
+
+                Text(text)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.black)
+
+                Text(emoji)
+                    .font(.system(size: 24))
+
+                Spacer()
             }
             .padding(.vertical, 20)
             .padding(.horizontal, 16)

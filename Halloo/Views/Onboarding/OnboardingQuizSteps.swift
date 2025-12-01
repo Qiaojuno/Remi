@@ -24,10 +24,10 @@ struct Step1View: View {
     @State private var showContent = false
 
     let options = [
-        "Mom",
-        "Dad",
-        "Both",
-        "Other"
+        "👩 Mom",
+        "👨 Dad",
+        "👨‍👩‍👧 Both",
+        "💛 Other"
     ]
 
     var body: some View {
@@ -50,7 +50,7 @@ struct Step1View: View {
                             .opacity(showContent ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
-                        Text("We'll personalize reminders and tone for your family.")
+                        Text("We'll use this to generate your custom plan")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.black)
                             .multilineTextAlignment(.center)
@@ -101,9 +101,9 @@ struct Step2View: View {
     @State private var showContent = false
 
     let options = [
-        "Often",
-        "As needed",
-        "Rarely"
+        "🔔 Often",
+        "⏰ As needed",
+        "🌿 Rarely"
     ]
 
     var body: some View {
@@ -169,7 +169,444 @@ struct Step2View: View {
     }
 }
 
-// MARK: - Step 4: Habit Focus (Micro-Commitment) - MOVED FROM STEP 2
+// MARK: - Step 4: Current Reminders (Problem Discovery)
+
+struct Step4CurrentRemindersView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var selectedReminders: Set<String> = []
+    @State private var showContent = false
+
+    let reminderOptions = [
+        ("Phone calendar/alarms", "📱"),
+        ("Manual text messages", "💬"),
+        ("Sticky notes", "📝"),
+        ("Written lists", "🗓️"),
+        ("Just trying to remember", "🧠"),
+        ("None - this is new for me", "❌")
+    ]
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Header
+                    VStack(spacing: 12) {
+                        Text("What type of reminders do you currently use?")
+                            .font(.system(size: 32, weight: .bold))
+                            .tracking(-1.0)
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+
+                        Text("Select all that apply")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                    // Scrollable multi-select reminder options
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 12) {
+                            ForEach(Array(reminderOptions.enumerated()), id: \.offset) { index, reminder in
+                                QuizMultiSelectButton(
+                                    text: reminder.0,
+                                    emoji: reminder.1,
+                                    index: index,
+                                    isSelected: selectedReminders.contains(reminder.0),
+                                    onTap: {
+                                        // "None" is exclusive - deselects all others
+                                        if reminder.0 == "None - this is new for me" {
+                                            if selectedReminders.contains(reminder.0) {
+                                                selectedReminders.remove(reminder.0)
+                                            } else {
+                                                selectedReminders.removeAll()
+                                                selectedReminders.insert(reminder.0)
+                                            }
+                                        } else {
+                                            // Remove "None" if user selects any other option
+                                            selectedReminders.remove("None - this is new for me")
+
+                                            if selectedReminders.contains(reminder.0) {
+                                                selectedReminders.remove(reminder.0)
+                                            } else {
+                                                selectedReminders.insert(reminder.0)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .padding(.bottom, 20)
+                    }
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.3), value: showContent)
+                }
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: !selectedReminders.isEmpty,
+                    action: {
+                        // Save answers
+                        viewModel.userAnswers["current_reminders"] = Array(selectedReminders).joined(separator: ", ")
+                        viewModel.nextStep()
+                    }
+                )
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
+    }
+}
+
+// MARK: - Step 4a: Tech Comfort Level (Objection Handling)
+
+struct Step4aTechComfortView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var selectedComfort: String? = nil
+
+    let techComfortOptions = [
+        "Very comfortable with tech",
+        "Somewhat comfortable",
+        "Prefers simple solutions",
+        "Not tech-savvy at all"
+    ]
+
+    // Get recipient name from quiz answers
+    private var recipientName: String {
+        viewModel.userAnswers["loved_one_name"] ?? "they"
+    }
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Header
+                    Text("How comfortable are \(recipientName) with technology?")
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                    // Single-select tech comfort options (black button style)
+                    VStack(spacing: 12) {
+                        ForEach(Array(techComfortOptions.enumerated()), id: \.element) { index, option in
+                            QuizOptionButton(
+                                text: option,
+                                index: index,
+                                isSelected: selectedComfort == option,
+                                onTap: {
+                                    selectedComfort = option
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                }
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: selectedComfort != nil,
+                    action: {
+                        // Save answer
+                        viewModel.userAnswers["tech_comfort"] = selectedComfort ?? ""
+                        viewModel.nextStep()
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Step 4b: Satisfaction Level (Pain Amplification)
+
+struct Step4bSatisfactionView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var selectedSatisfaction: String? = nil
+
+    let satisfactionOptions = [
+        "Pretty well - I like my system",
+        "It's okay - but I'd like something better",
+        "Not great - I need a better solution"
+    ]
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Header
+                    Text("How well is this working for you?")
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                    // Single-select satisfaction options (black button style)
+                    VStack(spacing: 12) {
+                        ForEach(Array(satisfactionOptions.enumerated()), id: \.element) { index, option in
+                            QuizOptionButton(
+                                text: option,
+                                index: index,
+                                isSelected: selectedSatisfaction == option,
+                                onTap: {
+                                    selectedSatisfaction = option
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                }
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: selectedSatisfaction != nil,
+                    action: {
+                        // Save answer
+                        viewModel.userAnswers["satisfaction_level"] = selectedSatisfaction ?? ""
+                        viewModel.nextStep()
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Step 5a: Current Frustration (Peak Pain Amplification)
+
+struct Step5aCurrentFrustrationView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var selectedFrustration: String? = nil
+
+    let frustrationOptions = [
+        "I forget to remind them",
+        "They forget even when I remind them",
+        "Takes too much of my time",
+        "I feel like I'm nagging",
+        "Not sure if they actually did it"
+    ]
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Header
+                    Text("What frustrates you most about your current system?")
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                    // Single-select frustration options (black button style)
+                    VStack(spacing: 12) {
+                        ForEach(Array(frustrationOptions.enumerated()), id: \.element) { index, option in
+                            QuizOptionButton(
+                                text: option,
+                                index: index,
+                                isSelected: selectedFrustration == option,
+                                onTap: {
+                                    selectedFrustration = option
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                }
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: selectedFrustration != nil,
+                    action: {
+                        // Save answer
+                        viewModel.userAnswers["current_frustration"] = selectedFrustration ?? ""
+                        viewModel.nextStep()
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Empathy Break (Emotional Release After Pain Questions)
+
+struct EmpathyBreakView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var showContent = false
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Family Lottie animation (larger, matching purple theme)
+                    LottieView(animation: .named("Family"))
+                        .playing(loopMode: .loop)
+                        .frame(width: 280, height: 280)
+                        .scaleEffect(showContent ? 1.0 : 0.85)
+                        .offset(y: showContent ? 0 : -20)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: showContent)
+
+                    // Title and description with purple gradient hero word
+                    VStack(spacing: 16) {
+                        // Combined hero statement with purple gradient + black
+                        (Text("We understand.\n")
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "9333EA"), Color(hex: "C084FC")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                         +
+                         Text("Caring for loved ones shouldn't feel this hard.")
+                            .foregroundColor(.black)
+                        )
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeIn(duration: 0.4).delay(0.3), value: showContent)
+
+                        // Supporting CTA line
+                        Text("Let's build a system that works for you both.")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeIn(duration: 0.4).delay(0.4), value: showContent)
+                    }
+                }
+                .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: true,
+                    action: {
+                        viewModel.nextStep()
+                    },
+                    buttonText: "Continue"
+                )
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeOut(duration: 0.4).delay(0.5), value: showContent)
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
+    }
+}
+
+// MARK: - Reminder Timing (Bridge Question - Introduces SMS Automation)
+
+struct ReminderTimingView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var selectedTiming: String? = nil
+
+    let timingOptions = [
+        "Morning routine",
+        "Around mealtimes",
+        "Evening routine",
+        "Throughout the day",
+        "I'm not sure yet"
+    ]
+
+    // Get recipient name from quiz answers
+    private var recipientName: String {
+        viewModel.userAnswers["loved_one_name"] ?? "them"
+    }
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Header
+                    Text("When would a gentle reminder help \(recipientName) most?")
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                    // Single-select timing options (black button style)
+                    VStack(spacing: 12) {
+                        ForEach(Array(timingOptions.enumerated()), id: \.element) { index, option in
+                            QuizOptionButton(
+                                text: option,
+                                index: index,
+                                isSelected: selectedTiming == option,
+                                onTap: {
+                                    selectedTiming = option
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                }
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: selectedTiming != nil,
+                    action: {
+                        // Save answer
+                        viewModel.userAnswers["reminder_timing"] = selectedTiming ?? ""
+                        viewModel.nextStep()
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Step 4c: Habit Focus (Micro-Commitment) - MOVED FROM STEP 2
 
 struct Step4View: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
@@ -684,6 +1121,7 @@ struct NotificationPermissionView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var authorizationStatus: UNAuthorizationStatus?
     @State private var isCheckingPermission = true
+    @State private var shouldShowUI = false
 
     var body: some View {
         OnboardingStepContainer(
@@ -692,23 +1130,24 @@ struct NotificationPermissionView: View {
             onBack: viewModel.previousStep
         ) {
             VStack(spacing: 0) {
-                // Header at top
-                Text("Enable notifications")
-                    .font(.system(size: 32, weight: .bold))
-                    .tracking(-1.0)
-                    .foregroundColor(.black)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.horizontal, OnboardingUI.horizontalPadding)
-                    .padding(.top, OnboardingUI.headerTopSpacing)
+                if shouldShowUI {
+                    // Header at top
+                    Text("Enable notifications")
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .padding(.top, OnboardingUI.headerTopSpacing)
 
-                Spacer()
+                    Spacer()
 
-                if isCheckingPermission {
-                    // Loading indicator while checking status or showing dialog
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(1.5)
+                    if isCheckingPermission {
+                        // Loading indicator while checking status or showing dialog
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .scaleEffect(1.5)
                 } else if authorizationStatus == .denied || authorizationStatus == .provisional {
                     // Mock iOS alert popup for denied state
                     // Alert container
@@ -782,16 +1221,17 @@ struct NotificationPermissionView: View {
                     .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 10)
                 }
 
-                Spacer()
+                    Spacer()
 
-                // Continue button (always show when in denied state)
-                if authorizationStatus == .denied || authorizationStatus == .provisional {
-                    OnboardingNextButton(
-                        isEnabled: true,
-                        action: {
-                            viewModel.nextStep()
-                        }
-                    )
+                    // Continue button (always show when in denied state)
+                    if authorizationStatus == .denied || authorizationStatus == .provisional {
+                        OnboardingNextButton(
+                            isEnabled: true,
+                            action: {
+                                viewModel.nextStep()
+                            }
+                        )
+                    }
                 }
             }
             .onAppear {
@@ -805,11 +1245,12 @@ struct NotificationPermissionView: View {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
                 if settings.authorizationStatus == .authorized {
-                    // Already granted - skip this screen immediately
+                    // Already granted - skip this screen immediately (don't show UI)
                     print("✅ Notifications already authorized - skipping")
                     viewModel.nextStep()
                 } else if settings.authorizationStatus == .notDetermined {
-                    // Not determined - show the permission dialog
+                    // Not determined - show UI and permission dialog
+                    shouldShowUI = true
                     isCheckingPermission = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
@@ -825,8 +1266,9 @@ struct NotificationPermissionView: View {
                         }
                     }
                 } else {
-                    // Denied or restricted - show settings option
+                    // Denied or restricted - show UI with settings option
                     print("⚠️ Notifications denied/restricted - showing settings option")
+                    shouldShowUI = true
                     authorizationStatus = settings.authorizationStatus
                     isCheckingPermission = false
                 }
@@ -2069,12 +2511,140 @@ struct SaveYourProgressView: View {
     }
 }
 
-// MARK: - Loading Plan View (2.5s with artificial delays at 60% and 92%)
+// MARK: - Plan Ready Teaser View (before loading screen)
+
+struct PlanReadyTeaserView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var showContent = false
+
+    // Get recipient name from quiz answers
+    private var recipientName: String {
+        viewModel.userAnswers["loved_one_name"] ?? "your loved one"
+    }
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 24) {
+                    // Lottie animation (matching notification banner size/position)
+                    LottieView(animation: .named("verification"))
+                        .playing(loopMode: .playOnce)
+                        .frame(width: 200, height: 200)
+                        .scaleEffect(showContent ? 1.0 : 0.85)
+                        .offset(y: showContent ? 0 : -20)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: showContent)
+
+                    // Title and description
+                    VStack(spacing: 16) {
+                        // Title - with gradient on "customized plan"
+                        (Text("Time to generate your\n")
+                            .foregroundColor(.black)
+                         +
+                         Text("customized plan!")
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "0E9883"), Color(hex: "4ECDC4")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        )
+                            .font(.system(size: 32, weight: .bold))
+                            .tracking(-1.0)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeIn(duration: 0.4).delay(0.3), value: showContent)
+
+                        // Description - exact same specs as "We'll ping you"
+                        Text("Let us personalize Remi for you")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeIn(duration: 0.4).delay(0.4), value: showContent)
+                    }
+
+                    // Privacy section with blurred glass card and shield on top edge
+                    ZStack(alignment: .top) {
+                        // Blurred glass card background (matching notification box)
+                        VStack(spacing: 8) {
+                            // Spacer for shield
+                            Spacer()
+                                .frame(height: 12)
+
+                            // Privacy title
+                            Text("We value your privacy and security")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .multilineTextAlignment(.center)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeIn(duration: 0.4).delay(0.6), value: showContent)
+
+                            // Privacy description
+                            Text("We'll never share your family's information. Your data is held privately")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeIn(duration: 0.4).delay(0.7), value: showContent)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 13)
+                                .fill(Color.white)
+                        )
+
+                        // Lock emoji sitting on top edge
+                        Text("🔒")
+                            .font(.system(size: 32))
+                            .offset(y: -16)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeIn(duration: 0.4).delay(0.5), value: showContent)
+                    }
+                    .padding(.top, 40)
+                }
+                .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                Spacer()
+
+                // Continue button
+                OnboardingNextButton(
+                    isEnabled: true,
+                    action: {
+                        viewModel.nextStep()
+                    },
+                    buttonText: "Continue"
+                )
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeOut(duration: 0.4).delay(0.5), value: showContent)
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
+    }
+}
+
+// MARK: - Loading Plan View (4s with artificial delays at 60% and 92%)
 
 struct LoadingPlanView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var progress: Double = 0.0
     @State private var currentMessage: String = "Analyzing quiz answers..."
+    @State private var completedBullets: Set<Int> = []
+
+    private let hapticGenerator = UIImpactFeedbackGenerator(style: .light)
 
     // Get recipient name from quiz answers
     private var recipientName: String {
@@ -2104,7 +2674,7 @@ struct LoadingPlanView: View {
                 .foregroundColor(.black)
                 .padding(.bottom, 32)
 
-            // Progress bar with Remi blue gradient
+            // Progress bar with blue gradient
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     // Background track
@@ -2122,6 +2692,7 @@ struct LoadingPlanView: View {
                             )
                         )
                         .frame(width: geometry.size.width * progress, height: 8)
+                        .animation(.easeInOut(duration: 0.1), value: progress)
                 }
             }
             .frame(height: 8)
@@ -2143,11 +2714,11 @@ struct LoadingPlanView: View {
                     .foregroundColor(.black)
                     .padding(.bottom, 8)
 
-                BulletPoint(text: "Reminder schedule for \(recipientName)")
-                BulletPoint(text: "Best daily habits")
-                BulletPoint(text: "SMS message style")
-                BulletPoint(text: "Check-in frequency")
-                BulletPoint(text: "Family notifications")
+                BulletPoint(text: "Reminder schedule for \(recipientName)", showCheckmark: completedBullets.contains(0))
+                BulletPoint(text: "Best daily habits", showCheckmark: completedBullets.contains(1))
+                BulletPoint(text: "SMS message style", showCheckmark: completedBullets.contains(2))
+                BulletPoint(text: "Check-in frequency", showCheckmark: completedBullets.contains(3))
+                BulletPoint(text: "Family notifications", showCheckmark: completedBullets.contains(4))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 40)
@@ -2181,45 +2752,118 @@ struct LoadingPlanView: View {
 
     private func startLoading() {
         currentMessage = "Analyzing quiz answers..."
+        hapticGenerator.prepare()
 
-        // Phase 1: 0% → 60% (1.0 second)
-        animateProgress(from: 0.0, to: 0.6, duration: 1.0) {
-            // Pause at 60% for 0.3 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                currentMessage = "Selecting best reminder times..."
+        // Start incrementing counter to show every percentage
+        startCountingProgress()
+    }
 
-                // Phase 2: 60% → 92% (0.6 seconds)
-                animateProgress(from: 0.6, to: 0.92, duration: 0.6) {
-                    // Pause at 92% for 0.4 seconds
+    private func showCheckmark(_ index: Int) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            self.completedBullets.insert(index)
+        }
+        hapticGenerator.impactOccurred()
+    }
+
+    private func startCountingProgress() {
+        var currentPercentage = 0
+        let totalDuration: TimeInterval = 4.0  // 4 seconds total
+        let incrementDelay: TimeInterval = totalDuration / 100.0  // 0.04 seconds per increment
+
+        Timer.scheduledTimer(withTimeInterval: incrementDelay, repeats: true) { timer in
+            if currentPercentage <= 100 {
+                // Update progress
+                self.progress = Double(currentPercentage) / 100.0
+
+                // Show checkmarks at specific milestones
+                if currentPercentage == 20 {
+                    self.showCheckmark(0)
+                } else if currentPercentage == 40 {
+                    self.showCheckmark(1)
+                } else if currentPercentage == 60 {
+                    self.showCheckmark(2)
+                } else if currentPercentage == 80 {
+                    self.showCheckmark(3)
+                } else if currentPercentage == 100 {
+                    self.showCheckmark(4)
+                }
+
+                // Update message at key points
+                if currentPercentage == 60 {
+                    // Pause at 60% for artificial delay
+                    timer.invalidate()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        currentMessage = "Finalizing recommendations..."
-
-                        // Phase 3: 92% → 100% (0.2 seconds)
-                        animateProgress(from: 0.92, to: 1.0, duration: 0.2) {
-                            // Done - advance to next screen after brief delay
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                viewModel.nextStep()
-                            }
-                        }
+                        self.currentMessage = "Selecting best reminder times..."
+                        currentPercentage += 1
+                        self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
                     }
+                } else if currentPercentage == 92 {
+                    // Pause at 92% for artificial delay
+                    timer.invalidate()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.currentMessage = "Finalizing recommendations..."
+                        currentPercentage += 1
+                        self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
+                    }
+                } else if currentPercentage == 100 {
+                    // Done - advance to next screen
+                    timer.invalidate()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        self.viewModel.nextStep()
+                    }
+                } else {
+                    currentPercentage += 1
                 }
             }
         }
     }
 
-    private func animateProgress(from start: Double, to end: Double, duration: TimeInterval, completion: @escaping () -> Void) {
-        withAnimation(.easeInOut(duration: duration)) {
-            progress = end
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
-            completion()
+    private func continueCountingFrom(_ startPercentage: Int, totalDuration: TimeInterval, incrementDelay: TimeInterval) {
+        var currentPercentage = startPercentage
+
+        Timer.scheduledTimer(withTimeInterval: incrementDelay, repeats: true) { timer in
+            if currentPercentage <= 100 {
+                self.progress = Double(currentPercentage) / 100.0
+
+                // Show checkmarks at specific milestones
+                if currentPercentage == 20 {
+                    self.showCheckmark(0)
+                } else if currentPercentage == 40 {
+                    self.showCheckmark(1)
+                } else if currentPercentage == 60 {
+                    self.showCheckmark(2)
+                } else if currentPercentage == 80 {
+                    self.showCheckmark(3)
+                } else if currentPercentage == 100 {
+                    self.showCheckmark(4)
+                }
+
+                if currentPercentage == 92 {
+                    // Pause at 92% for artificial delay
+                    timer.invalidate()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.currentMessage = "Finalizing recommendations..."
+                        currentPercentage += 1
+                        self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
+                    }
+                } else if currentPercentage == 100 {
+                    // Done - advance to next screen
+                    timer.invalidate()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        self.viewModel.nextStep()
+                    }
+                } else {
+                    currentPercentage += 1
+                }
+            }
         }
     }
 }
 
-// Helper view for bullet points
+// Helper view for bullet points with optional checkmark
 private struct BulletPoint: View {
     let text: String
+    let showCheckmark: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -2229,6 +2873,16 @@ private struct BulletPoint: View {
             Text(text)
                 .font(.system(size: 15))
                 .foregroundColor(.black)
+
+            Spacer()
+
+            // Always reserve space for checkmark to prevent layout shift
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20))
+                .foregroundColor(.black)
+                .opacity(showCheckmark ? 1 : 0)
+                .scaleEffect(showCheckmark ? 1 : 0.5)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: showCheckmark)
         }
     }
 }
