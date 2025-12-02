@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		873DFD8F2EDE8F42004F7DB0 /* Notification.json in Resources */ = {isa = PBXBuildFile; fileRef = 873DFD8E2EDE8F42004F7DB0 /* Notification.json */; };
 		8746D66E2E456C9500F3D4EA /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 8746D66D2E456C9500F3D4EA /* FirebaseAnalytics */; };
 		8746D6702E456C9500F3D4EA /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 8746D66F2E456C9500F3D4EA /* FirebaseAppCheck */; };
 		8746D6722E456C9500F3D4EA /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 8746D6712E456C9500F3D4EA /* FirebaseAuth */; };
@@ -46,6 +47,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		873DFD8E2EDE8F42004F7DB0 /* Notification.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Notification.json; sourceTree = "<group>"; };
 		8746D53C2E443C2800F3D4EA /* Halloo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Halloo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8746D54A2E443C2A00F3D4EA /* HallooTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HallooTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8746D5542E443C2A00F3D4EA /* HallooUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HallooUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -147,6 +149,7 @@
 				87A3B6472ECFC58A0083E08C /* Relax.json */,
 				87A3B64B2ECFCA650083E08C /* Family.json */,
 				87A3B64D2ECFE5B60083E08C /* Like success.json */,
+				873DFD8E2EDE8F42004F7DB0 /* Notification.json */,
 			);
 			sourceTree = "<group>";
 		};
@@ -302,6 +305,7 @@
 				87A3B29F2EC7E2D10083E08C /* 5 stars.json in Resources */,
 				878D39DD2E95A654001D2561 /* StoreKit.storekit in Resources */,
 				87A3B64E2ECFE5B60083E08C /* Like success.json in Resources */,
+				873DFD8F2EDE8F42004F7DB0 /* Notification.json in Resources */,
 				87A3B64C2ECFCA650083E08C /* Family.json in Resources */,
 				87A3B6502ED018E70083E08C /* verification.json in Resources */,
 				87A3B6482ECFC58A0083E08C /* Relax.json in Resources */,

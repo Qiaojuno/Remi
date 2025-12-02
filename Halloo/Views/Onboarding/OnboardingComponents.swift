@@ -39,7 +39,7 @@ enum OnboardingUI {
     static let optionAnimationDelay: TimeInterval = 0.1
 
     // Total steps in quiz flow (notification permission, teaser, loading not counted)
-    static let totalSteps = 16
+    static let totalSteps = 17
 }
 
 // MARK: - Progress Bar

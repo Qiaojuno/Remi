@@ -253,6 +253,8 @@ final class OnboardingViewModel: ObservableObject {
             return true  // Informational screen - no validation needed
         case .notificationPermission:
             return true  // Permission request - no validation needed
+        case .referralSource:
+            return true  // Optional question - no validation needed
         case .planReadyTeaser:
             return true  // Teaser screen - user clicks to continue
         case .loadingPlan:
@@ -263,6 +265,10 @@ final class OnboardingViewModel: ObservableObject {
             return true  // Social proof screen - no validation needed
         case .saveYourProgress:
             return authService.currentUser != nil // Can proceed after auth
+        case .freeTrialIntro:
+            return true  // Informational screen - no validation needed
+        case .freeTrialReminder:
+            return true  // Informational screen - no validation needed
         case .step6Paywall:
             return true // Always can proceed after selecting plan
         case .profileSetupConfirmation:
@@ -318,11 +324,14 @@ final class OnboardingViewModel: ObservableObject {
         case .step5WhatMatters: stepNumber = 11
         case .step6NotificationPromise: stepNumber = 12
         case .notificationPermission: stepNumber = 12  // Same as previous step - not counted
-        case .step7SocialProof: stepNumber = 13  // Rating (moved before plan)
-        case .planReadyTeaser: stepNumber = 13  // Teaser - not counted in progress
-        case .loadingPlan: stepNumber = 13  // Loading screen - not counted in progress
-        case .personalizedPlan: stepNumber = 13  // Plan summary - not counted (same as rating)
-        case .saveYourProgress: stepNumber = 14
+        case .referralSource: stepNumber = 13  // Referral source question
+        case .step7SocialProof: stepNumber = 14  // Rating (moved before plan)
+        case .planReadyTeaser: stepNumber = 14  // Teaser - not counted in progress
+        case .loadingPlan: stepNumber = 14  // Loading screen - not counted in progress
+        case .personalizedPlan: stepNumber = 14  // Plan summary - not counted (same as rating)
+        case .saveYourProgress: stepNumber = 15
+        case .freeTrialIntro: stepNumber = 15  // Not counted in progress
+        case .freeTrialReminder: stepNumber = 15  // Not counted in progress
         case .step6Paywall: stepNumber = 15
         case .profileSetupConfirmation: stepNumber = 12
         case .preferences: stepNumber = 12  // Same as profileSetupConfirmation
@@ -472,6 +481,9 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .notificationPermission
             updateProgress()
         case .notificationPermission:
+            currentStep = .referralSource
+            updateProgress()
+        case .referralSource:
             currentStep = .step7SocialProof
             updateProgress()
         case .step7SocialProof:
@@ -487,18 +499,24 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .saveYourProgress
             updateProgress()
         case .saveYourProgress:
-            // After auth, proceed to paywall
+            // After auth, proceed to free trial intro
+            currentStep = .freeTrialIntro
+            updateProgress()
+        case .freeTrialIntro:
+            currentStep = .freeTrialReminder
+            updateProgress()
+        case .freeTrialReminder:
             currentStep = .step6Paywall
             updateProgress()
         case .step6Paywall:
-            currentStep = .profileSetupConfirmation
-            updateProgress()
+            // After paywall, onboarding is complete - go to dashboard
+            isComplete = true
         case .profileSetupConfirmation:
-            currentStep = .preferences
-            updateProgress()
+            // Deprecated - skip to complete
+            isComplete = true
         case .preferences:
-            // Show CreateProfileView - don't auto-complete
-            break
+            // Deprecated - skip to complete
+            isComplete = true
         }
     }
 
@@ -549,8 +567,12 @@ final class OnboardingViewModel: ObservableObject {
         case .notificationPermission:
             currentStep = .step6NotificationPromise
             updateProgress()
-        case .step7SocialProof:
+        case .referralSource:
+            // Skip notificationPermission (system dialog) - go back to the info screen
             currentStep = .step6NotificationPromise
+            updateProgress()
+        case .step7SocialProof:
+            currentStep = .referralSource
             updateProgress()
         case .planReadyTeaser:
             // Skip back to rating (not notification permission)
@@ -567,14 +589,22 @@ final class OnboardingViewModel: ObservableObject {
         case .saveYourProgress:
             currentStep = .personalizedPlan
             updateProgress()
-        case .step6Paywall:
+        case .freeTrialIntro:
             currentStep = .saveYourProgress
             updateProgress()
+        case .freeTrialReminder:
+            currentStep = .freeTrialIntro
+            updateProgress()
+        case .step6Paywall:
+            currentStep = .freeTrialReminder
+            updateProgress()
         case .profileSetupConfirmation:
+            // Deprecated - go back to paywall
             currentStep = .step6Paywall
             updateProgress()
         case .preferences:
-            currentStep = .profileSetupConfirmation
+            // Deprecated - go back to paywall
+            currentStep = .step6Paywall
             updateProgress()
         }
     }
@@ -844,7 +874,10 @@ enum OnboardingStep: String, CaseIterable {
     case step5WhatMatters = "step5WhatMatters"
     case step6NotificationPromise = "step6NotificationPromise"
     case notificationPermission = "notificationPermission"
+    case referralSource = "referralSource"  // Were you recommended by a doctor/home-care worker?
     case step7SocialProof = "step7SocialProof"  // Give us a Rating (moved before plan)
+    case freeTrialIntro = "freeTrialIntro"  // "We want you to try Remi for free"
+    case freeTrialReminder = "freeTrialReminder"  // "We'll send you a reminder before your free trial ends"
     case planReadyTeaser = "planReadyTeaser"  // "Your plan is ready!" announcement
     case loadingPlan = "loadingPlan"  // Loading screen with progress
     case personalizedPlan = "personalizedPlan"  // Summary of quiz answers
@@ -885,6 +918,12 @@ enum OnboardingStep: String, CaseIterable {
             return "Stay Informed"
         case .notificationPermission:
             return "Notifications"
+        case .referralSource:
+            return "Quick Question"
+        case .freeTrialIntro:
+            return "Free Trial"
+        case .freeTrialReminder:
+            return "Trial Reminder"
         case .planReadyTeaser:
             return "Plan Ready"
         case .loadingPlan:
@@ -936,6 +975,12 @@ enum OnboardingStep: String, CaseIterable {
             return "Remi keeps you in the loop"
         case .notificationPermission:
             return "Never miss a moment"
+        case .referralSource:
+            return "Were you recommended by a professional?"
+        case .freeTrialIntro:
+            return "Try Remi risk-free"
+        case .freeTrialReminder:
+            return "We'll remind you before it ends"
         case .planReadyTeaser:
             return "We've analyzed your answers"
         case .loadingPlan:

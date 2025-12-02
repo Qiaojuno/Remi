@@ -111,19 +111,27 @@ struct ContentView: View {
     // MARK: - Navigation Content
     // ✅ ARCHITECTURE: Single source of truth for authentication state
     // Auth state (authService.isAuthenticated) determines view hierarchy
-    // Subscription check happens AFTER authentication via PaywallGateView
+    // Subscription check happens AFTER authentication AND onboarding completion via PaywallGateView
     @ViewBuilder
     private var navigationContent: some View {
         if let authService = authService {
             if authService.isAuthenticated {
-                // ✅ User is authenticated → Check subscription via PaywallGateView
-                // PaywallGateView will either:
-                //   - Show dashboard if subscribed
-                //   - Show Superwall paywall if not subscribed
-                PaywallGateView {
-                    authenticatedContent
+                // Check if user is still in onboarding flow
+                if let onboardingVM = onboardingViewModel, !onboardingVM.isComplete {
+                    // ✅ User authenticated but still in onboarding → Continue onboarding
+                    // This allows free trial intro/reminder steps to show before paywall
+                    OnboardingContainerView()
+                        .environmentObject(onboardingVM)
+                } else {
+                    // ✅ User is authenticated AND onboarding complete → Check subscription via PaywallGateView
+                    // PaywallGateView will either:
+                    //   - Show dashboard if subscribed
+                    //   - Show Superwall paywall if not subscribed
+                    PaywallGateView {
+                        authenticatedContent
+                    }
+                    .environmentObject(appState)
                 }
-                .environmentObject(appState)
             } else {
                 // ✅ User not authenticated → Show onboarding/welcome
                 if let onboardingVM = onboardingViewModel {

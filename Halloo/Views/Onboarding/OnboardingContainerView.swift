@@ -69,6 +69,15 @@ struct OnboardingContainerView: View {
             case .notificationPermission:
                 NotificationPermissionView()
 
+            case .referralSource:
+                ReferralSourceView()
+
+            case .freeTrialIntro:
+                FreeTrialIntroView()
+
+            case .freeTrialReminder:
+                FreeTrialReminderView()
+
             case .planReadyTeaser:
                 PlanReadyTeaserView()
 

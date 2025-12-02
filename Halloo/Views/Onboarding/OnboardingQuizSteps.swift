@@ -1125,15 +1125,28 @@ struct NotificationPermissionView: View {
     @State private var authorizationStatus: UNAuthorizationStatus?
     @State private var isCheckingPermission = true
     @State private var shouldShowUI = false
+    @State private var hasCheckedPermission = false
 
     var body: some View {
+        Group {
+            if !hasCheckedPermission {
+                // Completely invisible while checking - prevents flash
+                Color.clear
+                    .onAppear {
+                        checkAndRequestPermission()
+                    }
+            } else if shouldShowUI {
+                permissionContent
+            }
+        }
+    }
+
+    private var permissionContent: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
             onBack: viewModel.previousStep
         ) {
             VStack(spacing: 0) {
-                if shouldShowUI {
                     // Header at top
                     Text("Enable notifications")
                         .font(.system(size: 32, weight: .bold))
@@ -1235,10 +1248,6 @@ struct NotificationPermissionView: View {
                             }
                         )
                     }
-                }
-            }
-            .onAppear {
-                checkAndRequestPermission()
             }
         }
     }
@@ -1253,6 +1262,7 @@ struct NotificationPermissionView: View {
                     viewModel.nextStep()
                 } else if settings.authorizationStatus == .notDetermined {
                     // Not determined - show UI and permission dialog
+                    hasCheckedPermission = true
                     shouldShowUI = true
                     isCheckingPermission = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -1271,10 +1281,241 @@ struct NotificationPermissionView: View {
                 } else {
                     // Denied or restricted - show UI with settings option
                     print("⚠️ Notifications denied/restricted - showing settings option")
+                    hasCheckedPermission = true
                     shouldShowUI = true
                     authorizationStatus = settings.authorizationStatus
                     isCheckingPermission = false
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Referral Source Question
+
+struct ReferralSourceView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var selectedOption: String? = nil
+    @State private var showContent = false
+
+    let options = [
+        "Yes",
+        "No"
+    ]
+
+    var body: some View {
+        OnboardingStepContainer(
+            progress: $viewModel.progress,
+            onBack: viewModel.previousStep
+        ) {
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(spacing: 32) {
+                    // Header
+                    VStack(spacing: 12) {
+                        Text("Were you recommended Remi by a Doctor or Home-care worker?")
+                            .font(.system(size: 28, weight: .bold))
+                            .tracking(-0.5)
+                            .foregroundColor(.black)
+                            .multilineTextAlignment(.center)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+
+                    // Options
+                    VStack(spacing: 12) {
+                        ForEach(Array(options.enumerated()), id: \.element) { index, option in
+                            QuizOptionButton(
+                                text: option,
+                                index: index,
+                                isSelected: selectedOption == option,
+                                onTap: { selectedOption = option }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
+                }
+
+                Spacer()
+
+                OnboardingNextButton(
+                    isEnabled: selectedOption != nil,
+                    action: {
+                        viewModel.userAnswers["referral_source"] = selectedOption ?? ""
+                        viewModel.nextStep()
+                    }
+                )
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeOut(duration: 0.4).delay(0.3), value: showContent)
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
+    }
+}
+
+// MARK: - Free Trial Intro
+
+struct FreeTrialIntroView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var showContent = false
+
+    var body: some View {
+        ZStack {
+            // Background
+            OnboardingGradientBackground()
+
+            VStack(spacing: 0) {
+                // Title at the very top - no progress bar or back chevron
+                Text("We want you to try Remi for free")
+                    .font(.system(size: 28, weight: .bold))
+                    .tracking(-0.5)
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .padding(.top, 60)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+
+                // Empty middle space for asset (to be added later)
+                Spacer()
+
+                // Bottom section
+                VStack(spacing: 16) {
+                    // No payment due now
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green)
+                        Text("No payment due now")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.3), value: showContent)
+
+                    // Try for $0.00 button
+                    Button(action: {
+                        HapticFeedback.medium()
+                        viewModel.nextStep()
+                    }) {
+                        Text("Try for $0.00")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Color.black)
+                            .cornerRadius(14)
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.4), value: showContent)
+                }
+                .padding(.bottom, 50)
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
+    }
+}
+
+// MARK: - Free Trial Reminder
+
+struct FreeTrialReminderView: View {
+    @EnvironmentObject var viewModel: OnboardingViewModel
+    @State private var showContent = false
+
+    var body: some View {
+        ZStack {
+            // Background
+            OnboardingGradientBackground()
+
+            VStack(spacing: 0) {
+                // Back chevron at top left
+                HStack {
+                    Button(action: {
+                        viewModel.previousStep()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(width: 44, height: 44)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+
+                // Title
+                Text("We'll send you a reminder before your free trial ends")
+                    .font(.system(size: 28, weight: .bold))
+                    .tracking(-0.5)
+                    .foregroundColor(.black)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .padding(.top, 8)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+
+                Spacer()
+
+                // Notification bell lottie
+                LottieView(animation: .named("Notification"))
+                    .playing(loopMode: .loop)
+                    .frame(width: 200, height: 200)
+                    .opacity(showContent ? 1 : 0)
+                    .scaleEffect(showContent ? 1.0 : 0.8)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: showContent)
+
+                Spacer()
+
+                // Bottom section
+                VStack(spacing: 16) {
+                    // No payment due now
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green)
+                        Text("No payment due now")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.3), value: showContent)
+
+                    // Continue for FREE button
+                    Button(action: {
+                        HapticFeedback.medium()
+                        viewModel.nextStep()
+                    }) {
+                        Text("Continue for FREE")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Color.black)
+                            .cornerRadius(14)
+                    }
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.4), value: showContent)
+                }
+                .padding(.bottom, 50)
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
             }
         }
     }
@@ -2435,11 +2676,8 @@ struct SaveYourProgressView: View {
                             isAuthenticating = true
                             await viewModel.signInWithApple()
 
-                            // handleSuccessfulAuthentication() handles all navigation logic:
-                            // - New user: Creates user with trial → dashboard
-                            // - Existing user with subscription: → dashboard
-                            // - Existing user without subscription: → paywall
-                            // Quiz data is automatically saved in handleSuccessfulAuthentication
+                            // After successful auth, move to next step (free trial intro)
+                            viewModel.nextStep()
                             isAuthenticating = false
                         }
                     } label: {
@@ -2465,11 +2703,8 @@ struct SaveYourProgressView: View {
                             isAuthenticating = true
                             await viewModel.signInWithGoogle()
 
-                            // handleSuccessfulAuthentication() handles all navigation logic:
-                            // - New user: Creates user with trial → dashboard
-                            // - Existing user with subscription: → dashboard
-                            // - Existing user without subscription: → paywall
-                            // Quiz data is automatically saved in handleSuccessfulAuthentication
+                            // After successful auth, move to next step (free trial intro)
+                            viewModel.nextStep()
                             isAuthenticating = false
                         }
                     } label: {

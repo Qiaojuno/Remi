@@ -1,5 +1,6 @@
 import SwiftUI
 import SuperwallKit
+import Lottie
 
 // MARK: - Custom Shapes
 struct TopRoundedRectangle: Shape {
@@ -787,20 +788,30 @@ struct ProfileSetupConfirmationView: View {
 // MARK: - Paywall Step View
 struct PaywallStepView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
-    @State private var showContent = false
-    @State private var paywallDismissed = false
 
     var body: some View {
-        OnboardingStepContainer(
-            progress: $viewModel.progress,
-            
-            onBack: viewModel.previousStep
-        ) {
-            // Superwall Paywall - automatically shows campaign
-            PaywallView()
-                .onAppear {
-                    configureSuperwallHandlers()
-                }
+        PaywallView(onDismiss: {
+            handlePaywallDismiss()
+        })
+        .onAppear {
+            configureSuperwallHandlers()
+        }
+    }
+
+    private func handlePaywallDismiss() {
+        // Check if user now has active subscription after paywall dismissal
+        _Concurrency.Task { @MainActor in
+            let hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+
+            if hasSubscription {
+                // User successfully subscribed - complete onboarding and go to dashboard
+                print("✅ [PaywallStepView] User has subscription - completing onboarding")
+                viewModel.isComplete = true
+            } else {
+                // User dismissed without subscribing - go back to free trial reminder
+                print("⚠️ [PaywallStepView] User dismissed paywall without subscribing - returning to previous step")
+                viewModel.previousStep()
+            }
         }
     }
 
@@ -823,13 +834,21 @@ struct PaywallStepView: View {
 
 /// Superwall Paywall View Wrapper
 struct PaywallView: UIViewControllerRepresentable {
+    var onDismiss: (() -> Void)?
+
     func makeUIViewController(context: Context) -> UIViewController {
         let viewController = UIViewController()
+        viewController.view.backgroundColor = .clear
 
         // Trigger Superwall paywall placement when view controller is created
         DispatchQueue.main.async {
             // Register the paywall placement - Superwall will show the configured campaign
-            Superwall.shared.register(placement: "onboarding_paywall")
+            Superwall.shared.register(placement: "onboarding_paywall") {
+                // This closure is called when the paywall is dismissed
+                DispatchQueue.main.async {
+                    onDismiss?()
+                }
+            }
             print("🎯 Superwall 'onboarding_paywall' placement triggered")
         }
 
