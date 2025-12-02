@@ -625,10 +625,13 @@ struct Step4View: View {
     // Convert "Both" and "Other" to "them" for grammatical correctness
     private var personPronoun: String {
         let answer = viewModel.userAnswers["who_to_help"] ?? "them"
-        if answer == "Both" || answer == "Other" {
+        if answer.contains("Both") || answer.contains("Other") {
             return "them"
         }
-        return answer
+        // Strip emoji prefix (e.g., "👩 Mom" → "Mom")
+        if answer.contains("Mom") { return "Mom" }
+        if answer.contains("Dad") { return "Dad" }
+        return "them"
     }
 
     var body: some View {
@@ -1512,12 +1515,16 @@ struct PersonalizedPlanView: View {
     // Helper to format recipient name
     private var recipientName: String {
         let answer = viewModel.userAnswers["who_to_help"] ?? "them"
-        if answer == "Both" {
+        if answer.contains("Both") {
             return "your parents"
-        } else if answer == "Other" {
+        } else if answer.contains("Other") {
             return "your loved one"
+        } else if answer.contains("Mom") {
+            return "Mom"
+        } else if answer.contains("Dad") {
+            return "Dad"
         } else {
-            return answer
+            return "your loved one"
         }
     }
 

@@ -217,6 +217,12 @@ TASK CREATION → SCHEDULING → DELIVERY → RESPONSE → BROADCAST
 
     Cloud Function: twilioWebhook()
         │
+        ├─ Validate Twilio Signature:
+        │  ├─ Reconstruct full URL (handles Cloud Functions Gen 2 routing)
+        │  ├─ If host contains "cloudfunctions.net" → append "/twilioWebhook"
+        │  ├─ Verify signature with Twilio auth token
+        │  └─ Reject if invalid ✓
+        │
         ├─ Extract data:
         │  ├─ fromPhone: "+1778-814-3739"
         │  ├─ messageBody: "YES"
@@ -240,6 +246,11 @@ TASK CREATION → SCHEDULING → DELIVERY → RESPONSE → BROADCAST
         │  ├─ Has text: true ✓
         │  └─ Valid response!
         │
+        ├─ Send thank you SMS:
+        │  ├─ Reply: "Thank you! We'll let your family know ❤️"
+        │  ├─ Twilio sends immediately
+        │  └─ Store replyMessage for gallery event
+        │
         ├─ Create SMSResponse:
         │  ├─ taskId: "habit-123"
         │  ├─ textResponse: "YES"
@@ -249,7 +260,9 @@ TASK CREATION → SCHEDULING → DELIVERY → RESPONSE → BROADCAST
         ├─ Create GalleryHistoryEvent:
         │  ├─ type: "taskCompletion"
         │  ├─ text: "Grandma completed medication"
-        │  └─ timestamp: now
+        │  ├─ replyMessage: "Thank you! We'll let your family know ❤️"
+        │  ├─ timestamp: now
+        │  └─ ALL DATA IN SINGLE WRITE (iOS listener only processes .added)
         │
         └─ Update task completion metrics:
              ├─ completionCount + 1

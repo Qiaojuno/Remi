@@ -1,7 +1,7 @@
 # 🔥 Firebase Schema Contract & Audit Report
 **Project:** Halloo/Remi iOS App
 **Date:** 2025-10-03
-**Last Verified:** 2025-11-18
+**Last Verified:** 2025-12-01
 **Status:** ✅ **SCHEMA MIGRATION COMPLETE** + RevenueCat Integration
 
 ---
@@ -241,7 +241,8 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
     "textResponse": "Done! Feeling great",
     "photoData": "base64-encoded-image-data",
     "responseType": "both",
-    "sentMessage": "Hello Mom 🌞 A gentle reminder to Take Morning Medication\n\nSnap a quick photo when you finish — it always brightens the day 🌿"  // NEW: Actual SMS sent (added ffd2878)
+    "sentMessage": "Hello Mom 🌞 A gentle reminder to Take Morning Medication\n\nSnap a quick photo when you finish — it always brightens the day 🌿",  // Actual SMS sent (added ffd2878)
+    "replyMessage": "Thank you! We'll let your family know ❤️"  // Thank you SMS sent back (added 2025-12-01)
   },
   "eventType": "taskResponse",               // taskResponse, profileCreated
   "timestamp": "2025-10-03T09:05:00Z",
@@ -254,15 +255,18 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 - `userId` → MUST match user document path
 - `profileId` → References the profile this event is for
 - `eventData.sentMessage` → Optional, stores the actual SMS text sent to recipient (for display in gallery)
+- `eventData.replyMessage` → Optional, stores the thank you SMS sent back to recipient after response (added 2025-12-01)
 - `eventType` → Enum: `taskResponse`, `profileCreated`
 - `timestamp` → Event creation time
 - `responseType` → Enum: `text`, `photo`, `both`, `flexible`
 
 **Event Types:**
 - **taskResponse**: SMS response from elderly user completing a habit
-  - Includes: taskId, taskTitle, textResponse, photoData, sentMessage
+  - Includes: taskId, taskTitle, textResponse, photoData, sentMessage, replyMessage
 - **profileCreated**: Profile creation confirmation
   - Includes: profileName, profilePhotoURL
+
+**Important:** Gallery events MUST include all data in the initial write (no separate updates). The iOS app's real-time listener only processes `.added` document changes, NOT `.modified` changes (see TECHNICAL-DOCUMENTATION.md - Twilio Webhook Fixes 2025-12-01).
 
 ---
 

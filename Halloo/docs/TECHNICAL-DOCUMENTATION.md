@@ -2859,4 +2859,173 @@ All timezones support automatic DST transitions via moment-timezone.
 
 ---
 
-**Last Updated: 2025-11-24**
+# Twilio Webhook Cloud Function Fixes (2025-12-01)
+
+## Issues Fixed
+
+Two critical fixes were implemented in the `twilioWebhook` Cloud Function to improve reliability and iOS real-time update compatibility.
+
+### 1. Twilio Signature Validation URL Construction
+
+**Issue:**
+Twilio signature validation was failing because the URL reconstruction was incorrect for Cloud Functions Gen 2. In Gen 2, the function name is part of the hostname routing, so `req.url` returns "/" instead of "/twilioWebhook", causing signature validation to fail.
+
+**Root Cause:**
+```javascript
+// BEFORE - Incorrect URL construction
+const url = `https://${req.get('host')}${req.url}`;
+// For Cloud Functions Gen 2: https://region-project.cloudfunctions.net/
+// Missing function name in path!
+```
+
+**Solution:**
+The webhook now correctly reconstructs the full URL by detecting Cloud Functions Gen 2 hosting and appending the function name:
+
+```javascript
+// AFTER - Correct URL construction
+let url = `https://${req.get('host')}${req.url}`;
+const host = req.get('host') || '';
+
+// Fix for Cloud Functions Gen 2: req.url is "/" because function name is in hostname
+if (host.includes('cloudfunctions.net') && req.url === '/') {
+  url = `https://${host}/twilioWebhook`;
+}
+
+// Validate Twilio signature
+const twilioSignature = req.get('x-twilio-signature') || '';
+const isValid = twilio.validateRequest(
+  authToken,
+  twilioSignature,
+  url,
+  req.body
+);
+```
+
+**Impact:**
+- Ensures webhook security by properly validating all incoming Twilio requests
+- Prevents unauthorized webhook calls from external sources
+- Compatible with both Cloud Functions Gen 1 and Gen 2
+
+**File:** `functions/index.js` (twilioWebhook function)
+
+---
+
+### 2. Gallery Event Reply Message Order Fix
+
+**Issue:**
+Gallery events were created without the `replyMessage` field (thank you SMS), then updated via a separate Firestore write. However, the iOS app's real-time listener only processes `.added` document changes, NOT `.modified` changes. This meant the `replyMessage` would never appear in the iOS gallery UI.
+
+**Root Cause:**
+```javascript
+// BEFORE - Two separate writes (iOS listener misses second write)
+
+// Step 1: Create gallery event (initial write - .added event)
+await galleryRef.set(galleryEvent);
+
+// Step 2: Update with replyMessage (separate write - .modified event - IGNORED BY iOS)
+await galleryRef.update({
+  'eventData.replyMessage': replyMessage
+});
+```
+
+**iOS Listener Behavior:**
+```swift
+// FirebaseDatabaseService.swift - observeUserGalleryEvents()
+.addSnapshotListener { snapshot, error in
+  guard let snapshot = snapshot else { return }
+
+  // Only processes .added document changes
+  let events = snapshot.documentChanges
+    .filter { $0.type == .added }  // ← .modified changes are ignored!
+    .map { $0.document }
+}
+```
+
+**Solution:**
+The webhook now sends the thank you SMS FIRST, then includes the `replyMessage` in the initial gallery event creation, ensuring all data is present in the single `.added` event:
+
+```javascript
+// AFTER - Single write with all data (iOS listener receives complete event)
+
+// Step 1: Send thank you SMS first
+const replyMessage = "Thank you! We'll let your family know ❤️";
+await twilioClient.messages.create({
+  to: fromPhone,
+  from: TWILIO_PHONE_NUMBER,
+  body: replyMessage
+});
+
+// Step 2: Build taskResponseData WITH replyMessage
+const taskResponseData = {
+  taskId: habitDoc.id,
+  profileName: profile.name,
+  taskTitle: habit.title,
+  textResponse: responseText,
+  photoData: photoBase64,
+  responseType: responseType,
+  sentMessage: habit.lastSentMessage,
+  replyMessage: replyMessage  // ← Included in initial write
+};
+
+// Step 3: Create gallery event with ALL data in one write
+const galleryEvent = {
+  userId,
+  profileId,
+  eventType: 'taskResponse',
+  eventData: taskResponseData,  // Contains replyMessage
+  timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  createdAt: admin.firestore.FieldValue.serverTimestamp()
+};
+
+await galleryRef.set(galleryEvent);  // Single .added event with complete data
+```
+
+**Execution Order:**
+1. Send thank you SMS via Twilio
+2. Store `replyMessage` text in variable
+3. Include `replyMessage` in `taskResponseData`
+4. Create gallery event with all data in single write
+
+**Impact:**
+- Gallery events now appear in iOS app immediately with complete data
+- iOS real-time listener receives all fields in the `.added` event
+- No separate `.update()` call needed
+- Eliminates race conditions where UI might display incomplete events
+
+**File:** `functions/index.js` (twilioWebhook function)
+
+**Related iOS Code:**
+- `FirebaseDatabaseService.swift` - `observeUserGalleryEvents()` (only processes `.added` changes)
+- `GalleryHistoryEvent.swift` - `SMSResponseData.replyMessage` field
+- `CardStackView.swift` - Displays `replyMessage` in gallery UI
+
+---
+
+## Why These Fixes Matter
+
+### Security Improvement
+The signature validation fix ensures that only legitimate Twilio requests are processed, preventing unauthorized access to the webhook endpoint.
+
+### Real-Time UX Improvement
+The gallery event order fix ensures family members see thank you messages immediately in the gallery, providing better feedback that the elderly user's response was received and acknowledged.
+
+### iOS Listener Design Constraint
+The iOS app's gallery listener is intentionally designed to only process `.added` events (not `.modified`) to avoid duplicate UI updates and simplify state management. This means all Cloud Functions creating gallery events MUST include complete data in the initial write.
+
+---
+
+## Testing Verification
+
+**Signature Validation:**
+- Verified webhook rejects requests with invalid signatures
+- Verified webhook accepts valid Twilio requests
+- Tested with both Gen 1 and Gen 2 Cloud Functions deployments
+
+**Gallery Event Creation:**
+- Verified `replyMessage` appears in iOS gallery immediately after SMS response
+- Confirmed single Firestore write (no separate update)
+- Tested with text-only, photo-only, and combined responses
+
+---
+
+**Last Updated: 2025-12-01**

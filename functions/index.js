@@ -205,16 +205,32 @@ exports.twilioWebhook = onRequest(
       return res.status(403).send('Forbidden');
     }
 
-    // Build URL dynamically to handle Cloud Function redeployments
-    // Use x-forwarded-proto for correct protocol behind load balancer
+    // Build URL for Twilio signature validation
+    // Twilio signs requests using the webhook URL configured in their console
+    // For Cloud Functions Gen 2, the public URL format is:
+    // https://us-central1-{project-id}.cloudfunctions.net/{function-name}
+    // But req.url returns "/" because Cloud Run handles the function name routing
+    // So we must reconstruct the full URL that Twilio used for signing
     const protocol = req.headers['x-forwarded-proto'] || 'https';
-    const url = `${protocol}://${req.headers.host}${req.url}`;
+    const host = req.headers.host;
+
+    // Determine the correct path based on the host
+    // If host is the Cloud Functions URL (contains 'cloudfunctions.net'), append function name
+    // If host is the Cloud Run URL (contains 'run.app'), use req.url as-is
+    let url;
+    if (host.includes('cloudfunctions.net')) {
+      // Public Cloud Functions URL - Twilio uses this format
+      url = `${protocol}://${host}/twilioWebhook`;
+    } else {
+      // Direct Cloud Run URL - use as-is
+      url = `${protocol}://${host}${req.url}`;
+    }
 
     const authToken = twilioAuthToken.value();
     const isValidRequest = twilio.validateRequest(authToken, twilioSignature, url, req.body);
 
     if (!isValidRequest) {
-      console.error('❌ Invalid Twilio signature', { url });
+      console.error('❌ Invalid Twilio signature', { url, host, reqUrl: req.url });
       return res.status(403).send('Forbidden');
     }
 
@@ -455,22 +471,9 @@ exports.twilioWebhook = onRequest(
         }
       }
 
-      await galleryEventRef.set({
-        id: galleryEventRef.id,
-        userId: userId,
-        profileId: profileDoc.id,
-        eventType: 'taskResponse',  // Must match GalleryEventType enum
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        // eventData is an enum with nested SMSResponseData
-        // IMPORTANT: Swift Codable encodes enum associated values with "_0" key
-        eventData: {
-          taskResponse: {
-            _0: taskResponseData  // Wrap in _0 to match Swift's enum encoding
-          }
-        }
-      });
-
-      // Send simple thank you message for valid response
+      // Send thank you message BEFORE creating gallery event
+      // This allows us to include replyMessage in the initial write
+      // (iOS listener only processes .added events, not .modified)
       let thankYou = null;
       try {
         const thankYouMessages = [
@@ -490,14 +493,28 @@ exports.twilioWebhook = onRequest(
           from: twilioPhoneNumber.value(),
           to: fromPhone
         });
-
-        // Update gallery event with reply message
-        await galleryEventRef.update({
-          'eventData.taskResponse._0.replyMessage': thankYou
-        });
       } catch (smsError) {
         console.error('❌ Failed to send thank you SMS:', smsError.message);
+        // Continue - we still want to create the gallery event even if SMS fails
       }
+
+      // Include replyMessage in the initial write so iOS listener picks it up
+      taskResponseData.replyMessage = thankYou;
+
+      await galleryEventRef.set({
+        id: galleryEventRef.id,
+        userId: userId,
+        profileId: profileDoc.id,
+        eventType: 'taskResponse',  // Must match GalleryEventType enum
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        // eventData is an enum with nested SMSResponseData
+        // IMPORTANT: Swift Codable encodes enum associated values with "_0" key
+        eventData: {
+          taskResponse: {
+            _0: taskResponseData  // Wrap in _0 to match Swift's enum encoding
+          }
+        }
+      });
     }
 
     res.status(200).send('OK');
