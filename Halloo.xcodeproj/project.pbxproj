@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		873DFD8F2EDE8F42004F7DB0 /* Notification.json in Resources */ = {isa = PBXBuildFile; fileRef = 873DFD8E2EDE8F42004F7DB0 /* Notification.json */; };
+		873DFD922EE7880A004F7DB0 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 873DFD912EE7880A004F7DB0 /* FirebaseMessaging */; };
 		8746D66E2E456C9500F3D4EA /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 8746D66D2E456C9500F3D4EA /* FirebaseAnalytics */; };
 		8746D6702E456C9500F3D4EA /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 8746D66F2E456C9500F3D4EA /* FirebaseAppCheck */; };
 		8746D6722E456C9500F3D4EA /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 8746D6712E456C9500F3D4EA /* FirebaseAuth */; };
@@ -102,6 +103,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				873DFD922EE7880A004F7DB0 /* FirebaseMessaging in Frameworks */,
 				8746D6702E456C9500F3D4EA /* FirebaseAppCheck in Frameworks */,
 				8746D6742E456C9500F3D4EA /* FirebaseFirestore in Frameworks */,
 				8746D6782E456C9500F3D4EA /* FirebaseFunctions in Frameworks */,
@@ -133,6 +135,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		873DFD902EE7880A004F7DB0 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		8746D5332E443C2800F3D4EA = {
 			isa = PBXGroup;
 			children = (
@@ -150,6 +159,7 @@
 				87A3B64B2ECFCA650083E08C /* Family.json */,
 				87A3B64D2ECFE5B60083E08C /* Like success.json */,
 				873DFD8E2EDE8F42004F7DB0 /* Notification.json */,
+				873DFD902EE7880A004F7DB0 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -194,6 +204,7 @@
 				87E87B652E73A1940014AEFE /* GoogleSignIn */,
 				87E87B672E73A1940014AEFE /* GoogleSignInSwift */,
 				87A3B2A12EC9471E0083E08C /* RevenueCat */,
+				873DFD912EE7880A004F7DB0 /* FirebaseMessaging */,
 			);
 			productName = Halloo;
 			productReference = 8746D53C2E443C2800F3D4EA /* Halloo.app */;
@@ -740,6 +751,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		873DFD912EE7880A004F7DB0 /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8746D66C2E456C9500F3D4EA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
 		8746D66D2E456C9500F3D4EA /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 8746D66C2E456C9500F3D4EA /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

@@ -412,6 +412,12 @@ struct WelcomeView: View {
 }
 
 // MARK: - Login Sheet View
+
+/// Modal sheet for returning users to log in directly from welcome screen
+///
+/// Uses shared `AuthButtonsView` component for DRY auth UI.
+/// No post-auth callback needed - relies on ContentView's reactive navigation
+/// via authService.isAuthenticated state changes.
 struct LoginSheetView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @Environment(\.dismiss) var dismiss
@@ -425,60 +431,20 @@ struct LoginSheetView: View {
                     .tracking(-1.0)
                     .padding(.top, 40)
 
-            Spacer()
-                .frame(height: 12)
+                Spacer()
+                    .frame(height: 12)
 
-            // Login buttons
-            // ✅ ARCHITECTURE: No manual dismiss - ContentView reacts to auth state changes
-            VStack(spacing: 12) {
-                // Apple Sign In
-                Button {
-                    _Concurrency.Task {
-                        await viewModel.signInWithApple()
-                        // ✅ No dismiss() - ContentView will automatically navigate when authService.isAuthenticated changes
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "apple.logo")
-                            .font(.system(size: 20, weight: .semibold))
-                        Text("Continue with Apple")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.black)
-                    .cornerRadius(12)
-                }
+                // Shared auth buttons component
+                // ✅ ARCHITECTURE: No onAuthComplete callback - ContentView reacts to auth state changes
+                AuthButtonsView(
+                    onAppleSignIn: { await viewModel.signInWithApple() },
+                    onGoogleSignIn: { await viewModel.signInWithGoogle() },
+                    onAuthComplete: nil,  // Reactive navigation via authService.isAuthenticated
+                    showPrivacyText: false
+                )
+                .padding(.horizontal, 24)
 
-                // Google Sign In
-                Button {
-                    _Concurrency.Task {
-                        await viewModel.signInWithGoogle()
-                        // ✅ No dismiss() - ContentView will automatically navigate when authService.isAuthenticated changes
-                    }
-                } label: {
-                    HStack {
-                        Image("GoogleIcon")
-                            .resizable()
-                            .frame(width: 20, height: 20)
-                        Text("Continue with Google")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.white)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
-                    .cornerRadius(12)
-                }
-            }
-            .padding(.horizontal, 24)
-
-            Spacer()
+                Spacer()
             }
             .background(Color(hex: "f9f9f9"))
 

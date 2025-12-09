@@ -3,27 +3,141 @@ import Firebase
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
+import FirebaseMessaging
 import SuperwallKit
 import RevenueCat
 import GoogleSignIn
+import UserNotifications
 
-// MARK: - App Delegate for Orientation Control
-class AppDelegate: NSObject, UIApplicationDelegate {
+// MARK: - App Delegate for Push Notifications & Orientation Control
+
+class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
     static var orientationLock = UIInterfaceOrientationMask.portrait
-    
-    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Set FCM and notification delegates
+        Messaging.messaging().delegate = self
+        UNUserNotificationCenter.current().delegate = self
+
+        // Register for remote notifications (required for push)
+        application.registerForRemoteNotifications()
+
+        return true
+    }
+
+    func application(_ application: UIApplication,
+                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         return AppDelegate.orientationLock
     }
+
+    // MARK: - APNs Token Registration
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        // Pass APNs token to Firebase - FCM exchanges it for an FCM token
+        Messaging.messaging().apnsToken = deviceToken
+        print("📱 [Push] APNs token registered")
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("❌ [Push] Failed to register for remote notifications: \(error.localizedDescription)")
+    }
+
+    // MARK: - FCM Token Handling (MessagingDelegate)
+
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let token = fcmToken else {
+            print("⚠️ [Push] FCM token is nil")
+            return
+        }
+
+        print("📱 [Push] FCM token received: \(token.prefix(20))...")
+
+        // Store token in Firestore for authenticated users
+        _Concurrency.Task {
+            await storeFCMToken(token)
+        }
+    }
+
+    /// Stores FCM token in Firestore for the current user
+    private func storeFCMToken(_ token: String) async {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("⚠️ [Push] No authenticated user - FCM token not stored")
+            return
+        }
+
+        let db = Firestore.firestore()
+        do {
+            try await db.collection("users").document(userId).setData([
+                "fcmToken": token,
+                "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
+                "fcmPlatform": "ios"
+            ], merge: true)
+            print("✅ [Push] FCM token stored in Firestore for user \(userId.prefix(8))...")
+        } catch {
+            print("❌ [Push] Failed to store FCM token: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Foreground Notification Display (UNUserNotificationCenterDelegate)
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        let userInfo = notification.request.content.userInfo
+        print("📬 [Push] Notification received in foreground: \(userInfo)")
+
+        // Show notification banner even when app is in foreground
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    // MARK: - Notification Tap Handling (UNUserNotificationCenterDelegate)
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let userInfo = response.notification.request.content.userInfo
+        print("👆 [Push] Notification tapped: \(userInfo)")
+
+        // Extract custom data from notification payload
+        if let type = userInfo["type"] as? String, type == "noReply" {
+            let habitId = userInfo["habitId"] as? String
+            let profileId = userInfo["profileId"] as? String
+
+            // Post notification to navigate to relevant screen
+            NotificationCenter.default.post(
+                name: .didTapNoReplyNotification,
+                object: nil,
+                userInfo: [
+                    "habitId": habitId as Any,
+                    "profileId": profileId as Any
+                ]
+            )
+        }
+
+        completionHandler()
+    }
 }
+
+// MARK: - Notification Name Extension
+
+extension Notification.Name {
+    /// Posted when user taps a "no reply" push notification
+    static let didTapNoReplyNotification = Notification.Name("didTapNoReplyNotification")
+}
+
+// MARK: - Main App
 
 @main
 struct HalloApp: App {
     // MARK: - App Delegate
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    
+
     // MARK: - Dependencies
     private let container: Container
-    
+
     // MARK: - App Lifecycle
     init() {
         // Skip heavy initialization during Canvas/Preview execution
@@ -45,12 +159,12 @@ struct HalloApp: App {
 
         configureAppearance()
     }
-    
+
     private static func configureFirebase() {
         // Simple Firebase configuration
         FirebaseApp.configure()
     }
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -79,11 +193,14 @@ struct HalloApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
                     handleAppDidEnterBackground()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .didTapNoReplyNotification)) { notification in
+                    handleNoReplyNotificationTap(notification)
+                }
         }
     }
-    
+
     // MARK: - Configuration
-    
+
     private func configureNotifications() {
         _Concurrency.Task {
             await requestNotificationPermissions()
@@ -151,7 +268,7 @@ struct HalloApp: App {
         //     "profiles_created": 0
         // ])
     }
-    
+
     private func configureGoogleSignIn() {
         guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
               let plist = NSDictionary(contentsOfFile: path),
@@ -162,7 +279,7 @@ struct HalloApp: App {
 
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
     }
-    
+
     private func configureAppearance() {
         // Register custom fonts (Poppins & Inter available when needed)
         AppFonts.registerFonts()
@@ -189,7 +306,7 @@ struct HalloApp: App {
             UINavigationBar.appearance().scrollEdgeAppearance = UINavigationBarAppearance()
         }
     }
-    
+
     // MARK: - App Lifecycle Handlers
     private func handleAppLaunch() {
         // Initialize critical services
@@ -204,18 +321,27 @@ struct HalloApp: App {
             await refreshAppData()
         }
 
-        // Check for pending notifications
-        checkPendingNotifications()
+        // Clear badge count when app comes to foreground
+        UNUserNotificationCenter.current().setBadgeCount(0)
     }
 
     private func handleAppDidEnterBackground() {
         // Save any pending changes
         savePendingChanges()
-
-        // Schedule background notifications if needed
-        scheduleBackgroundNotifications()
     }
-    
+
+    private func handleNoReplyNotificationTap(_ notification: Notification) {
+        // Handle navigation when user taps a "no reply" notification
+        guard let userInfo = notification.userInfo,
+              let profileId = userInfo["profileId"] as? String else {
+            return
+        }
+
+        print("📍 [Push] Navigating to profile: \(profileId)")
+        // TODO: Implement navigation to profile/habit detail view
+        // This could update an @AppStorage or @Published property that ContentView observes
+    }
+
     // MARK: - Service Initialization
     private func initializeCriticalServices() async {
         // Initialize authentication state
@@ -230,37 +356,53 @@ struct HalloApp: App {
         if let userId = userId {
             // Setup incoming SMS listener
             setupSMSListener(userId: userId, dataSyncCoordinator: dataSyncCoordinator)
+
+            // Re-register FCM token for this user (in case token changed while logged out)
+            await refreshFCMToken()
         }
     }
-    
+
     private func requestNotificationPermissions() async {
         let notificationService = container.resolve(NotificationServiceProtocol.self)
-
         _ = await notificationService.requestPermissions()
+    }
 
-        // Check for orphaned pending notifications from old code
-        let pendingIds = await notificationService.getPendingNotificationIds()
-        if !pendingIds.isEmpty {
-            await notificationService.cancelAllNotifications()
+    /// Refreshes FCM token registration for the current user
+    private func refreshFCMToken() async {
+        guard let token = Messaging.messaging().fcmToken,
+              let userId = Auth.auth().currentUser?.uid else {
+            return
+        }
+
+        let db = Firestore.firestore()
+        do {
+            try await db.collection("users").document(userId).setData([
+                "fcmToken": token,
+                "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
+                "fcmPlatform": "ios"
+            ], merge: true)
+            print("✅ [Push] FCM token refreshed on login")
+        } catch {
+            print("❌ [Push] Failed to refresh FCM token: \(error.localizedDescription)")
         }
     }
-    
+
     // MARK: - Data Management
     private func refreshAppData() async {
         let dataSyncCoordinator = container.resolve(DataSyncCoordinator.self)
 
         await dataSyncCoordinator.syncAllData()
     }
-    
+
     private func savePendingChanges() {
         // Save any unsaved changes before app goes to background
         let dataSyncCoordinator = container.resolve(DataSyncCoordinator.self)
-        
+
         _Concurrency.Task {
             await dataSyncCoordinator.saveUnsavedChanges()
         }
     }
-    
+
     /// Sets up Firestore listener for incoming SMS messages
     private func setupSMSListener(userId: String, dataSyncCoordinator: DataSyncCoordinator) {
         guard let databaseService = container.resolve(DatabaseServiceProtocol.self) as? FirebaseDatabaseService else {
@@ -284,15 +426,6 @@ struct HalloApp: App {
             .store(in: &container.cancellables) // Store in Container's cancellables
     }
 
-    private func checkPendingNotifications() {
-        // For MVP, notifications are checked when tasks are loaded
-        // No separate check needed at app foreground
-    }
-
-    private func scheduleBackgroundNotifications() {
-        // TODO: Implement background notifications if needed
-    }
-    
     // Analytics removed - no longer tracking app events
 }
 
@@ -306,11 +439,11 @@ extension HalloApp {
         return true
         #endif
     }
-    
+
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
     }
-    
+
     private var buildNumber: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     }
@@ -320,14 +453,31 @@ extension HalloApp {
 extension HalloApp {
     private func handleCriticalError(_ error: Error) {
         print("🚨 Critical app error: \(error)")
-        
+
         // Log to crash reporting service
         // CrashlyticsService.shared.recordError(error)
-        
+
         // Show user-friendly error if needed
         _Concurrency.Task { @MainActor in
             print("🚨 Critical app error: \(error.localizedDescription)")
             // TODO: Display critical error to user if needed
+        }
+    }
+}
+
+// MARK: - FCM Token Management on Auth State Changes
+
+extension HalloApp {
+    /// Call this when user logs out to remove FCM token
+    static func clearFCMTokenOnLogout(userId: String) async {
+        let db = Firestore.firestore()
+        do {
+            try await db.collection("users").document(userId).updateData([
+                "fcmToken": FieldValue.delete()
+            ])
+            print("🗑️ [Push] FCM token cleared on logout")
+        } catch {
+            print("❌ [Push] Failed to clear FCM token: \(error.localizedDescription)")
         }
     }
 }
@@ -341,4 +491,3 @@ struct HalloApp_Previews: PreviewProvider {
     }
 }
 #endif
-

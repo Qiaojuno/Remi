@@ -1,6 +1,10 @@
 import Foundation
 import UserNotifications
 
+/// Notification permission service implementation
+///
+/// Handles only permission management for push notifications.
+/// See `NotificationServiceProtocol` for architecture details.
 class NotificationService: NotificationServiceProtocol {
 
     func requestPermissions() async -> Bool {
@@ -13,36 +17,8 @@ class NotificationService: NotificationServiceProtocol {
         }
     }
 
-    func scheduleNotification(
-        id: String,
-        title: String,
-        body: String,
-        scheduledTime: Date
-    ) async throws {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: scheduledTime)
-
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-
-        try await UNUserNotificationCenter.current().add(request)
-    }
-
-    func cancelNotification(withId id: String) async {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
-    }
-
-    func cancelAllNotifications() async {
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
-    }
-
-    func getPendingNotificationIds() async -> [String] {
-        let requests = await UNUserNotificationCenter.current().pendingNotificationRequests()
-        return requests.map { $0.identifier }
+    func getAuthorizationStatus() async -> UNAuthorizationStatus {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus
     }
 }

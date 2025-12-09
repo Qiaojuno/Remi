@@ -202,7 +202,6 @@ final class Container: ObservableObject {
         TaskViewModel(
             databaseService: resolve(DatabaseServiceProtocol.self),
             smsService: resolve(SMSServiceProtocol.self),
-            notificationService: resolve(NotificationServiceProtocol.self),
             authService: resolve(AuthenticationServiceProtocol.self),
             dataSyncCoordinator: resolve(DataSyncCoordinator.self)
         )

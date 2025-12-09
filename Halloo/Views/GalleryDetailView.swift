@@ -156,7 +156,6 @@ struct GalleryDetailView: View {
             .environmentObject(TaskViewModel(
                 databaseService: container.resolve(DatabaseServiceProtocol.self),
                 smsService: container.resolve(SMSServiceProtocol.self),
-                notificationService: container.resolve(NotificationServiceProtocol.self),
                 authService: container.resolve(AuthenticationServiceProtocol.self),
                 dataSyncCoordinator: container.resolve(DataSyncCoordinator.self)
             ))

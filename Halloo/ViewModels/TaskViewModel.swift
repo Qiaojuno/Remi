@@ -3,11 +3,11 @@
 //  Hallo
 //
 //  Purpose: Manages task creation, scheduling, and SMS reminder coordination for elderly care
-//  Key Features: 
+//  Key Features:
 //    • Daily medication and care task scheduling with family oversight
 //    • SMS reminder delivery with flexible response acceptance
 //    • Real-time task completion tracking across family members
-//  Dependencies: DatabaseService, SMSService, NotificationService, DataSyncCoordinator
+//  Dependencies: DatabaseService, SMSService, DataSyncCoordinator
 //  
 //  Business Context: Core value proposition - helps families ensure elderly parents complete daily tasks
 //  Critical Paths: Task creation → SMS reminders → Response processing → Family notifications
@@ -257,10 +257,7 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
     
     /// SMS service for sending reminders to elderly parents
     private let smsService: SMSServiceProtocol
-    
-    /// Local notification service for family member alerts
-    private let notificationService: NotificationServiceProtocol
-    
+
     /// Authentication service for user context and permissions
     private let authService: AuthenticationServiceProtocol
     
@@ -399,7 +396,7 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
     /// validation, and robust error handling for non-technical elderly users.
     ///
     /// ## Setup Process:
-    /// 1. **Service Integration**: Connects SMS, database, and notification services
+    /// 1. **Service Integration**: Connects SMS and database services
     /// 2. **Family Coordination**: Establishes real-time sync across family devices
     /// 3. **Validation Setup**: Configures elderly-friendly form validation
     /// 4. **Data Loading**: Loads existing tasks with family context
@@ -407,19 +404,16 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
     ///
     /// - Parameter databaseService: Handles task persistence and family synchronization
     /// - Parameter smsService: Manages SMS reminders to elderly parents
-    /// - Parameter notificationService: Creates family oversight notifications
     /// - Parameter authService: Provides family user context and permissions
     /// - Parameter dataSyncCoordinator: Synchronizes task data across family members
     init(
         databaseService: DatabaseServiceProtocol,
         smsService: SMSServiceProtocol,
-        notificationService: NotificationServiceProtocol,
         authService: AuthenticationServiceProtocol,
         dataSyncCoordinator: DataSyncCoordinator
     ) {
         self.databaseService = databaseService
         self.smsService = smsService
-        self.notificationService = notificationService
         self.authService = authService
         self.dataSyncCoordinator = dataSyncCoordinator
         

@@ -2619,15 +2619,15 @@ struct PersonalizedPlanView: View {
 /// This view presents authentication as a value-add ("save your progress")
 /// rather than a hard requirement. Appears naturally after quiz completion
 /// and before the paywall conversion step.
+///
+/// Uses shared `AuthButtonsView` component for DRY auth UI.
 struct SaveYourProgressView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
-    @State private var isAuthenticating = false
 
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            
             onBack: viewModel.previousStep
         ) {
             VStack(spacing: 0) {
@@ -2668,78 +2668,16 @@ struct SaveYourProgressView: View {
                 Spacer()
                     .frame(minHeight: 40)
 
-                // Auth buttons
-                VStack(spacing: 12) {
-                    // Apple Sign In
-                    Button {
-                        _Concurrency.Task {
-                            isAuthenticating = true
-                            await viewModel.signInWithApple()
-
-                            // After successful auth, move to next step (free trial intro)
-                            viewModel.nextStep()
-                            isAuthenticating = false
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "apple.logo")
-                                .font(.system(size: 20, weight: .semibold))
-                            Text("Continue with Apple")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.black)
-                        .cornerRadius(12)
-                    }
-                    .disabled(isAuthenticating)
-                    .opacity(showContent ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4).delay(0.4), value: showContent)
-
-                    // Google Sign In
-                    Button {
-                        _Concurrency.Task {
-                            isAuthenticating = true
-                            await viewModel.signInWithGoogle()
-
-                            // After successful auth, move to next step (free trial intro)
-                            viewModel.nextStep()
-                            isAuthenticating = false
-                        }
-                    } label: {
-                        HStack {
-                            Image("GoogleIcon")
-                                .resizable()
-                                .frame(width: 20, height: 20)
-                            Text("Continue with Google")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.black)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.white)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        )
-                        .cornerRadius(12)
-                    }
-                    .disabled(isAuthenticating)
-                    .opacity(showContent ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4).delay(0.5), value: showContent)
-                }
+                // Shared auth buttons component
+                AuthButtonsView(
+                    onAppleSignIn: { await viewModel.signInWithApple() },
+                    onGoogleSignIn: { await viewModel.signInWithGoogle() },
+                    onAuthComplete: { viewModel.nextStep() },
+                    showPrivacyText: true
+                )
                 .padding(.horizontal, 24)
-
-                // Privacy text
-                Text("By continuing, you agree to our Terms & Privacy Policy")
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-                    .padding(.top, 16)
-                    .opacity(showContent ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4).delay(0.6), value: showContent)
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeOut(duration: 0.4).delay(0.4), value: showContent)
 
                 Spacer()
             }

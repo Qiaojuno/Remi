@@ -537,9 +537,6 @@ struct ContentView: View {
                         // Restore any missing photoURL references from Storage
                         await self.profileViewModel?.restoreMissingProfilePhotos()
 
-                        // DEBUG: Check and clear pending notifications
-                        await self.debugAndClearNotifications()
-
                         // Re-populate the duplicate prevention Set AFTER data is loaded
                         await MainActor.run {
                             self.profileViewModel?.populateGalleryEventTrackingSet(from: appState.galleryEvents)
@@ -548,15 +545,6 @@ struct ContentView: View {
                 }
             }
         }
-    }
-
-    /// Debug function to check and clear all pending/delivered notifications
-    private func debugAndClearNotifications() async {
-        let center = UNUserNotificationCenter.current()
-
-        // Clear ALL notifications (both pending and delivered)
-        await center.removeAllPendingNotificationRequests()
-        await center.removeAllDeliveredNotifications()
     }
 
     private func setupAuthStateObserver() {
@@ -599,14 +587,12 @@ struct ContentView: View {
     private func safeTaskViewModel() -> TaskViewModel? {
         let dbService = container.resolve(DatabaseServiceProtocol.self)
         let smsService = container.resolve(SMSServiceProtocol.self)
-        let notificationService = container.resolve(NotificationServiceProtocol.self)
         let authService = container.resolve(AuthenticationServiceProtocol.self)
         let dataSyncCoordinator = container.resolve(DataSyncCoordinator.self)
 
         let viewModel = TaskViewModel(
             databaseService: dbService,
             smsService: smsService,
-            notificationService: notificationService,
             authService: authService,
             dataSyncCoordinator: dataSyncCoordinator
         )

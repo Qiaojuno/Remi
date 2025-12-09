@@ -301,6 +301,111 @@ struct OnboardingStepContainer<Content: View>: View {
     }
 }
 
+// MARK: - Auth Buttons (Shared Apple/Google Sign In)
+
+/// Reusable authentication buttons for Apple and Google Sign In
+///
+/// This component provides consistent auth UI across:
+/// - SaveYourProgressView (quiz flow auth gate)
+/// - LoginSheetView (welcome page direct login)
+///
+/// ## Usage:
+/// ```swift
+/// AuthButtonsView(
+///     onAppleSignIn: { await viewModel.signInWithApple() },
+///     onGoogleSignIn: { await viewModel.signInWithGoogle() },
+///     onAuthComplete: { viewModel.nextStep() }  // Optional post-auth action
+/// )
+/// ```
+///
+/// ## Design:
+/// - Apple button: Black background, white text/icon
+/// - Google button: White background with gray border, GoogleIcon asset
+/// - Both buttons use consistent 16pt semibold text, 12pt corner radius
+struct AuthButtonsView: View {
+    /// Async action to perform Apple Sign In (typically viewModel.signInWithApple)
+    let onAppleSignIn: () async -> Void
+
+    /// Async action to perform Google Sign In (typically viewModel.signInWithGoogle)
+    let onGoogleSignIn: () async -> Void
+
+    /// Optional callback after successful authentication (e.g., navigate to next step)
+    /// If nil, relies on reactive navigation via authService.isAuthenticated
+    var onAuthComplete: (() -> Void)? = nil
+
+    /// Whether to show privacy policy text below buttons
+    var showPrivacyText: Bool = true
+
+    @State private var isAuthenticating = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // Apple Sign In
+            Button {
+                guard !isAuthenticating else { return }
+                _Concurrency.Task {
+                    isAuthenticating = true
+                    await onAppleSignIn()
+                    onAuthComplete?()
+                    isAuthenticating = false
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text("Continue with Apple")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.black)
+                .cornerRadius(12)
+            }
+            .disabled(isAuthenticating)
+
+            // Google Sign In
+            Button {
+                guard !isAuthenticating else { return }
+                _Concurrency.Task {
+                    isAuthenticating = true
+                    await onGoogleSignIn()
+                    onAuthComplete?()
+                    isAuthenticating = false
+                }
+            } label: {
+                HStack {
+                    Image("GoogleIcon")
+                        .resizable()
+                        .frame(width: 20, height: 20)
+                    Text("Continue with Google")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.black)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+                .cornerRadius(12)
+            }
+            .disabled(isAuthenticating)
+
+            // Privacy text (optional)
+            if showPrivacyText {
+                Text("By continuing, you agree to our Terms & Privacy Policy")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+            }
+        }
+    }
+}
+
 // MARK: - Quiz Selection Step (Generic)
 
 /// Generic single-select quiz step - eliminates most duplication
