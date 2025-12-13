@@ -203,9 +203,12 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     private let databaseService: DatabaseServiceProtocol
     
     // MARK: - Internal Family Coordination State Management
-    
+
     /// Combine cancellables for reactive family coordination workflows
     private var cancellables = Set<AnyCancellable>()
+
+    /// Separate cancellables for Firebase listeners (allows stopping/restarting on auth changes)
+    private var firebaseListenerCancellables = Set<AnyCancellable>()
     
     /// Background timer for continuous family data synchronization
     /// 
@@ -364,8 +367,16 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     /// enabling true multi-device sync where Device B receives updates when
     /// Device A makes changes to tasks or profiles.
     ///
+    /// This method is idempotent - safe to call multiple times. It will stop
+    /// existing listeners before starting new ones to avoid duplicates.
+    ///
     /// - Parameter userId: Family user ID to observe data for
     func setupFirebaseListeners(userId: String) {
+        // Stop any existing listeners first (prevents duplicates on re-login)
+        stopFirebaseListeners()
+
+        print("🔗 [DataSyncCoordinator] Setting up Firebase listeners for user: \(userId.prefix(8))...")
+
         // 1. Connect Task Updates Listener
         // Observes all habits across user's profiles via collection group query
         databaseService.observeUserTasks(userId)
@@ -387,7 +398,7 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
                     }
                 }
             )
-            .store(in: &cancellables)
+            .store(in: &firebaseListenerCancellables)
 
         // 2. Connect Profile Updates Listener
         // Observes user's elderly profiles for real-time confirmation status updates
@@ -408,7 +419,7 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
                     }
                 }
             )
-            .store(in: &cancellables)
+            .store(in: &firebaseListenerCancellables)
 
         // 3. Connect Gallery Events Listener
         // Observes gallery_events collection for real-time updates from Twilio webhook
@@ -430,7 +441,20 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
                     }
                 }
             )
-            .store(in: &cancellables)
+            .store(in: &firebaseListenerCancellables)
+
+        print("✅ [DataSyncCoordinator] Firebase listeners connected")
+    }
+
+    /// Stops all Firebase real-time listeners
+    ///
+    /// Call this when user logs out or before re-initializing listeners
+    /// to prevent duplicate listeners and permission errors.
+    func stopFirebaseListeners() {
+        guard !firebaseListenerCancellables.isEmpty else { return }
+
+        print("🔌 [DataSyncCoordinator] Stopping Firebase listeners...")
+        firebaseListenerCancellables.removeAll()
     }
     
     /// Saves any unsaved changes before backgrounding

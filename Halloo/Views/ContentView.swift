@@ -554,7 +554,16 @@ struct ContentView: View {
             .receive(on: DispatchQueue.main)
             .sink { newAuthState in
                 if newAuthState {
-                    // User logged in - load data and setup listeners
+                    // User logged in - setup Firebase listeners and load data
+                    let dataSyncCoordinator = self.container.resolve(DataSyncCoordinator.self)
+
+                    // ✅ FIX: Setup Firebase listeners on mid-session login
+                    // This fixes the race condition where listeners weren't initialized
+                    // when user logs in from the Welcome page (vs app launch)
+                    if let userId = authService.currentUser?.uid {
+                        dataSyncCoordinator.setupFirebaseListeners(userId: userId)
+                    }
+
                     _Concurrency.Task { @MainActor in
                         await self.appState.loadUserData()
 
@@ -572,6 +581,9 @@ struct ContentView: View {
                     self.profileViewModel?.loadProfiles()
                 } else {
                     // User logged out - reset all state and stop listeners
+                    let dataSyncCoordinator = self.container.resolve(DataSyncCoordinator.self)
+                    dataSyncCoordinator.stopFirebaseListeners()
+
                     // Reset AppState (clears data + stops listeners)
                     self.appState.reset()
 

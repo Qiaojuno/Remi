@@ -416,8 +416,7 @@ struct WelcomeView: View {
 /// Modal sheet for returning users to log in directly from welcome screen
 ///
 /// Uses shared `AuthButtonsView` component for DRY auth UI.
-/// No post-auth callback needed - relies on ContentView's reactive navigation
-/// via authService.isAuthenticated state changes.
+/// Sets `isComplete = true` on successful auth to bypass onboarding for returning users.
 struct LoginSheetView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @Environment(\.dismiss) var dismiss
@@ -435,11 +434,16 @@ struct LoginSheetView: View {
                     .frame(height: 12)
 
                 // Shared auth buttons component
-                // ✅ ARCHITECTURE: No onAuthComplete callback - ContentView reacts to auth state changes
+                // ✅ FIX: Set isComplete = true for returning users logging in from Welcome page
+                // This bypasses onboarding since they've already completed it in a previous session
                 AuthButtonsView(
                     onAppleSignIn: { await viewModel.signInWithApple() },
                     onGoogleSignIn: { await viewModel.signInWithGoogle() },
-                    onAuthComplete: nil,  // Reactive navigation via authService.isAuthenticated
+                    onAuthComplete: {
+                        // Returning users bypass onboarding → go straight to PaywallGateView/Dashboard
+                        viewModel.isComplete = true
+                        dismiss()
+                    },
                     showPrivacyText: false
                 )
                 .padding(.horizontal, 24)
@@ -873,7 +877,11 @@ struct PaywallGateView<AuthenticatedContent: View>: View {
                 // ❌ No subscription - show paywall
                 PaywallGateContent(
                     placement: determinePlacement(),
-                    isNewUser: isNewUser
+                    isNewUser: isNewUser,
+                    onSubscriptionGranted: {
+                        // User subscribed - update state to show dashboard
+                        subscriptionStatus = .hasSubscription
+                    }
                 )
             }
         }
@@ -929,49 +937,24 @@ struct PaywallGateView<AuthenticatedContent: View>: View {
 
 // MARK: - Paywall Gate Content
 
-/// Displays the paywall with Superwall integration
-/// ✅ SIMPLIFIED: RevenueCat handles trials, we just check subscription status
+/// Triggers Superwall paywall and handles dismissal
+/// - If user subscribes → PaywallGateView will detect and show dashboard
+/// - If user dismisses without subscribing → Log out and return to Welcome page
 private struct PaywallGateContent: View {
     let placement: String
     let isNewUser: Bool
+    let onSubscriptionGranted: () -> Void
 
     @EnvironmentObject var appState: AppState
+    @Environment(\.container) private var container
 
     var body: some View {
-        ZStack {
-            Color(hex: "f9f9f9")
-                .ignoresSafeArea()
-
-            VStack(spacing: 20) {
-                Spacer()
-
-                // Remi logo
-                Image("Remi Logo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 200)
-
-                // Message based on user state
-                Text(getMessage())
-                    .font(.system(size: 24, weight: .bold))
-                    .tracking(-1.0)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-
-                Spacer()
+        // Minimal background while Superwall paywall loads
+        Color(hex: "f9f9f9")
+            .ignoresSafeArea()
+            .onAppear {
+                triggerSuperwallPaywall()
             }
-        }
-        .onAppear {
-            triggerSuperwallPaywall()
-        }
-    }
-
-    private func getMessage() -> String {
-        if isNewUser {
-            return "Choose your plan to get started"
-        } else {
-            return "Subscribe to continue"
-        }
     }
 
     private func triggerSuperwallPaywall() {
@@ -983,9 +966,29 @@ private struct PaywallGateContent: View {
             "paywall_trigger": "auth_gate"
         ])
 
-        // Register placement - Superwall handles the rest
+        // Register placement with dismissal handler
         Superwall.shared.register(placement: placement) {
-            print("✅ [PaywallGate] User gained access after purchase")
+            // This handler fires when paywall is dismissed
+            // Check if user actually subscribed
+            handlePaywallDismissal()
+        }
+    }
+
+    private func handlePaywallDismissal() {
+        _Concurrency.Task { @MainActor in
+            print("🔍 [PaywallGate] Paywall dismissed - checking subscription status...")
+
+            let hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+
+            if hasSubscription {
+                print("✅ [PaywallGate] User subscribed - granting access")
+                onSubscriptionGranted()
+            } else {
+                print("❌ [PaywallGate] No subscription after paywall - logging out")
+                // Log out user and return to welcome page
+                let authService = container.resolve(AuthenticationServiceProtocol.self)
+                try? await authService.signOut()
+            }
         }
     }
 }

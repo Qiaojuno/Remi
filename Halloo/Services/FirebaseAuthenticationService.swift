@@ -203,6 +203,14 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
             try await createUserDocument(newUser)
         }
 
+        // ✅ FIX: Update isAuthenticated synchronously to prevent race condition
+        // The auth state listener runs in a separate Task which can lose the race
+        // against onAuthComplete() in the UI layer
+        await MainActor.run {
+            self.isAuthenticated = true
+            self.authBoolSubject.send(true)
+        }
+
         return AuthResult(
             uid: firebaseUser.uid,
             email: firebaseUser.email ?? appleIDCredential.email,
@@ -211,7 +219,7 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
             idToken: try await firebaseUser.getIDToken()
         )
     }
-    
+
     func signInWithGoogle() async throws -> AuthResult {
         // Get the app's root view controller
         guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -261,6 +269,14 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
                 try await createUserDocument(newUser)
             }
 
+            // ✅ FIX: Update isAuthenticated synchronously to prevent race condition
+            // The auth state listener runs in a separate Task which can lose the race
+            // against onAuthComplete() in the UI layer
+            await MainActor.run {
+                self.isAuthenticated = true
+                self.authBoolSubject.send(true)
+            }
+
             return AuthResult(
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
@@ -274,11 +290,14 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
             throw AuthenticationError.unknownError("Google Sign In failed: \(error.localizedDescription)")
         }
     }
-    
+
     func signOut() async throws {
         try auth.signOut()
-        authStateSubject.send(nil)
-        authBoolSubject.send(false)
+        await MainActor.run {
+            self.isAuthenticated = false
+            self.authBoolSubject.send(false)
+            self.authStateSubject.send(nil)
+        }
     }
     
     func deleteAccount() async throws {
