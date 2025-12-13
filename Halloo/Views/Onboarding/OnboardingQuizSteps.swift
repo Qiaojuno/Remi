@@ -33,8 +33,8 @@ struct Step1View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -109,8 +109,8 @@ struct Step2View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -188,7 +188,8 @@ struct Step4CurrentRemindersView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -293,7 +294,8 @@ struct Step4aTechComfortView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -353,7 +355,8 @@ struct Step4bSatisfactionView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -415,7 +418,8 @@ struct Step5aCurrentFrustrationView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -469,7 +473,8 @@ struct EmpathyBreakView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -561,7 +566,8 @@ struct ReminderTimingView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -637,8 +643,8 @@ struct Step4View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -717,8 +723,8 @@ struct Step3View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -788,8 +794,8 @@ struct Step3bView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -930,8 +936,8 @@ struct Step5View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -1007,8 +1013,8 @@ struct Step6View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -1144,7 +1150,8 @@ struct NotificationPermissionView: View {
     private var permissionContent: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                     // Header at top
@@ -1306,7 +1313,8 @@ struct ReferralSourceView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()
@@ -1530,8 +1538,8 @@ struct Step7View: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 // Header section with title, stars, and description
@@ -1546,7 +1554,7 @@ struct Step7View: View {
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
                         .padding(.top, OnboardingUI.headerTopSpacing)
 
-                    // 5-star rating with laurel wreaths (30% smaller overall)
+                    // 5-star rating with laurel wreaths in bordered box
                     HStack(spacing: 4) {
                         // Left laurel wreath (30% smaller)
                         Image("Laurel Wreath")
@@ -1575,6 +1583,13 @@ struct Step7View: View {
                             .scaleEffect(showContent ? 1.0 : 0.5)
                             .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                    .padding(.horizontal, OnboardingUI.horizontalPadding)
 
                     // Description (same font settings as title)
                     Text("Remi was created for people like you")
@@ -1819,8 +1834,8 @@ struct PersonalizedPlanView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 // Scrollable content area (including header)
@@ -2628,7 +2643,8 @@ struct SaveYourProgressView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 // Top spacing
@@ -2705,7 +2721,8 @@ struct PlanReadyTeaserView: View {
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
-            onBack: viewModel.previousStep
+            onBack: viewModel.previousStep,
+            showProgressBar: viewModel.showsProgressBar
         ) {
             VStack(spacing: 0) {
                 Spacer()

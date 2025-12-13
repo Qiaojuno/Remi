@@ -47,8 +47,15 @@ enum OnboardingUI {
 /// Reusable progress bar with back button for onboarding steps
 /// Progress is controlled by parent (OnboardingViewModel) - this is a presentational component
 struct OnboardingProgressBar: View {
-    @Binding var progress: Double  // Animated by ViewModel
+    @Binding var progress: Double
     let onBack: () -> Void
+    var showBar: Bool = true  // When false, only show back chevron
+
+    // Static storage to remember last progress across view recreations
+    private static var lastProgress: Double = 0
+
+    // Local state for animated display
+    @State private var displayProgress: Double = OnboardingProgressBar.lastProgress
 
     var body: some View {
         HStack(spacing: 12) {
@@ -59,24 +66,46 @@ struct OnboardingProgressBar: View {
                     .frame(width: OnboardingUI.backButtonSize, height: OnboardingUI.backButtonSize)
             }
 
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background track (rounded)
-                    RoundedRectangle(cornerRadius: OnboardingUI.progressBarHeight / 2)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: OnboardingUI.progressBarHeight)
+            if showBar {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        // Background track (rounded)
+                        RoundedRectangle(cornerRadius: OnboardingUI.progressBarHeight / 2)
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: OnboardingUI.progressBarHeight)
 
-                    // Progress fill (rounded) - directly bound to ViewModel progress
-                    RoundedRectangle(cornerRadius: OnboardingUI.progressBarHeight / 2)
-                        .fill(Color.black)
-                        .frame(width: geometry.size.width * progress, height: OnboardingUI.progressBarHeight)
-                        .animation(.easeOut(duration: 0.4), value: progress)
+                        // Progress fill (rounded) - uses local animated state
+                        RoundedRectangle(cornerRadius: OnboardingUI.progressBarHeight / 2)
+                            .fill(Color.black)
+                            .frame(width: geometry.size.width * displayProgress, height: OnboardingUI.progressBarHeight)
+                    }
                 }
+                .frame(height: OnboardingUI.progressBarHeight)
+            } else {
+                Spacer()
             }
-            .frame(height: OnboardingUI.progressBarHeight)
         }
         .padding(.horizontal, OnboardingUI.horizontalPadding)
         .padding(.top, OnboardingUI.topPadding)
+        .onAppear {
+            // Start from last known progress
+            displayProgress = Self.lastProgress
+            // Animate to target after a brief delay to ensure initial state renders
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    displayProgress = progress
+                }
+                // Update lastProgress AFTER starting animation
+                Self.lastProgress = progress
+            }
+        }
+        .onChange(of: progress) { oldValue, newValue in
+            // Animate when progress changes while view is visible
+            // But DON'T update lastProgress here - that would break the next view's animation
+            withAnimation(.easeOut(duration: 0.3)) {
+                displayProgress = newValue
+            }
+        }
     }
 }
 
@@ -275,15 +304,18 @@ struct QuizMultiSelectButton: View {
 struct OnboardingStepContainer<Content: View>: View {
     @Binding var progress: Double  // Progress from ViewModel
     let onBack: () -> Void
+    let showProgressBar: Bool  // When false, only show back chevron
     let content: Content
 
     init(
         progress: Binding<Double>,
         onBack: @escaping () -> Void,
+        showProgressBar: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         self._progress = progress
         self.onBack = onBack
+        self.showProgressBar = showProgressBar
         self.content = content()
     }
 
@@ -291,7 +323,8 @@ struct OnboardingStepContainer<Content: View>: View {
         VStack(spacing: 0) {
             OnboardingProgressBar(
                 progress: $progress,
-                onBack: onBack
+                onBack: onBack,
+                showBar: showProgressBar
             )
 
             content

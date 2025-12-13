@@ -299,13 +299,37 @@ final class OnboardingViewModel: ObservableObject {
     }
     
     
+    /// Whether the current step should show the progress bar
+    ///
+    /// Progress bar is shown from step1WhoFor through step7SocialProof (Give us a Rating).
+    /// After that, only the back chevron is shown.
+    var showsProgressBar: Bool {
+        switch currentStep {
+        case .welcome,
+             .planReadyTeaser,
+             .loadingPlan,
+             .personalizedPlan,
+             .saveYourProgress,
+             .freeTrialIntro,
+             .freeTrialReminder,
+             .step6Paywall,
+             .profileSetupConfirmation,
+             .preferences:
+            return false
+        default:
+            return true
+        }
+    }
+
     /// Calculated progress percentage for onboarding workflow visualization
     ///
     /// Shows families how much of the setup process remains.
-    /// Calculates progress based on actual quiz flow steps (not all enum cases)
+    /// Progress bar covers steps from step1WhoFor (1/16) to step7SocialProof (16/16 = 100%).
     /// Used for progress bars and completion indicators.
     var progressPercentage: Double {
-        let totalSteps: Double = 16  // Actual quiz flow steps (notification permission, teaser, loading not counted)
+        // 15 steps with progress bar: step1 through step7SocialProof
+        // (notificationPermission shares step 13 with step6NotificationPromise since it may be skipped)
+        let totalSteps: Double = 15
         let stepNumber: Double
 
         switch currentStep {
@@ -317,24 +341,26 @@ final class OnboardingViewModel: ObservableObject {
         case .step4CurrentReminders: stepNumber = 5
         case .step4bSatisfaction: stepNumber = 6
         case .step5aCurrentFrustration: stepNumber = 7
-        case .empathyBreak: stepNumber = 7  // Empathy break - not counted in progress
-        case .reminderTiming: stepNumber = 8
-        case .step4HabitFocus: stepNumber = 9
-        case .step3bProofScreen: stepNumber = 10
-        case .step5WhatMatters: stepNumber = 11
-        case .step6NotificationPromise: stepNumber = 12
-        case .notificationPermission: stepNumber = 12  // Same as previous step - not counted
-        case .referralSource: stepNumber = 13  // Referral source question
-        case .step7SocialProof: stepNumber = 14  // Rating (moved before plan)
-        case .planReadyTeaser: stepNumber = 14  // Teaser - not counted in progress
-        case .loadingPlan: stepNumber = 14  // Loading screen - not counted in progress
-        case .personalizedPlan: stepNumber = 14  // Plan summary - not counted (same as rating)
-        case .saveYourProgress: stepNumber = 15
-        case .freeTrialIntro: stepNumber = 15  // Not counted in progress
-        case .freeTrialReminder: stepNumber = 15  // Not counted in progress
-        case .step6Paywall: stepNumber = 15
-        case .profileSetupConfirmation: stepNumber = 12
-        case .preferences: stepNumber = 12  // Same as profileSetupConfirmation
+        case .empathyBreak: stepNumber = 8
+        case .reminderTiming: stepNumber = 9
+        case .step4HabitFocus: stepNumber = 10
+        case .step3bProofScreen: stepNumber = 11
+        case .step5WhatMatters: stepNumber = 12
+        case .step6NotificationPromise: stepNumber = 13
+        case .notificationPermission: stepNumber = 13  // Same as promise - may be skipped
+        case .referralSource: stepNumber = 14
+        case .step7SocialProof: stepNumber = 15  // Give us a Rating - 100%
+        // Steps after step7SocialProof don't show progress bar
+        case .planReadyTeaser,
+             .loadingPlan,
+             .personalizedPlan,
+             .saveYourProgress,
+             .freeTrialIntro,
+             .freeTrialReminder,
+             .step6Paywall,
+             .profileSetupConfirmation,
+             .preferences:
+            stepNumber = 15
         }
 
         return stepNumber / totalSteps
@@ -805,9 +831,7 @@ final class OnboardingViewModel: ObservableObject {
     }
     
     private func updateProgress() {
-        withAnimation(.linear(duration: 0.5)) {
-            progress = progressPercentage
-        }
+        progress = progressPercentage
     }
     
     // MARK: - Sign In Methods

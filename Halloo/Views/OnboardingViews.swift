@@ -399,8 +399,9 @@ struct WelcomeView: View {
         .sheet(isPresented: $showingLogin) {
             LoginSheetView()
                 .environmentObject(viewModel)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+                .presentationDetents([.height(220)])
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
         }
         .onAppear {
             // Show content (cards + tagline) with slight delay
@@ -422,50 +423,30 @@ struct LoginSheetView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(spacing: 24) {
-                // Title
-                Text("Welcome back")
-                    .font(.system(size: 28, weight: .bold))
-                    .tracking(-1.0)
-                    .padding(.top, 40)
+        VStack(spacing: 16) {
+            // Title
+            Text("Welcome back")
+                .font(.system(size: 28, weight: .bold))
+                .tracking(-1.0)
+                .padding(.top, 24)
 
-                Spacer()
-                    .frame(height: 12)
-
-                // Shared auth buttons component
-                // ✅ FIX: Set isComplete = true for returning users logging in from Welcome page
-                // This bypasses onboarding since they've already completed it in a previous session
-                AuthButtonsView(
-                    onAppleSignIn: { await viewModel.signInWithApple() },
-                    onGoogleSignIn: { await viewModel.signInWithGoogle() },
-                    onAuthComplete: {
-                        // Returning users bypass onboarding → go straight to PaywallGateView/Dashboard
-                        viewModel.isComplete = true
-                        dismiss()
-                    },
-                    showPrivacyText: false
-                )
-                .padding(.horizontal, 24)
-
-                Spacer()
-            }
-            .background(Color(hex: "f9f9f9"))
-
-            // Close button
-            Button(action: {
-                dismiss()
-            }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
-                    .frame(width: 32, height: 32)
-                    .background(Color.gray.opacity(0.15))
-                    .clipShape(Circle())
-            }
-            .padding(.top, 16)
-            .padding(.trailing, 24)
+            // Shared auth buttons component
+            // ✅ FIX: Set isComplete = true for returning users logging in from Welcome page
+            // This bypasses onboarding since they've already completed it in a previous session
+            AuthButtonsView(
+                onAppleSignIn: { await viewModel.signInWithApple() },
+                onGoogleSignIn: { await viewModel.signInWithGoogle() },
+                onAuthComplete: {
+                    // Returning users bypass onboarding → go straight to PaywallGateView/Dashboard
+                    viewModel.isComplete = true
+                    dismiss()
+                },
+                showPrivacyText: false
+            )
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
+        .background(Color(hex: "f9f9f9"))
     }
 }
 
