@@ -145,8 +145,6 @@ struct DashboardView: View {
             if let selectedId = viewModel.selectedProfileId,
                let index = appState.profiles.firstIndex(where: { $0.id == selectedId }) {
                 selectedProfileIndex = index
-            } else {
-                print("⚠️ [DashboardView] Could not sync profile selection - profiles may not be loaded yet")
             }
 
             loadData()

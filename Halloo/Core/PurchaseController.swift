@@ -44,13 +44,10 @@ final class PurchaseController: SuperwallKit.PurchaseController {
     /// - Parameter product: StoreKit product to purchase
     /// - Returns: Purchase result with customer info and transaction
     func purchase(product: SuperwallKit.StoreProduct) async -> SuperwallKit.PurchaseResult {
-        print("💰 [PurchaseController] Purchase requested for product: \(product.productIdentifier)")
-
         do {
             // Convert Superwall StoreProduct to RevenueCat StoreProduct
             // RevenueCat requires StoreKit 2 products
             guard let sk2Product = product.sk2Product else {
-                print("❌ [PurchaseController] SK2 product not found - ensure Superwall is configured with StoreKit 2")
                 return .failed(NSError(domain: "PurchaseController", code: -1,
                     userInfo: [NSLocalizedDescriptionKey: "StoreKit 2 product required"]))
             }
@@ -60,19 +57,12 @@ final class PurchaseController: SuperwallKit.PurchaseController {
 
             // Check if user cancelled
             if result.userCancelled {
-                print("⚠️ [PurchaseController] User cancelled purchase")
                 return .cancelled
             }
-
-            print("✅ [PurchaseController] Purchase successful")
-            print("   - Product ID: \(product.productIdentifier)")
-            print("   - Active entitlements: \(result.customerInfo.entitlements.active.keys)")
 
             return .purchased
 
         } catch let error as ErrorCode {
-            print("❌ [PurchaseController] RevenueCat error: \(error)")
-
             if error == .paymentPendingError {
                 return .pending
             } else {
@@ -80,7 +70,6 @@ final class PurchaseController: SuperwallKit.PurchaseController {
             }
 
         } catch {
-            print("❌ [PurchaseController] Purchase failed: \(error.localizedDescription)")
             return .failed(error)
         }
     }
@@ -88,21 +77,14 @@ final class PurchaseController: SuperwallKit.PurchaseController {
     /// Restore previous purchases
     /// - Returns: Restore result with customer info
     func restorePurchases() async -> SuperwallKit.RestorationResult {
-        print("♻️ [PurchaseController] Restore purchases requested")
-
         do {
             // Delegate restoration to RevenueCat
-            let customerInfo = try await Purchases.shared.restorePurchases()
-
-            print("✅ [PurchaseController] Purchases restored successfully")
-            print("   - Active entitlements: \(customerInfo.entitlements.active.keys)")
-            print("   - Active subscriptions: \(customerInfo.activeSubscriptions)")
+            _ = try await Purchases.shared.restorePurchases()
 
             // Return success with restored customer info
             return .restored
 
         } catch {
-            print("❌ [PurchaseController] Restore failed: \(error)")
             return .failed(error)
         }
     }

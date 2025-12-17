@@ -122,7 +122,7 @@ protocol AuthenticationServiceProtocol {
     /// - Returns: Authentication result with Google-provided user information
     /// - Throws: AuthError if Google authentication fails or permissions denied
     /// - Important: Google authentication requires appropriate OAuth scopes for elderly care access
-    func signInWithGoogle() async throws -> AuthResult
+    @MainActor func signInWithGoogle() async throws -> AuthResult
     
     // MARK: - Family Account Security Management
     

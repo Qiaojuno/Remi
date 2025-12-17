@@ -220,10 +220,11 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
         )
     }
 
+    @MainActor
     func signInWithGoogle() async throws -> AuthResult {
-        // Get the app's root view controller
-        guard let windowScene = await UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let presentingViewController = await windowScene.windows.first?.rootViewController else {
+        // Get the app's root view controller - must be on main thread
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let presentingViewController = windowScene.windows.first?.rootViewController else {
             throw AuthenticationError.unknownError("Unable to get root view controller")
         }
 

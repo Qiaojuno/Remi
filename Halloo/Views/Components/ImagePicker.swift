@@ -34,19 +34,13 @@ struct ImagePicker: UIViewControllerRepresentable {
         }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            print("🖼️ ImagePicker: didFinishPickingMedia called")
             if let image = info[.originalImage] as? UIImage {
-                print("🖼️ ImagePicker: Image found - size: \(image.size)")
                 parent.image = image
-                print("🖼️ ImagePicker: Image SET on parent.image")
-            } else {
-                print("🖼️ ImagePicker: ❌ No image found in info dictionary")
             }
             parent.presentationMode.wrappedValue.dismiss()
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            print("🖼️ ImagePicker: User cancelled")
             parent.presentationMode.wrappedValue.dismiss()
         }
     }

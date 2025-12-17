@@ -20,23 +20,10 @@ final class Container: ObservableObject {
     
     // MARK: - Service Registration
     private func setupServices() {
-        print("🔥 Container.setupServices() started")
-        print("🔥 FirebaseApp.app() = \(String(describing: FirebaseApp.app()))")
-
         // Check if Firebase is configured
         let useFirebaseServices = checkFirebaseConfiguration()
-        print("🔥 useFirebaseServices = \(useFirebaseServices)")
-
-        // Write to file for debugging
-        let logMessage = "useFirebaseServices = \(useFirebaseServices), FirebaseApp = \(String(describing: FirebaseApp.app()))\n"
-        if let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let logFile = documentsPath.appendingPathComponent("firebase-debug.log")
-            try? logMessage.write(to: logFile, atomically: true, encoding: .utf8)
-            print("📝 Debug log written to: \(logFile.path)")
-        }
 
         // Core Services - Firebase only (Mock services removed for MVP)
-        print("🔥 Using Firebase services")
         registerSingleton(AuthenticationServiceProtocol.self) {
             FirebaseAuthenticationService()
         }
@@ -44,15 +31,10 @@ final class Container: ObservableObject {
         registerSingleton(DatabaseServiceProtocol.self) {
             FirebaseDatabaseService()
         }
-
-        print("✅ Container.setupServices() completed")
         
         // Twilio SMS Service (Production)
         register(SMSServiceProtocol.self) {
-            print("🔴 Container: Creating TwilioSMSService...")
-            let twilioService = TwilioSMSService()
-            print("🔴 Container: TwilioSMSService created")
-            return twilioService
+            TwilioSMSService()
         }
         
         // Notification Service - TODO: Implement real NotificationService
@@ -62,22 +44,19 @@ final class Container: ObservableObject {
 
         // DataSync Coordinator - Singleton for multi-device sync
         registerSingleton(DataSyncCoordinator.self) {
-            print("🔴 [Container] Creating DataSyncCoordinator SINGLETON")
-            return DataSyncCoordinator(
+            DataSyncCoordinator(
                 databaseService: self.resolve(DatabaseServiceProtocol.self)
             )
         }
 
         // Image Cache Service - Singleton for profile photo caching
         registerSingleton(ImageCacheService.self) {
-            print("🖼️ [Container] Creating ImageCacheService SINGLETON")
-            return ImageCacheService()
+            ImageCacheService()
         }
 
         // Subscription Service - Singleton for RevenueCat subscription management
         registerSingleton(SubscriptionServiceProtocol.self) {
-            print("💰 [Container] Creating RevenueCatSubscriptionService SINGLETON")
-            return RevenueCatSubscriptionService()
+            RevenueCatSubscriptionService()
         }
     }
     
@@ -85,23 +64,19 @@ final class Container: ObservableObject {
     private func checkFirebaseConfiguration() -> Bool {
         // Check if Firebase has been configured
         guard FirebaseApp.app() != nil else {
-            print("⚠️ Firebase not configured - using mock services")
             return false
         }
 
         // In preview/canvas mode, use mock services
         if ProcessInfo.processInfo.environment.keys.contains("XCODE_RUNNING_FOR_PREVIEWS") {
-            print("🎨 Running in preview mode - using mock services")
             return false
         }
 
         // Check for explicit mock mode environment variable
         if ProcessInfo.processInfo.environment["USE_MOCK_SERVICES"] == "true" {
-            print("🧪 Mock services explicitly requested via environment")
             return false
         }
 
-        print("🔥 Firebase configured - using Firebase services")
         return true
     }
     
@@ -138,7 +113,6 @@ final class Container: ObservableObject {
         lock.lock()
         defer { lock.unlock() }
         singletons[key] = instance
-        print("✅ Registered singleton: \(key)")
     }
 
     // MARK: - Service Resolution

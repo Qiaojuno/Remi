@@ -454,7 +454,6 @@ struct FeedbackView: View {
     private func submitFeedback() {
         // TODO: Send feedback to backend or email
         // For now, just show thank you message
-        print("📝 Feedback submitted: [\(feedbackType.rawValue)] \(feedbackText)")
         showingThankYou = true
     }
 }

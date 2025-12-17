@@ -37,7 +37,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         // Pass APNs token to Firebase - FCM exchanges it for an FCM token
         Messaging.messaging().apnsToken = deviceToken
-        print("📱 [Push] APNs token registered")
     }
 
     func application(_ application: UIApplication,
@@ -49,11 +48,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else {
-            print("⚠️ [Push] FCM token is nil")
             return
         }
-
-        print("📱 [Push] FCM token received: \(token.prefix(20))...")
 
         // Store token in Firestore for authenticated users
         _Concurrency.Task {
@@ -64,7 +60,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     /// Stores FCM token in Firestore for the current user
     private func storeFCMToken(_ token: String) async {
         guard let userId = Auth.auth().currentUser?.uid else {
-            print("⚠️ [Push] No authenticated user - FCM token not stored")
             return
         }
 
@@ -75,7 +70,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                 "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
                 "fcmPlatform": "ios"
             ], merge: true)
-            print("✅ [Push] FCM token stored in Firestore for user \(userId.prefix(8))...")
         } catch {
             print("❌ [Push] Failed to store FCM token: \(error.localizedDescription)")
         }
@@ -86,9 +80,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        let userInfo = notification.request.content.userInfo
-        print("📬 [Push] Notification received in foreground: \(userInfo)")
-
         // Show notification banner even when app is in foreground
         completionHandler([.banner, .sound, .badge])
     }
@@ -99,7 +90,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
-        print("👆 [Push] Notification tapped: \(userInfo)")
 
         // Extract custom data from notification payload
         if let type = userInfo["type"] as? String, type == "noReply" {
@@ -333,11 +323,10 @@ struct HalloApp: App {
     private func handleNoReplyNotificationTap(_ notification: Notification) {
         // Handle navigation when user taps a "no reply" notification
         guard let userInfo = notification.userInfo,
-              let profileId = userInfo["profileId"] as? String else {
+              let _ = userInfo["profileId"] as? String else {
             return
         }
 
-        print("📍 [Push] Navigating to profile: \(profileId)")
         // TODO: Implement navigation to profile/habit detail view
         // This could update an @AppStorage or @Published property that ContentView observes
     }
@@ -381,7 +370,6 @@ struct HalloApp: App {
                 "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
                 "fcmPlatform": "ios"
             ], merge: true)
-            print("✅ [Push] FCM token refreshed on login")
         } catch {
             print("❌ [Push] Failed to refresh FCM token: \(error.localizedDescription)")
         }
@@ -475,7 +463,6 @@ extension HalloApp {
             try await db.collection("users").document(userId).updateData([
                 "fcmToken": FieldValue.delete()
             ])
-            print("🗑️ [Push] FCM token cleared on logout")
         } catch {
             print("❌ [Push] Failed to clear FCM token: \(error.localizedDescription)")
         }

@@ -620,6 +620,115 @@ PROTECTION: ✅ Effective at UI level
 
 ---
 
+## No-Reply Push Notification System (Added 2025-12-14)
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                    NO-REPLY PUSH NOTIFICATION FLOW                   │
+└──────────────────────────────────────────────────────────────────────┘
+
+    SMS Sent to Elderly User
+            │
+            ▼
+    ┌───────────────────────────────────────┐
+    │ Cloud Scheduler: checkNoReplyAndNotify │
+    │ Runs: Every 5 minutes                  │
+    │ Window: 30-45 minutes after SMS sent   │
+    └───────────────────────────────────────┘
+            │
+            ├─ Query smsLogs where:
+            │   ├─ direction == 'outbound'
+            │   ├─ messageType == 'taskReminder'
+            │   ├─ sentAt >= 45 min ago
+            │   ├─ sentAt <= 30 min ago
+            │   └─ noReplyNotifiedAt == null
+            │
+            ▼
+    ┌───────────────────────────────────────┐
+    │ For each SMS log:                      │
+    │                                        │
+    │ 1. Check if reply exists               │
+    │    └─ Query messages where:            │
+    │       ├─ direction == 'inbound'        │
+    │       └─ receivedAt >= SMS sentAt      │
+    │                                        │
+    │ 2. If no reply found:                  │
+    │    └─ Get user's FCM token             │
+    │    └─ Send push notification           │
+    │    └─ Mark smsLog as notified          │
+    └───────────────────────────────────────┘
+            │
+            ▼
+    ┌───────────────────────────────────────┐
+    │ sendPushNotification()                 │
+    │                                        │
+    │ • Fetch fcmToken from user doc         │
+    │ • Build FCM message with:              │
+    │   ├─ notification.title                │
+    │   ├─ notification.body                 │
+    │   └─ data: {type, habitId, profileId}  │
+    │ • Send via admin.messaging().send()    │
+    │ • Handle invalid token cleanup         │
+    └───────────────────────────────────────┘
+            │
+            ▼
+    ┌───────────────────────────────────────┐
+    │ iOS App Receives Push                  │
+    │                                        │
+    │ • AppDelegate handles notification     │
+    │ • Shows banner even in foreground      │
+    │ • On tap: posts didTapNoReplyNotification │
+    │ • ContentView navigates to profile     │
+    └───────────────────────────────────────┘
+```
+
+### Push Notification Payload Structure
+
+```javascript
+{
+  notification: {
+    title: "No reply from Grandma Rose",
+    body: "Grandma Rose hasn't responded to \"Take Medication\" yet. You may want to check in."
+  },
+  data: {
+    type: "noReply",
+    habitId: "uuid-habit-123",
+    profileId: "+15551234567",
+    smsLogId: "smsLog-doc-id",
+    userId: "firebase-auth-uid",
+    timestamp: "2025-12-14T09:35:00Z"
+  },
+  token: "user-fcm-token",
+  apns: {
+    payload: {
+      aps: {
+        alert: { title, body },
+        sound: "default",
+        badge: 1,
+        "mutable-content": 1
+      }
+    }
+  }
+}
+```
+
+### Duplicate Prevention
+
+1. **noReplyNotifiedAt field**: Set on smsLog after notification sent
+2. **Time window (30-45 min)**: Prevents re-processing old SMS
+3. **replyReceived flag**: Marks SMS as having received a reply
+4. **noReplyNotificationSkipped**: Tracks skipped notifications (no FCM token)
+
+### Configuration Constants
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| NO_REPLY_TIMEOUT_MINUTES | 30 | Minimum wait before notifying |
+| MAX_WINDOW_MINUTES | 45 | Maximum age of SMS to process |
+| Schedule | Every 5 min | How often checker runs |
+
+---
+
 ## Key Timestamps & Their Usage
 
 ```

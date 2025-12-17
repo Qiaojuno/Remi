@@ -89,14 +89,12 @@ struct HabitsView: View {
             .onAppear {
                 // Initialize TaskViewModel once
                 if taskViewModel == nil {
-                    print("🔴 [HabitsView] Creating TaskViewModel instance")
                     taskViewModel = container.makeTaskViewModel()
                     // Load all tasks for the authenticated user
                     taskViewModel?.loadTasks()
                 }
             }
             .onChange(of: taskViewModel?.tasks.count) { oldCount, newCount in
-                print("🔄 [HabitsView] Tasks count changed to: \(newCount ?? 0)")
                 // Force view refresh by updating a local state
                 refreshID = UUID()
             }
@@ -214,8 +212,6 @@ struct HabitsView: View {
             if let selectedId = viewModel.selectedProfileId,
                let index = appState.profiles.firstIndex(where: { $0.id == selectedId }) {
                 selectedProfileIndex = index
-            } else {
-                print("⚠️ [HabitsView] Could not sync selectedProfileIndex - profile selection may be out of sync")
             }
 
             // Trigger initial cooldown if user is already on Habits tab
@@ -573,11 +569,8 @@ struct HabitsView: View {
 
     /// Upload new profile photo and update profile
     private func updateProfilePhoto(profile: ElderlyProfile, image: UIImage) async {
-        print("🖼️ [HabitsView] Updating profile photo for '\(profile.name)'...")
-
         // Convert UIImage to JPEG data (strip EXIF for privacy)
         guard let imageData = image.jpegDataWithoutEXIF(compressionQuality: 0.8) else {
-            print("❌ [HabitsView] Failed to convert image to JPEG data")
             return
         }
 
@@ -585,8 +578,6 @@ struct HabitsView: View {
             // Upload photo to Firebase Storage
             let databaseService = container.resolve(DatabaseServiceProtocol.self)
             let photoURL = try await databaseService.uploadProfilePhoto(imageData, for: profile.id, userId: profile.userId)
-
-            print("✅ [HabitsView] Photo uploaded successfully: \(photoURL)")
 
             // Update profile with new photo URL
             var updatedProfile = profile
@@ -603,8 +594,6 @@ struct HabitsView: View {
 
             // Pre-load new image into cache
             await appState.imageCache.preloadProfileImages([updatedProfile])
-
-            print("✅ [HabitsView] Profile photo updated successfully")
 
             // Reset selected image
             await MainActor.run {
@@ -633,8 +622,6 @@ struct HabitsView: View {
     private func confirmDeleteHabit() {
         guard let habit = habitToDelete else { return }
 
-        print("🗑️ Deleting habit '\(habit.title)' (ID: \(habit.id))")
-
         // Remove from pending deletion
         habitsPendingDeletion.remove(habit.id)
 
@@ -652,8 +639,6 @@ struct HabitsView: View {
                 // Delete habit from database with userId and profileId
                 try await container.resolve(DatabaseServiceProtocol.self)
                     .deleteTask(habit.id, userId: habit.userId, profileId: habit.profileId)
-
-                print("✅ Habit deleted successfully")
 
                 // Reload data to sync with server (without animation since UI already updated)
                 await MainActor.run {

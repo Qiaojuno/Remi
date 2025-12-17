@@ -1137,6 +1137,205 @@ exports.healthCheckMonitor = onSchedule({
 });
 
 /**
+ * No-Reply Push Notification Checker
+ *
+ * Monitors SMS reminders that haven't received a response within the timeout window
+ * and sends push notifications to family members to alert them.
+ *
+ * Flow:
+ * 1. Query smsLogs for outbound task reminders sent 30-45 minutes ago
+ * 2. Check if a reply was received (via messages collection)
+ * 3. If no reply and not already notified → send FCM push to family user
+ * 4. Mark smsLog as notified to prevent duplicate notifications
+ *
+ * Runs: Every 5 minutes
+ * Timeout Window: 30-45 minutes (configurable)
+ *
+ * Why 30-45 minute window:
+ * - 30 min minimum gives elderly users reasonable time to respond
+ * - 45 min maximum prevents notifications for very old SMS
+ * - 5-minute runs ensure we catch all no-replies within ~5 min of timeout
+ */
+exports.checkNoReplyAndNotify = onSchedule({
+  schedule: 'every 5 minutes',
+  timeZone: 'America/Los_Angeles'
+}, async (event) => {
+  const now = new Date();
+
+  // Time window: SMS sent between 30-45 minutes ago
+  const NO_REPLY_TIMEOUT_MINUTES = 30;
+  const MAX_WINDOW_MINUTES = 45;
+
+  const thirtyMinutesAgo = admin.firestore.Timestamp.fromDate(
+    new Date(now.getTime() - NO_REPLY_TIMEOUT_MINUTES * 60 * 1000)
+  );
+  const fortyFiveMinutesAgo = admin.firestore.Timestamp.fromDate(
+    new Date(now.getTime() - MAX_WINDOW_MINUTES * 60 * 1000)
+  );
+
+  try {
+    // Find task reminder SMS sent in the 30-45 minute window that haven't been notified
+    const smsLogsSnapshot = await admin.firestore()
+      .collectionGroup('smsLogs')
+      .where('direction', '==', 'outbound')
+      .where('messageType', '==', 'taskReminder')
+      .where('sentAt', '>=', fortyFiveMinutesAgo)
+      .where('sentAt', '<=', thirtyMinutesAgo)
+      .get();
+
+    if (smsLogsSnapshot.empty) {
+      return null;
+    }
+
+    let notificationsSent = 0;
+    let alreadyReplied = 0;
+    let alreadyNotified = 0;
+    let noFcmToken = 0;
+    let errors = 0;
+
+    for (const smsLogDoc of smsLogsSnapshot.docs) {
+      const smsLog = smsLogDoc.data();
+      const smsLogPath = smsLogDoc.ref.path;
+
+      // Skip if already notified for this SMS
+      if (smsLog.noReplyNotifiedAt) {
+        alreadyNotified++;
+        continue;
+      }
+
+      // Extract userId from path: users/{userId}/smsLogs/{logId}
+      const pathParts = smsLogPath.split('/');
+      if (pathParts.length < 2 || pathParts[0] !== 'users') {
+        continue;
+      }
+      const userId = pathParts[1];
+      const profileId = smsLog.profileId;
+      const habitId = smsLog.habitId;
+
+      if (!profileId || !habitId) {
+        continue;
+      }
+
+      // Check if elderly user replied after the SMS was sent
+      const smsSentAt = smsLog.sentAt.toDate();
+      const replySnapshot = await admin.firestore()
+        .collection(`users/${userId}/profiles/${profileId}/messages`)
+        .where('direction', '==', 'inbound')
+        .where('receivedAt', '>=', smsLog.sentAt)
+        .limit(1)
+        .get();
+
+      if (!replySnapshot.empty) {
+        // Reply received - mark as replied (not no-reply)
+        alreadyReplied++;
+
+        // Update smsLog to track that reply was received
+        await smsLogDoc.ref.update({
+          replyReceived: true,
+          replyCheckedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        continue;
+      }
+
+      // No reply found - get profile name for notification
+      const profileDoc = await admin.firestore()
+        .doc(`users/${userId}/profiles/${profileId}`)
+        .get();
+
+      const profileName = profileDoc.exists ? profileDoc.data().name : 'Your loved one';
+
+      // Get habit title for notification
+      const habitDoc = await admin.firestore()
+        .doc(`users/${userId}/profiles/${profileId}/habits/${habitId}`)
+        .get();
+
+      const habitTitle = habitDoc.exists ? habitDoc.data().title : 'their task';
+
+      // Send push notification to family user
+      const notification = {
+        title: `No reply from ${profileName}`,
+        body: `${profileName} hasn't responded to "${habitTitle}" yet. You may want to check in.`
+      };
+
+      const pushData = {
+        type: 'noReply',
+        habitId: habitId,
+        profileId: profileId,
+        smsLogId: smsLogDoc.id
+      };
+
+      const pushResult = await sendPushNotification(userId, notification, pushData);
+
+      if (pushResult.success) {
+        notificationsSent++;
+
+        // Mark smsLog as notified to prevent duplicate notifications
+        await smsLogDoc.ref.update({
+          noReplyNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          noReplyNotificationSent: true,
+          noReplyPushMessageId: pushResult.messageId
+        });
+
+        // Also log to a dedicated collection for analytics
+        await admin.firestore()
+          .collection(`users/${userId}/noReplyNotifications`)
+          .add({
+            smsLogId: smsLogDoc.id,
+            habitId: habitId,
+            profileId: profileId,
+            profileName: profileName,
+            habitTitle: habitTitle,
+            smsSentAt: smsLog.sentAt,
+            notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+            pushMessageId: pushResult.messageId,
+            minutesSinceSmsSent: Math.floor((now - smsSentAt) / 60000)
+          });
+
+      } else if (pushResult.error === 'No FCM token registered for user') {
+        noFcmToken++;
+
+        // Still mark as processed to avoid re-checking
+        await smsLogDoc.ref.update({
+          noReplyCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+          noReplyNotificationSkipped: true,
+          noReplySkipReason: 'no_fcm_token'
+        });
+
+      } else {
+        errors++;
+        console.error('❌ No-reply push failed:', pushResult.error);
+      }
+    }
+
+    // Only log if work was done
+    if (notificationsSent > 0 || alreadyReplied > 0) {
+      console.log('NoReply check:', {
+        checked: smsLogsSnapshot.size,
+        sent: notificationsSent,
+        replied: alreadyReplied,
+        alreadyNotified: alreadyNotified,
+        noToken: noFcmToken,
+        errors: errors
+      });
+    }
+
+    return {
+      checked: smsLogsSnapshot.size,
+      notificationsSent,
+      alreadyReplied,
+      alreadyNotified,
+      noFcmToken,
+      errors
+    };
+
+  } catch (error) {
+    console.error('❌ checkNoReplyAndNotify failed:', error);
+    throw error;
+  }
+});
+
+/**
  * Calculate the next scheduled occurrence for a recurring habit
  * Uses moment-timezone for proper timezone-aware date calculations
  *
@@ -1221,6 +1420,90 @@ function calculateNextOccurrence(habit, profileTimeZone = 'America/Los_Angeles')
       const defaultNext = currentDate.clone().add(1, 'day');
       defaultNext.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
       return defaultNext.toDate();
+  }
+}
+
+/**
+ * Helper: Send push notification via Firebase Cloud Messaging (FCM)
+ *
+ * Sends a push notification to the user's iOS device using their stored FCM token.
+ * Used primarily for "no reply" alerts when elderly users don't respond to SMS.
+ *
+ * @param {string} userId - User ID to send notification to
+ * @param {Object} notification - Notification content { title, body }
+ * @param {Object} data - Custom data payload for app handling
+ * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
+ */
+async function sendPushNotification(userId, notification, data = {}) {
+  try {
+    // Get user's FCM token from Firestore
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+
+    if (!userDoc.exists) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const userData = userDoc.data();
+    const fcmToken = userData.fcmToken;
+
+    if (!fcmToken) {
+      return { success: false, error: 'No FCM token registered for user' };
+    }
+
+    // Build FCM message
+    const message = {
+      notification: {
+        title: notification.title,
+        body: notification.body
+      },
+      data: {
+        ...data,
+        // Ensure all values are strings (FCM requirement)
+        type: String(data.type || 'noReply'),
+        userId: String(userId),
+        timestamp: new Date().toISOString()
+      },
+      token: fcmToken,
+      // iOS-specific configuration
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title: notification.title,
+              body: notification.body
+            },
+            sound: 'default',
+            badge: 1,
+            'mutable-content': 1
+          }
+        }
+      }
+    };
+
+    // Send via FCM
+    const response = await admin.messaging().send(message);
+
+    return {
+      success: true,
+      messageId: response
+    };
+
+  } catch (error) {
+    console.error('❌ Push notification failed:', error.message);
+
+    // Handle invalid token (user uninstalled app or token expired)
+    if (error.code === 'messaging/invalid-registration-token' ||
+        error.code === 'messaging/registration-token-not-registered') {
+      // Clean up invalid token
+      await admin.firestore().collection('users').doc(userId).update({
+        fcmToken: admin.firestore.FieldValue.delete(),
+        fcmTokenInvalidatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return { success: false, error: 'Invalid FCM token - removed from user record' };
+    }
+
+    return { success: false, error: error.message };
   }
 }
 

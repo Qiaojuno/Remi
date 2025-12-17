@@ -45,14 +45,6 @@ extension UIImage {
         }
 
         // Convert to JPEG data (no metadata will be included)
-        let jpegData = newImage.jpegData(compressionQuality: compressionQuality)
-
-        if let data = jpegData {
-            print("✅ [UIImage+EXIF] Stripped EXIF metadata - size: \(data.count) bytes")
-        } else {
-            print("❌ [UIImage+EXIF] Failed to convert stripped image to JPEG")
-        }
-
-        return jpegData
+        return newImage.jpegData(compressionQuality: compressionQuality)
     }
 }

@@ -278,6 +278,7 @@ struct Step4CurrentRemindersView: View {
 struct Step4aTechComfortView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var selectedComfort: String? = nil
+    @State private var showContent = false
 
     let techComfortOptions = [
         "Very comfortable with tech",
@@ -308,6 +309,8 @@ struct Step4aTechComfortView: View {
                         .foregroundColor(.black)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
                     // Single-select tech comfort options (black button style)
                     VStack(spacing: 12) {
@@ -323,6 +326,8 @@ struct Step4aTechComfortView: View {
                         }
                     }
                     .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
                 }
 
                 Spacer()
@@ -337,6 +342,11 @@ struct Step4aTechComfortView: View {
                 )
             }
         }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
     }
 }
 
@@ -345,6 +355,7 @@ struct Step4aTechComfortView: View {
 struct Step4bSatisfactionView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var selectedSatisfaction: String? = nil
+    @State private var showContent = false
 
     let satisfactionOptions = [
         "Pretty well - I like my system",
@@ -369,6 +380,8 @@ struct Step4bSatisfactionView: View {
                         .foregroundColor(.black)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
                     // Single-select satisfaction options (black button style)
                     VStack(spacing: 12) {
@@ -384,6 +397,8 @@ struct Step4bSatisfactionView: View {
                         }
                     }
                     .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
                 }
 
                 Spacer()
@@ -398,6 +413,11 @@ struct Step4bSatisfactionView: View {
                 )
             }
         }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
+            }
+        }
     }
 }
 
@@ -406,6 +426,7 @@ struct Step4bSatisfactionView: View {
 struct Step5aCurrentFrustrationView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var selectedFrustration: String? = nil
+    @State private var showContent = false
 
     let frustrationOptions = [
         "I forget to remind them",
@@ -432,6 +453,8 @@ struct Step5aCurrentFrustrationView: View {
                         .foregroundColor(.black)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
                     // Single-select frustration options (black button style)
                     VStack(spacing: 12) {
@@ -447,6 +470,8 @@ struct Step5aCurrentFrustrationView: View {
                         }
                     }
                     .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
                 }
 
                 Spacer()
@@ -459,6 +484,11 @@ struct Step5aCurrentFrustrationView: View {
                         viewModel.nextStep()
                     }
                 )
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
             }
         }
     }
@@ -549,6 +579,7 @@ struct EmpathyBreakView: View {
 struct ReminderTimingView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var selectedTiming: String? = nil
+    @State private var showContent = false
 
     let timingOptions = [
         "Morning routine",
@@ -580,6 +611,8 @@ struct ReminderTimingView: View {
                         .foregroundColor(.black)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
                     // Single-select timing options (black button style)
                     VStack(spacing: 12) {
@@ -595,6 +628,8 @@ struct ReminderTimingView: View {
                         }
                     }
                     .padding(.horizontal, OnboardingUI.horizontalPadding)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
                 }
 
                 Spacer()
@@ -607,6 +642,11 @@ struct ReminderTimingView: View {
                         viewModel.nextStep()
                     }
                 )
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                showContent = true
             }
         }
     }
@@ -1265,7 +1305,6 @@ struct NotificationPermissionView: View {
             DispatchQueue.main.async {
                 if settings.authorizationStatus == .authorized {
                     // Already granted - skip this screen immediately (don't show UI)
-                    print("✅ Notifications already authorized - skipping")
                     viewModel.nextStep()
                 } else if settings.authorizationStatus == .notDetermined {
                     // Not determined - show UI and permission dialog
@@ -1273,13 +1312,8 @@ struct NotificationPermissionView: View {
                     shouldShowUI = true
                     isCheckingPermission = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
                             DispatchQueue.main.async {
-                                if let error = error {
-                                    print("❌ Notification permission error: \(error.localizedDescription)")
-                                }
-                                print(granted ? "✅ Notification permission granted" : "⚠️ Notification permission denied")
-
                                 // Proceed to next step after user responds
                                 viewModel.nextStep()
                             }
@@ -1287,7 +1321,6 @@ struct NotificationPermissionView: View {
                     }
                 } else {
                     // Denied or restricted - show UI with settings option
-                    print("⚠️ Notifications denied/restricted - showing settings option")
                     hasCheckedPermission = true
                     shouldShowUI = true
                     authorizationStatus = settings.authorizationStatus
@@ -1553,6 +1586,8 @@ struct Step7View: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
                         .padding(.top, OnboardingUI.headerTopSpacing)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
                     // 5-star rating with laurel wreaths in bordered box
                     HStack(spacing: 4) {
@@ -1563,7 +1598,7 @@ struct Step7View: View {
                             .frame(width: 31.5, height: 63)
                             .opacity(showContent ? 1 : 0)
                             .scaleEffect(showContent ? 1.0 : 0.5)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.2), value: showContent)
 
                         // 5-star rating Lottie animation (30% smaller)
                         LottieView(animation: .named("5 stars"))
@@ -1571,7 +1606,7 @@ struct Step7View: View {
                             .frame(width: 140, height: 56)
                             .opacity(showContent ? 1 : 0)
                             .scaleEffect(showContent ? 1.0 : 0.5)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.6), value: showContent)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
 
                         // Right laurel wreath (flipped, 30% smaller)
                         Image("Laurel Wreath")
@@ -1581,13 +1616,15 @@ struct Step7View: View {
                             .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))  // Flip horizontally
                             .opacity(showContent ? 1 : 0)
                             .scaleEffect(showContent ? 1.0 : 0.5)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.2), value: showContent)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
                     )
                     .padding(.horizontal, OnboardingUI.horizontalPadding)
 

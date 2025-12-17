@@ -24,17 +24,21 @@ struct WelcomeCardStack: View {
     @State private var showCards = false
 
     // Mock task examples (randomized from common habits)
+    // Card 0 is a media card with photo, cards 1-2 are message cards
     private let mockTasks = [
+        "Evening photo 🌅",
         "take your medication 🌷",
-        "go for a walk",
         "drink some water"
     ]
 
+    // Which cards show as media (photo) cards vs message cards
+    private let mediaCardIndices: Set<Int> = [0]
+
     // Randomized greetings (matching TwilioSMSService)
     private let mockGreetings = [
-        "Hi Mom!",
-        "Hello Mom 🌞",
-        "Hi Mom! Hope you're doing well."
+        "Hi Dad!",
+        "Hello Dad 🌞",
+        "Hi Dad! Hope you're doing well."
     ]
 
     // Randomized prompts (matching TwilioSMSService)
@@ -54,8 +58,8 @@ struct WelcomeCardStack: View {
     // Mock confirmations (matching actual SMS responses)
     private let mockConfirmations = [
         "Done ✅",
-        "All set!",
-        "Completed!"
+        "just took them.",
+        "thanks kiddo 👍"
     ]
 
     // Mock appreciation messages (matching Cloud Functions thankYouMessages)
@@ -140,6 +144,87 @@ struct WelcomeCardStack: View {
     }
 
     private func mockCard(taskIndex: Int) -> some View {
+        // Media cards (photo) vs message cards (SMS bubbles)
+        if mediaCardIndices.contains(taskIndex) {
+            return AnyView(mockMediaCard(taskIndex: taskIndex))
+        } else {
+            return AnyView(mockMessageCard(taskIndex: taskIndex))
+        }
+    }
+
+    private func mockMediaCard(taskIndex: Int) -> some View {
+        ZStack {
+            // Full-bleed photo background
+            Image("Camping")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: cardWidth, height: cardHeight)
+                .clipped()
+
+            // Overlay header and bottom banner
+            VStack {
+                // Header with semi-transparent background for readability
+                HStack {
+                    Text("\(taskIndex + 1)/\(mockTasks.count)")
+                        .font(.system(size: 12.6, weight: .semibold))  // Scaled down 10%: 14 * 0.9
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10.8)  // Scaled down 10%: 12 * 0.9
+                        .padding(.vertical, 5.4)  // Scaled down 10%: 6 * 0.9
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.5))
+                        )
+                        .padding(.leading, 14.4)  // Scaled down 10%: 16 * 0.9
+                        .padding(.top, 14.4)  // Scaled down 10%: 16 * 0.9
+                    Spacer()
+                }
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.4), Color.clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 72)  // Scaled down 10%: 80 * 0.9
+                )
+
+                Spacer()
+
+                // Bottom banner with task info
+                HStack(spacing: 10.8) {  // Scaled down 10%: 12 * 0.9
+                    Image(cardFaces[taskIndex])
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 40.5, height: 40.5)  // Scaled down 10%: 45 * 0.9
+                        .clipShape(Circle())
+
+                    Text(mockTasks[taskIndex])
+                        .font(.system(size: 14.4, weight: .semibold))  // Scaled down 10%: 16 * 0.9
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text("6:45 PM")
+                        .font(.system(size: 12.6, weight: .medium))  // Scaled down 10%: 14 * 0.9
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                .padding(.horizontal, 14.4)  // Scaled down 10%: 16 * 0.9
+                .padding(.vertical, 10.8)  // Scaled down 10%: 12 * 0.9
+                .background(
+                    LinearGradient(
+                        colors: [Color.clear, Color.black.opacity(0.6)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 90)  // Scaled down 10%: 100 * 0.9
+                )
+            }
+        }
+        .frame(width: cardWidth, height: cardHeight)
+        .cornerRadius(10)
+    }
+
+    private func mockMessageCard(taskIndex: Int) -> some View {
         // Calculate progressive lightening for cards in stack (matching CardStackView)
         // Current position in stack determines lightening amount
         let currentPosition = stackedCards.firstIndex(of: taskIndex) ?? 0
@@ -756,11 +841,9 @@ struct PaywallStepView: View {
 
             if hasSubscription {
                 // User successfully subscribed - complete onboarding and go to dashboard
-                print("✅ [PaywallStepView] User has subscription - completing onboarding")
                 viewModel.isComplete = true
             } else {
                 // User dismissed without subscribing - go back to free trial reminder
-                print("⚠️ [PaywallStepView] User dismissed paywall without subscribing - returning to previous step")
                 viewModel.previousStep()
             }
         }
@@ -778,8 +861,6 @@ struct PaywallStepView: View {
             "emotional_value": viewModel.emotionalValue,
             "onboarding_step": "paywall"
         ])
-
-        print("✅ Superwall user attributes configured for Step 6 paywall")
     }
 }
 
@@ -870,18 +951,13 @@ struct PaywallGateView<AuthenticatedContent: View>: View {
 
     private func checkSubscriptionStatus() {
         _Concurrency.Task { @MainActor in
-            print("🔍 [PaywallGate] Checking subscription status...")
-
             // Check if user has active subscription or trial
             let hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
 
             if hasSubscription {
-                print("✅ [PaywallGate] User has active subscription - allowing access")
                 subscriptionStatus = .hasSubscription
                 // ContentView will handle navigation to dashboard
             } else {
-                print("❌ [PaywallGate] No subscription - showing paywall")
-
                 // Determine user state for placement targeting
                 await determineUserState()
 
@@ -895,10 +971,6 @@ struct PaywallGateView<AuthenticatedContent: View>: View {
         if let user = appState.currentUser, let createdAt = user.createdAt {
             let accountAge = Date().timeIntervalSince(createdAt)
             isNewUser = accountAge < 300 // Less than 5 minutes old = new user
-
-            print("📊 [PaywallGate] User state:")
-            print("   - Account age: \(Int(accountAge)) seconds")
-            print("   - Is new user: \(isNewUser)")
         } else {
             // No creation date available - assume returning user
             isNewUser = false
@@ -939,8 +1011,6 @@ private struct PaywallGateContent: View {
     }
 
     private func triggerSuperwallPaywall() {
-        print("🎨 [PaywallGate] Triggering Superwall placement: \(placement)")
-
         // Set user attributes for targeting (RevenueCat handles trial state)
         Superwall.shared.setUserAttributes([
             "user_type": isNewUser ? "new" : "returning",
@@ -957,15 +1027,11 @@ private struct PaywallGateContent: View {
 
     private func handlePaywallDismissal() {
         _Concurrency.Task { @MainActor in
-            print("🔍 [PaywallGate] Paywall dismissed - checking subscription status...")
-
             let hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
 
             if hasSubscription {
-                print("✅ [PaywallGate] User subscribed - granting access")
                 onSubscriptionGranted()
             } else {
-                print("❌ [PaywallGate] No subscription after paywall - logging out")
                 // Log out user and return to welcome page
                 let authService = container.resolve(AuthenticationServiceProtocol.self)
                 try? await authService.signOut()

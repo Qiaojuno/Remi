@@ -455,12 +455,36 @@ The "notification system" is:
 - ❌ NOT iOS push notifications (APNs)
 - ❌ NOT Firebase Cloud Messaging
 
-### 4. NO APNs / FCM INTEGRATION
+### 4. FCM PUSH NOTIFICATIONS FOR NO-REPLY ALERTS ✅ (Added 2025-12-14)
 
-No code for Apple Push Notifications or Firebase Cloud Messaging. The app uses:
-- Firestore real-time listeners for family coordination
-- Combine subjects for in-app broadcasting
-- SMS via Twilio for elderly users
+Firebase Cloud Messaging is now implemented for "no reply" push notifications:
+
+**iOS App (receives push):**
+- `AppDelegate` implements `MessagingDelegate` and `UNUserNotificationCenterDelegate`
+- FCM token stored in Firestore: `users/{userId}/fcmToken`
+- Handles foreground display and notification tap events
+- Posts `didTapNoReplyNotification` for in-app navigation
+
+**Cloud Functions (sends push):**
+- `checkNoReplyAndNotify`: Scheduled every 5 minutes
+- `sendPushNotification`: Helper function using `admin.messaging().send()`
+- Monitors SMS sent 30-45 minutes ago without replies
+- Sends push to family user's iOS device
+
+**Push Notification Payload:**
+```javascript
+{
+  notification: {
+    title: "No reply from Grandma Rose",
+    body: "Grandma Rose hasn't responded to \"Take Medication\" yet."
+  },
+  data: {
+    type: "noReply",
+    habitId: "uuid-habit-123",
+    profileId: "+15551234567"
+  }
+}
+```
 
 ### 5. SCHEDULER LATENESS TOLERANCE
 
@@ -541,11 +565,12 @@ if (lastSMSSentAt === nextScheduledDate) {
 | **Local Notifications** | ❌ DISABLED | UNUserNotificationCenter | Code exists but commented out in TaskViewModel |
 | **SMS Reminders** | ✅ ACTIVE | Twilio + Cloud Functions | Runs every 1 minute, critical path |
 | **Real-Time Sync** | ✅ ACTIVE | Firestore listeners + Combine | Family member devices sync instantly |
-| **Push Notifications** | ❌ NOT USED | APNs / FCM | No implementation, not part of system |
+| **Push Notifications** | ✅ ACTIVE | FCM + Cloud Functions | No-reply alerts after 30 min (added 2025-12-14) |
 | **Local Storage** | ✅ YES | Firestore | habits, messages, smsLogs collections |
 | **Duplicate Prevention** | ✅ PROTECTED | Multiple checks | lastSMSSentAt vs nextScheduledDate |
 | **SMS Quota** | ✅ ENFORCED | Cloud Function | Tracks usage per user |
 | **Response Matching** | ✅ WORKING | 30-minute window | Matches replies to recent tasks |
+| **No-Reply Detection** | ✅ ACTIVE | checkNoReplyAndNotify | Every 5 min, 30-45 min window (added 2025-12-14) |
 
 ---
 
@@ -553,24 +578,57 @@ if (lastSMSSentAt === nextScheduledDate) {
 
 | File | Lines | Purpose | Status |
 |------|-------|---------|--------|
-| NotificationService.swift | 48 | Local notification scheduling | Disabled |
-| NotificationServiceProtocol.swift | 28 | Service interface | In use |
-| App.swift | ~600 | App lifecycle & SMS setup | Active |
-| TaskViewModel.swift | ~1300 | Task creation & notification scheduling | Create works, notify disabled |
+| NotificationService.swift | 24 | Permission management only | Active |
+| NotificationServiceProtocol.swift | 30 | Service interface | Active |
+| App.swift | ~490 | App lifecycle, FCM setup, push handling | Active |
+| TaskViewModel.swift | ~1300 | Task creation & notification scheduling | Create works, local notify disabled |
 | DataSyncCoordinator.swift | ~600 | Real-time broadcasting | Active |
-| functions/index.js | 1690 | Cloud Functions (SMS, scheduler, webhooks) | Critical |
+| functions/index.js | ~1500 | Cloud Functions (SMS, scheduler, webhooks, push) | Critical |
+
+### Cloud Functions Summary
+
+| Function | Schedule | Purpose | Status |
+|----------|----------|---------|--------|
+| sendSMS | Callable | Send SMS via Twilio | Active |
+| twilioWebhook | HTTP | Receive SMS replies | Active |
+| sendScheduledTaskReminders | Every 1 min | Send due task reminders | Active |
+| recoverMissedHabits | Every 60 min | Fix stuck habits | Active |
+| healthCheckMonitor | Every 15 min | System health checks | Active |
+| cleanupOldGalleryEvents | Every 24 hr | Archive old gallery data | Active |
+| **checkNoReplyAndNotify** | **Every 5 min** | **Send no-reply push notifications** | **NEW (2025-12-14)** |
 
 ---
 
 ## Conclusion
 
-The Halloo notification system is **NOT a push notification system** in the traditional sense. It's a **task reminder system** that:
+The Halloo notification system is a **hybrid SMS + push notification system** that:
 
 1. **Creates reminders** via iOS app → Firestore
 2. **Schedules delivery** via Cloud Functions → Twilio SMS
-3. **Sends to elderly users** via Twilio
+3. **Sends to elderly users** via Twilio SMS
 4. **Receives responses** via Twilio Webhook → Firestore
 5. **Broadcasts to family** via Firestore listeners → Real-time UI updates
+6. **Alerts on no-reply** via FCM push notifications → iOS (added 2025-12-14)
 
-**Local iOS notifications were intentionally disabled** because SMS is the primary notification mechanism. The real-time Firestore listeners keep family members updated on task responses across all their devices.
+**Local iOS notifications remain disabled** because SMS is the primary mechanism for elderly users. However, **FCM push notifications are now active** for alerting family members when elderly users don't respond within 30 minutes.
+
+### System Flow (Updated 2025-12-14)
+
+```
+Family creates task → Firestore habit document
+                           ↓
+Cloud Scheduler (1 min) → sendScheduledTaskReminders
+                           ↓
+Twilio SMS → Elderly user's phone
+                           ↓
+         ┌─────────────────┴─────────────────┐
+         ↓                                   ↓
+    Elderly replies                    No reply (30 min)
+         ↓                                   ↓
+    Twilio webhook                   checkNoReplyAndNotify
+         ↓                                   ↓
+    Gallery event created            FCM push to family
+         ↓                                   ↓
+    Real-time sync to family         iOS shows notification
+```
 

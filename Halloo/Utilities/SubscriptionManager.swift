@@ -75,7 +75,6 @@ final class SubscriptionManager: ObservableObject {
         let debugBypass = false
 
         if debugBypass {
-            print("⚠️ [SubscriptionManager] DEBUG MODE: Bypassing subscription check (always granting access)")
             return true
         }
         #endif

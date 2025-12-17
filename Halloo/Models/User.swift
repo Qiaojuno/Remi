@@ -102,7 +102,6 @@ struct User: Codable, Identifiable, Hashable {
         } else if let date = try? container.decode(Date.self, forKey: .createdAt) {
             createdAt = date
         } else {
-            print("⚠️ [User] createdAt missing for user \(id), using current date")
             createdAt = Date()
         }
 
@@ -116,7 +115,6 @@ struct User: Codable, Identifiable, Hashable {
         } else if let date = try? container.decode(Date.self, forKey: .updatedAt) {
             updatedAt = date
         } else {
-            print("⚠️ [User] updatedAt missing for user \(id), using current date")
             updatedAt = Date()
         }
 
@@ -148,11 +146,9 @@ struct User: Codable, Identifiable, Hashable {
             smsQuotaPeriodEnd = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
         }
 
-        print("✅ [User] User decoded successfully - ID: \(id), Email: \(email), Profiles: \(profileCount), Tasks: \(taskCount), SMS Quota: \(smsQuotaUsed)/\(smsQuotaLimit)")
     }
 
     func encode(to encoder: Encoder) throws {
-        print("🔵 [User] Encoding User to Firestore - ID: \(id)")
 
         var container = encoder.container(keyedBy: CodingKeys.self)
 
@@ -172,8 +168,6 @@ struct User: Codable, Identifiable, Hashable {
         try container.encode(smsQuotaUsed, forKey: .smsQuotaUsed)
         try container.encode(smsQuotaPeriodStart, forKey: .smsQuotaPeriodStart)
         try container.encode(smsQuotaPeriodEnd, forKey: .smsQuotaPeriodEnd)
-
-        print("✅ [User] User encoded - ID: \(id), Profiles: \(profileCount), Tasks: \(taskCount), SMS Quota: \(smsQuotaUsed)/\(smsQuotaLimit)")
     }
 }
 

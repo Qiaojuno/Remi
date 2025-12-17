@@ -375,8 +375,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
         // Stop any existing listeners first (prevents duplicates on re-login)
         stopFirebaseListeners()
 
-        print("🔗 [DataSyncCoordinator] Setting up Firebase listeners for user: \(userId.prefix(8))...")
-
         // 1. Connect Task Updates Listener
         // Observes all habits across user's profiles via collection group query
         databaseService.observeUserTasks(userId)
@@ -442,8 +440,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
                 }
             )
             .store(in: &firebaseListenerCancellables)
-
-        print("✅ [DataSyncCoordinator] Firebase listeners connected")
     }
 
     /// Stops all Firebase real-time listeners
@@ -452,15 +448,12 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     /// to prevent duplicate listeners and permission errors.
     func stopFirebaseListeners() {
         guard !firebaseListenerCancellables.isEmpty else { return }
-
-        print("🔌 [DataSyncCoordinator] Stopping Firebase listeners...")
         firebaseListenerCancellables.removeAll()
     }
     
     /// Saves any unsaved changes before backgrounding
     func saveUnsavedChanges() async {
         // Save any pending changes to database
-        print("📦 Mock: Saving unsaved changes")
     }
     
     // MARK: - Family Coordination Synchronization Operations
@@ -586,7 +579,6 @@ final class DataSyncCoordinator: ObservableObject, @unchecked Sendable {
     
     private func performSync(isManual: Bool, force: Bool = false) async {
         guard !isSyncing || force else {
-            print("Sync already in progress")
             return
         }
         

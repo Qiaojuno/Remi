@@ -270,6 +270,132 @@ All production code uses nested paths via `CollectionPath` enum in FirebaseDatab
 
 ---
 
+### 6. SMS Log Subcollection
+**Path:** `/users/{firebaseUID}/smsLogs/{logId}`
+
+**Document ID Rule:**
+- ✅ Use auto-generated Firestore ID (timestamp-based ordering)
+- ❌ **NEVER** use Twilio SID as ID (may collide across retries)
+
+**Structure:**
+```json
+{
+  "habitId": "uuid-habit-123",
+  "profileId": "+15551234567",
+  "to": "+15551234567",
+  "message": "Hi Grandma! Time to take your medication...",
+  "messageType": "taskReminder",
+  "twilioSid": "SM1234567890abcdef",
+  "status": "delivered",
+  "nextScheduledDate": "2025-12-14T09:00:00Z",
+  "scheduledTime": "2025-12-14T09:00:00Z",
+  "latenessSeconds": 45,
+  "sentAt": "2025-12-14T09:00:45Z",
+  "direction": "outbound",
+
+  // ✨ NEW (2025-12-14): No-Reply Push Notification Tracking
+  "replyReceived": false,
+  "replyCheckedAt": "2025-12-14T09:35:00Z",
+  "noReplyNotifiedAt": "2025-12-14T09:35:00Z",
+  "noReplyNotificationSent": true,
+  "noReplyPushMessageId": "projects/halloo-app/messages/123456",
+  "noReplyCheckedAt": "2025-12-14T09:35:00Z",
+  "noReplyNotificationSkipped": false,
+  "noReplySkipReason": null
+}
+```
+
+**Field Requirements:**
+- `habitId` → Reference to the habit that triggered this SMS
+- `profileId` → Reference to the elderly profile
+- `to` → Recipient phone number (E.164 format)
+- `message` → Full SMS text content
+- `messageType` → Enum: `taskReminder`, `confirmation`, `unknown`
+- `twilioSid` → Twilio message SID for tracking
+- `status` → Twilio delivery status: `queued`, `sent`, `delivered`, `failed`
+- `direction` → Enum: `outbound`, `inbound`
+- `sentAt` → Timestamp when SMS was sent
+- `latenessSeconds` → How late the SMS was sent vs scheduled time (for analytics)
+
+**No-Reply Notification Fields (Added 2025-12-14):**
+- `replyReceived` → Boolean, true if elderly user replied to this SMS
+- `replyCheckedAt` → Timestamp when reply status was last checked
+- `noReplyNotifiedAt` → Timestamp when family was notified of no-reply
+- `noReplyNotificationSent` → Boolean, true if push notification was sent
+- `noReplyPushMessageId` → FCM message ID for the push notification
+- `noReplyCheckedAt` → Timestamp when no-reply checker processed this log
+- `noReplyNotificationSkipped` → Boolean, true if notification was skipped
+- `noReplySkipReason` → Reason for skip: `no_fcm_token`, `already_notified`, etc.
+
+---
+
+### 7. No-Reply Notifications Subcollection (Analytics)
+**Path:** `/users/{firebaseUID}/noReplyNotifications/{notificationId}`
+
+**Document ID Rule:**
+- ✅ Use auto-generated Firestore ID
+
+**Structure:**
+```json
+{
+  "smsLogId": "smsLog-doc-id-123",
+  "habitId": "uuid-habit-123",
+  "profileId": "+15551234567",
+  "profileName": "Grandma Rose",
+  "habitTitle": "Take Morning Medication",
+  "smsSentAt": "2025-12-14T09:00:00Z",
+  "notifiedAt": "2025-12-14T09:35:00Z",
+  "pushMessageId": "projects/halloo-app/messages/123456",
+  "minutesSinceSmsSent": 35
+}
+```
+
+**Purpose:**
+- Analytics tracking for no-reply push notifications
+- Separate from smsLogs to avoid polluting SMS audit trail
+- Enables queries like "how many no-reply notifications sent this week"
+
+**Field Requirements:**
+- `smsLogId` → Reference to the original SMS log document
+- `habitId` → Reference to the habit
+- `profileId` → Reference to the elderly profile
+- `profileName` → Cached profile name (for display without additional query)
+- `habitTitle` → Cached habit title (for display without additional query)
+- `smsSentAt` → When the original SMS was sent
+- `notifiedAt` → When the push notification was sent
+- `pushMessageId` → FCM message ID for tracking
+- `minutesSinceSmsSent` → Time elapsed between SMS and notification (for analytics)
+
+---
+
+### 8. User FCM Token Fields
+**Path:** `/users/{firebaseUID}` (additional fields)
+
+**Structure (FCM-related fields only):**
+```json
+{
+  "fcmToken": "dGVzdC1mY20tdG9rZW4tYWJjMTIzLi4u",
+  "fcmTokenUpdatedAt": "2025-12-14T08:00:00Z",
+  "fcmPlatform": "ios",
+  "fcmTokenInvalidatedAt": null
+}
+```
+
+**Field Requirements:**
+- `fcmToken` → Firebase Cloud Messaging token for push notifications
+- `fcmTokenUpdatedAt` → Timestamp when token was last updated
+- `fcmPlatform` → Platform identifier: `ios`, `android`
+- `fcmTokenInvalidatedAt` → Timestamp when token was marked invalid (cleared)
+
+**FCM Token Lifecycle:**
+1. Token registered on app launch (`App.swift:37-46`)
+2. Token stored in Firestore (`App.swift:65-82`)
+3. Token refreshed on login (`App.swift:371-388`)
+4. Token cleared on logout (`App.swift:472-482`)
+5. Token invalidated if FCM returns `invalid-registration-token` error
+
+---
+
 ## 🚨 CRITICAL VIOLATIONS DETECTED
 
 ### Violation #1: Flat Collection Architecture ⚠️
