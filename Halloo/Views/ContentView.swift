@@ -565,6 +565,12 @@ struct ContentView: View {
                     }
 
                     _Concurrency.Task { @MainActor in
+                        // Sync RevenueCat + Superwall identity with Firebase user
+                        // Ensures purchases and paywall targeting are linked correctly
+                        if let userId = authService.currentUser?.uid {
+                            await self.syncSubscriptionSDKIdentities(userId: userId)
+                        }
+
                         await self.appState.loadUserData()
 
                         // Restore any missing photoURL references from Storage
@@ -584,6 +590,11 @@ struct ContentView: View {
                     let dataSyncCoordinator = self.container.resolve(DataSyncCoordinator.self)
                     dataSyncCoordinator.stopFirebaseListeners()
 
+                    // Reset RevenueCat + Superwall to anonymous user
+                    _Concurrency.Task {
+                        await self.resetSubscriptionSDKIdentities()
+                    }
+
                     // Reset AppState (clears data + stops listeners)
                     self.appState.reset()
 
@@ -593,6 +604,45 @@ struct ContentView: View {
                 }
             }
             .store(in: &authCancellables)
+    }
+
+    // MARK: - Subscription SDK Identity Management
+
+    /// Syncs RevenueCat and Superwall customer identity with Firebase user ID
+    /// Called on login to ensure purchases and paywall targeting are linked correctly
+    private func syncSubscriptionSDKIdentities(userId: String) async {
+        // Sync RevenueCat identity for purchase attribution and cross-device restore
+        let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+        do {
+            try await subscriptionService.identify(userId: userId)
+        } catch {
+            // Non-fatal: RevenueCat will continue with anonymous ID
+            print("⚠️ [RevenueCat] Failed to sync user identity: \(error.localizedDescription)")
+        }
+
+        // Sync Superwall identity for paywall targeting and analytics
+        // This ensures A/B tests and targeting rules are consistent per user
+        await MainActor.run {
+            Superwall.shared.identify(userId: userId)
+        }
+    }
+
+    /// Resets RevenueCat and Superwall to anonymous user on logout
+    /// Prevents the next user from inheriting previous user's subscription/targeting state
+    private func resetSubscriptionSDKIdentities() async {
+        // Reset RevenueCat identity
+        let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)
+        do {
+            try await subscriptionService.logout()
+        } catch {
+            // Non-fatal: Will be reset on next app launch
+            print("⚠️ [RevenueCat] Failed to reset identity on logout: \(error.localizedDescription)")
+        }
+
+        // Reset Superwall identity
+        await MainActor.run {
+            Superwall.shared.reset()
+        }
     }
 
     // TEMPORARY: Safe TaskViewModel creation with detailed debugging

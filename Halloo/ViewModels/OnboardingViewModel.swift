@@ -553,6 +553,7 @@ final class OnboardingViewModel: ObservableObject {
             break
         case .step1WhoFor:
             currentStep = .welcome
+            OnboardingProgressBar.resetProgress()
             updateProgress()
         case .step2ReminderFrequency:
             currentStep = .step1WhoFor

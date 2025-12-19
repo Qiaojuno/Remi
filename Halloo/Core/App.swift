@@ -198,27 +198,10 @@ struct HalloApp: App {
     }
 
     private func configureRevenueCat() {
-        // RevenueCat API key - automatically switches between Test Store and Production
-        // ⚠️ IMPORTANT: Replace "YOUR_PRODUCTION_KEY_HERE" with your production API key before release
-        let REVENUECAT_API_KEY: String = {
-            #if DEBUG
-            // Test Store key for development and testing
-            // This key works immediately without connecting real App Store
-            return "test_JxDSDtqZjJxdAqlujuzvhPtVHSO"
-            #else
-            // Production key for App Store release
-            // TODO: Replace with your production API key from RevenueCat dashboard
-            // Find it at: Settings -> API Keys -> Apple App Store
-            return "YOUR_PRODUCTION_KEY_HERE"
-            #endif
-        }()
-
-        // Validate production key
-        #if !DEBUG
-        guard REVENUECAT_API_KEY != "YOUR_PRODUCTION_KEY_HERE" else {
-            fatalError("🚨 CRITICAL: Replace production RevenueCat API key before release!")
-        }
-        #endif
+        // RevenueCat Public SDK API Key (Apple App Store)
+        // This key works for both debug and release builds
+        // RevenueCat automatically detects sandbox vs production from the receipt
+        let REVENUECAT_API_KEY = "appl_xYqryxlTdBpJFNfaYVAftzCmVaM"
 
         // Get subscription service from container
         let subscriptionService = container.resolve(SubscriptionServiceProtocol.self)

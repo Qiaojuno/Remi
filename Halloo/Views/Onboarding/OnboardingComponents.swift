@@ -54,6 +54,11 @@ struct OnboardingProgressBar: View {
     // Static storage to remember last progress across view recreations
     private static var lastProgress: Double = 0
 
+    /// Reset progress to 0 (call when returning to welcome page)
+    static func resetProgress() {
+        lastProgress = 0
+    }
+
     // Local state for animated display
     @State private var displayProgress: Double = OnboardingProgressBar.lastProgress
 

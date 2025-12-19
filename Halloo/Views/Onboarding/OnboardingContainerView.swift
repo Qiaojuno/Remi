@@ -22,7 +22,11 @@ struct OnboardingContainerView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
 
     var body: some View {
-        Group {
+        ZStack {
+            // Persistent background to prevent white flash during view transitions
+            Color(hex: "f9f9f9")
+                .ignoresSafeArea()
+
             switch viewModel.currentStep {
             case .welcome:
                 WelcomeView()
