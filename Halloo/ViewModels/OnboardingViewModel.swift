@@ -68,7 +68,7 @@ final class OnboardingViewModel: ObservableObject {
     @Published var currentStep: OnboardingStep = .welcome
     
     /// Family's responses to elderly care assessment questions
-    /// 
+    ///
     /// Stores quiz answers that inform:
     /// - Recommended reminder types (medication, exercise, social)
     /// - Communication style based on elderly tech comfort
@@ -76,7 +76,16 @@ final class OnboardingViewModel: ObservableObject {
     /// - Default notification preferences for care coordination
     ///
     /// Used to personalize elderly care recommendations and SMS templates.
-    @Published var userAnswers: [String: String] = [:]
+    /// Automatically persisted to UserDefaults for quiz resumption.
+    @Published var userAnswers: [String: String] = [:] {
+        didSet {
+            // Persist answers to UserDefaults so users can resume quiz
+            UserDefaults.standard.set(userAnswers, forKey: Self.quizAnswersKey)
+        }
+    }
+
+    /// UserDefaults key for persisted quiz answers
+    private static let quizAnswersKey = "onboarding_quiz_answers"
     
     /// Loading state for onboarding operations (account creation, data saving)
     /// 
@@ -158,13 +167,26 @@ final class OnboardingViewModel: ObservableObject {
     ///
     /// Stores the multi-select choices from Step 4 (Memory Vision)
     /// Used to personalize the paywall preview and app experience
-    @Published var selectedMoments: Set<String> = []
+    /// Automatically persisted to UserDefaults for quiz resumption.
+    @Published var selectedMoments: Set<String> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(selectedMoments), forKey: Self.selectedMomentsKey)
+        }
+    }
 
     /// The emotional value selected by the family
     ///
     /// Stores the selected emotional value from Step 5 (Emotional Hook)
     /// Used for understanding family motivation and personalization
-    @Published var emotionalValue: String = ""
+    /// Automatically persisted to UserDefaults for quiz resumption.
+    @Published var emotionalValue: String = "" {
+        didSet {
+            UserDefaults.standard.set(emotionalValue, forKey: Self.emotionalValueKey)
+        }
+    }
+
+    private static let selectedMomentsKey = "onboarding_selected_moments"
+    private static let emotionalValueKey = "onboarding_emotional_value"
 
     /// The selected subscription plan
     ///
@@ -390,11 +412,36 @@ final class OnboardingViewModel: ObservableObject {
         self.authService = authService
         self.databaseService = databaseService
 
+        // Restore any saved quiz answers from previous session
+        restoreSavedAnswers()
+
         // Configure real-time form validation for account security
         setupValidation()
 
         // Enable visual progress feedback for family confidence
         setupProgressTracking()
+    }
+
+    /// Restores quiz answers from UserDefaults if available
+    private func restoreSavedAnswers() {
+        if let savedAnswers = UserDefaults.standard.dictionary(forKey: Self.quizAnswersKey) as? [String: String] {
+            userAnswers = savedAnswers
+            logger.info("Restored \(savedAnswers.count) quiz answers from previous session")
+        }
+        if let savedMoments = UserDefaults.standard.stringArray(forKey: Self.selectedMomentsKey) {
+            selectedMoments = Set(savedMoments)
+        }
+        if let savedEmotional = UserDefaults.standard.string(forKey: Self.emotionalValueKey), !savedEmotional.isEmpty {
+            emotionalValue = savedEmotional
+        }
+    }
+
+    /// Clears saved quiz progress (call after successful completion)
+    func clearSavedQuizProgress() {
+        UserDefaults.standard.removeObject(forKey: Self.quizAnswersKey)
+        UserDefaults.standard.removeObject(forKey: Self.selectedMomentsKey)
+        UserDefaults.standard.removeObject(forKey: Self.emotionalValueKey)
+        logger.info("Cleared saved quiz progress")
     }
     
     // MARK: - Setup Methods
@@ -610,8 +657,8 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .planReadyTeaser
             updateProgress()
         case .personalizedPlan:
-            // Skip loading screen and teaser when going back - go directly to rating
-            currentStep = .step7SocialProof
+            // Go back to customize plan screen (skip loading screen)
+            currentStep = .planReadyTeaser
             updateProgress()
         case .saveYourProgress:
             currentStep = .personalizedPlan
@@ -791,6 +838,9 @@ final class OnboardingViewModel: ObservableObject {
         if !userAnswers.isEmpty {
             await saveQuizAnswers()
         }
+
+        // Clear local quiz progress now that it's saved to Firestore
+        clearSavedQuizProgress()
 
         // Navigate to dashboard
         await MainActor.run {

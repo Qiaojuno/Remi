@@ -86,6 +86,10 @@ struct Step1View: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["who_to_help"], !saved.isEmpty {
+                selectedOption = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -162,6 +166,10 @@ struct Step2View: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["reminder_frequency"], !saved.isEmpty {
+                selectedOption = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -266,6 +274,10 @@ struct Step4CurrentRemindersView: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available (comma-separated)
+            if let saved = viewModel.userAnswers["current_reminders"], !saved.isEmpty {
+                selectedReminders = Set(saved.components(separatedBy: ", "))
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -343,6 +355,10 @@ struct Step4aTechComfortView: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["tech_comfort"], !saved.isEmpty {
+                selectedComfort = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -414,6 +430,10 @@ struct Step4bSatisfactionView: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["satisfaction_level"], !saved.isEmpty {
+                selectedSatisfaction = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -487,6 +507,10 @@ struct Step5aCurrentFrustrationView: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["current_frustration"], !saved.isEmpty {
+                selectedFrustration = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -645,6 +669,10 @@ struct ReminderTimingView: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["reminder_timing"], !saved.isEmpty {
+                selectedTiming = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -747,6 +775,10 @@ struct Step4View: View {
             }
         }
         .onAppear {
+            // Restore saved selection if available
+            if !viewModel.selectedMoments.isEmpty {
+                selectedHabits = viewModel.selectedMoments
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -1022,6 +1054,10 @@ struct Step5View: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["what_matters_most"], !saved.isEmpty {
+                selectedOption = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -1395,6 +1431,10 @@ struct ReferralSourceView: View {
             }
         }
         .onAppear {
+            // Restore saved answer if available
+            if let saved = viewModel.userAnswers["referral_source"], !saved.isEmpty {
+                selectedOption = saved
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showContent = true
             }
@@ -1804,6 +1844,7 @@ struct Step7View: View {
 struct PersonalizedPlanView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
+    @State private var improvementProgress: CGFloat = 0
 
     // Helper to format recipient name
     private var recipientName: String {
@@ -1868,6 +1909,35 @@ struct PersonalizedPlanView: View {
         }
     }
 
+    // Helper to format reminder frequency from quiz
+    private var frequencyText: String {
+        let frequency = viewModel.userAnswers["reminder_frequency"] ?? ""
+        if frequency.contains("Often") {
+            return "frequent reminders"
+        } else if frequency.contains("Rarely") {
+            return "gentle reminders"
+        } else {
+            return "reminders as needed"
+        }
+    }
+
+    // Helper to format reminder timing from quiz
+    private var timingText: String {
+        let timing = viewModel.userAnswers["reminder_timing"] ?? ""
+        switch timing {
+        case "Morning routine":
+            return "mornings"
+        case "Around mealtimes":
+            return "mealtimes"
+        case "Evening routine":
+            return "evenings"
+        case "Throughout the day":
+            return "key moments throughout the day"
+        default:
+            return "the times that work best"
+        }
+    }
+
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
@@ -1899,15 +1969,56 @@ struct PersonalizedPlanView: View {
                             .opacity(showContent ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.05), value: showContent)
 
-                            Text("Start Today!")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 28)
-                                .padding(.vertical, 14)
-                                .background(Color.black)
-                                .cornerRadius(25)
-                                .opacity(showContent ? 1 : 0)
-                                .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+                            // Improvement chance card
+                            VStack(alignment: .leading, spacing: 10) {
+                                // 89% text
+                                Text("89%")
+                                    .font(.system(size: 36, weight: .bold))
+                                    .foregroundColor(.black)
+
+                                // Progress bar with circle indicator
+                                GeometryReader { geometry in
+                                    ZStack(alignment: .leading) {
+                                        // Background track
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                            .frame(height: 12)
+
+                                        // Progress fill with pink-to-blue gradient
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color(hex: "E4D4F4"), Color(hex: "7BA4F4")],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                            .frame(width: geometry.size.width * improvementProgress, height: 12)
+
+                                        // Circle indicator
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 20, height: 20)
+                                            .shadow(color: Color.black.opacity(0.15), radius: 3, x: 0, y: 1)
+                                            .offset(x: max(0, (geometry.size.width * improvementProgress) - 10))
+                                            .opacity(improvementProgress > 0 ? 1 : 0)
+                                    }
+                                }
+                                .frame(height: 20)
+
+                                // Description text
+                                Text("Chance of improvement with Remi")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.white)
+                            )
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
                         }
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
 
@@ -1957,11 +2068,11 @@ struct PersonalizedPlanView: View {
                             }
                             .frame(maxWidth: .infinity)
 
-                            // Description with green card background
+                            // Description with blue card background
                             ZStack {
-                                // Opaque green card behind text
+                                // Blue card behind text
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.green.opacity(0.15))
+                                    .fill(Color(hex: "7BA4F4").opacity(0.15))
 
                                 Text("Remi helps your parents stay on track with gentle text reminders they already know how to use — no apps, no learning curve, just consistency.")
                                     .font(.system(size: 15, weight: .regular))
@@ -2204,7 +2315,7 @@ struct PersonalizedPlanView: View {
                         Spacer()
                             .frame(height: 32)
 
-                        // Second benefit section: Become the child who always shows up
+                        // Second benefit section: Become the person who always shows up
                         VStack(spacing: 16) {
                             // Lottie animation
                             LottieView(animation: .named("Family"))
@@ -2214,7 +2325,7 @@ struct PersonalizedPlanView: View {
                                 .animation(.easeOut(duration: 0.4).delay(0.5), value: showContent)
 
                             // Title
-                            Text("Become the child who always shows up")
+                            Text("Become the person who always shows up")
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(.black)
                                 .multilineTextAlignment(.center)
@@ -2565,6 +2676,40 @@ struct PersonalizedPlanView: View {
                         Spacer()
                             .frame(height: 20)
 
+                        // Personalized reminder schedule card
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 8) {
+                                Text("📅")
+                                    .font(.system(size: 20))
+                                Text("Your reminder schedule:")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.black)
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("You should send \(frequencyText) around \(timingText).")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.black)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                Text("We'll ping you when they miss anything!")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(hex: "7BA4F4").opacity(0.15))
+                        )
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.85), value: showContent)
+
+                        Spacer()
+                            .frame(height: 20)
+
                         // Research-backed studies section
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Plan further with Research-backed studies")
@@ -2657,6 +2802,12 @@ struct PersonalizedPlanView: View {
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     showContent = true
+                }
+                // Animate progress bar after card fades in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    withAnimation(.easeOut(duration: 0.8)) {
+                        improvementProgress = 0.89
+                    }
                 }
             }
         }
@@ -2835,6 +2986,8 @@ struct PlanReadyTeaserView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 13)
                                 .fill(Color.white)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeIn(duration: 0.4).delay(0.5), value: showContent)
                         )
 
                         // Lock emoji sitting on top edge
@@ -2908,7 +3061,7 @@ struct LoadingPlanView: View {
                 .foregroundColor(.black)
                 .padding(.bottom, 32)
 
-            // Progress bar with blue gradient
+            // Progress bar with pink-to-blue gradient
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     // Background track
@@ -2920,7 +3073,7 @@ struct LoadingPlanView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "6BB6FF"), Color(hex: "4A9DFF")],
+                                colors: [Color(hex: "E4D4F4"), Color(hex: "7BA4F4")],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -3034,7 +3187,7 @@ struct LoadingPlanView: View {
                 } else if currentPercentage == 92 {
                     // Pause at 92% for artificial delay
                     timer.invalidate()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         self.currentMessage = "Finalizing recommendations..."
                         currentPercentage += 1
                         self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
@@ -3075,7 +3228,7 @@ struct LoadingPlanView: View {
                 if currentPercentage == 92 {
                     // Pause at 92% for artificial delay
                     timer.invalidate()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         self.currentMessage = "Finalizing recommendations..."
                         currentPercentage += 1
                         self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
