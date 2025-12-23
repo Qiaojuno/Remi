@@ -1159,7 +1159,8 @@ exports.healthCheckMonitor = onSchedule({
  */
 exports.checkNoReplyAndNotify = onSchedule({
   schedule: 'every 5 minutes',
-  timeZone: 'America/Los_Angeles'
+  timeZone: 'America/Los_Angeles',
+  secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber]
 }, async (event) => {
   const now = new Date();
 
@@ -1292,6 +1293,66 @@ exports.checkNoReplyAndNotify = onSchedule({
             pushMessageId: pushResult.messageId,
             minutesSinceSmsSent: Math.floor((now - smsSentAt) / 60000)
           });
+
+        // Generate nudge message first so we can include it in gallery event
+        const nudgeMessages = [
+          `Looks like you missed "${habitTitle}". ⏰`,
+          `You missed "${habitTitle}"! ⏰`,
+          `"${habitTitle}" was missed. ⏱️`,
+          `Missed "${habitTitle}" this time. ⌛`,
+          `30 minutes passed - "${habitTitle}" was marked as missed. ⏱️`,
+          `"${habitTitle}" wasn't completed in time. ⏰`,
+          `Time's up on "${habitTitle}"! ⌛`
+        ];
+        const nudgeMessage = nudgeMessages[Math.floor(Math.random() * nudgeMessages.length)];
+
+        // Create gallery event for the unreplied message
+        // Shows: sent message (blue) → nudge message (blue)
+        const galleryEventRef = admin.firestore()
+          .collection(`users/${userId}/gallery_events`)
+          .doc();
+
+        await galleryEventRef.set({
+          id: galleryEventRef.id,
+          userId: userId,
+          profileId: profileId,
+          eventType: 'taskResponse',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          eventData: {
+            taskResponse: {
+              _0: {
+                taskId: habitId,
+                textResponse: null,
+                photoData: null,
+                responseType: 'text',
+                taskTitle: habitTitle,
+                sentMessage: smsLog.message,
+                replyMessage: nudgeMessage
+              }
+            }
+          }
+        });
+
+        // Send the nudge SMS to the elderly user
+        const profileData = profileDoc.data();
+        if (profileData.phoneNumber && !profileData.smsOptedOut) {
+          try {
+            const twilioClient = twilio(
+              twilioAccountSid.value(),
+              twilioAuthToken.value()
+            );
+
+            await twilioClient.messages.create({
+              body: nudgeMessage,
+              from: twilioPhoneNumber.value(),
+              to: profileData.phoneNumber
+            });
+
+          } catch (smsError) {
+            console.error('❌ Nudge SMS failed:', smsError.message);
+            // Continue - don't fail the whole function for nudge SMS failure
+          }
+        }
 
       } else if (pushResult.error === 'No FCM token registered for user') {
         noFcmToken++;

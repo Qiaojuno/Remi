@@ -239,6 +239,9 @@ extension GalleryHistoryEvent {
                 return text
             } else if data.photoData != nil {
                 return "Photo response"
+            } else if data.sentMessage != nil {
+                // No-reply event: has sent message but no response
+                return "No reply"
             } else {
                 return "Task completed"
             }

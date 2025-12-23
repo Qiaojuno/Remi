@@ -293,16 +293,17 @@ struct GalleryDetailView: View {
             switch event.eventType {
             case .taskResponse:
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("task confirmed")
+                    // Show "no reply" for events without a response, "task confirmed" otherwise
+                    Text(event.hasTextResponse || event.hasPhoto ? "task confirmed" : "no reply")
                         .font(AppFonts.poppins(size: 14))
                         .foregroundColor(Color(hex: "9f9f9f"))
-                    
+
                     // Combined name and time with bullet separator
                     HStack(spacing: 0) {
                         Text(event.originalTaskTitle + " • " + formatEventTime(event.createdAt))
                             .font(AppFonts.poppinsMedium(size: 18))
                             .foregroundColor(.black)
-                        
+
                         Spacer()
                     }
                 }
@@ -370,19 +371,22 @@ struct GalleryDetailView: View {
                 }
 
                 // Incoming message (their response) - left aligned, gray
-                HStack {
-                    SpeechBubbleView(
-                        text: event.textResponse ?? "OK",
-                        isOutgoing: false,
-                        backgroundColor: Color(hex: "E5E5EA"), // iOS gray
-                        textColor: .black
-                    )
+                // Only show if there was an actual response (not for no-reply events)
+                if let textResponse = event.textResponse, !textResponse.isEmpty {
+                    HStack {
+                        SpeechBubbleView(
+                            text: textResponse,
+                            isOutgoing: false,
+                            backgroundColor: Color(hex: "E5E5EA"), // iOS gray
+                            textColor: .black
+                        )
 
-                    Spacer(minLength: UIScreen.main.bounds.width * 0.2) // 20% right margin
+                        Spacer(minLength: UIScreen.main.bounds.width * 0.2) // 20% right margin
+                    }
                 }
 
                 // Reply message (thank you) - right aligned, blue
-                if let replyMessage = event.replyMessage {
+                if let replyMessage = event.replyMessage, !replyMessage.isEmpty {
                     HStack {
                         Spacer(minLength: UIScreen.main.bounds.width * 0.2) // 20% left margin
 
