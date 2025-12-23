@@ -184,8 +184,8 @@ struct SettingsView: View {
             .fullScreenCoverNoAnimation(isPresented: $showingNotifications) {
                 NotificationsSettingsView()
             }
-            .fullScreenCoverNoAnimation(isPresented: $showingSubscription) {
-                ManageSubscriptionView()
+            .sheet(isPresented: $showingSubscription) {
+                CustomerCenterView()
             }
             .fullScreenCoverNoAnimation(isPresented: $showingFAQs) {
                 FAQsView()
