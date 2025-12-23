@@ -4,7 +4,8 @@ const {onCall, onRequest} = require('firebase-functions/v2/https');
 const {defineSecret} = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const twilio = require('twilio');
-const moment = require('moment-timezone');
+const { addDays, addYears, setHours, setMinutes, setSeconds, setMilliseconds, getDay, getHours, getMinutes, getSeconds } = require('date-fns');
+const { toZonedTime, fromZonedTime } = require('date-fns-tz');
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -1337,7 +1338,7 @@ exports.checkNoReplyAndNotify = onSchedule({
 
 /**
  * Calculate the next scheduled occurrence for a recurring habit
- * Uses moment-timezone for proper timezone-aware date calculations
+ * Uses date-fns-tz for proper timezone-aware date calculations
  *
  * @param {Object} habit - Habit document data with frequency, customDays, scheduledTime, timeZone
  * @param {string} profileTimeZone - Profile's timezone identifier (e.g., "America/New_York")
@@ -1348,49 +1349,56 @@ function calculateNextOccurrence(habit, profileTimeZone = 'America/Los_Angeles')
   const tz = habit.timeZone || profileTimeZone || 'America/Los_Angeles';
 
   // Get current date in profile's timezone
-  const currentDate = moment(habit.nextScheduledDate.toDate()).tz(tz);
+  const currentDateUTC = habit.nextScheduledDate.toDate();
+  const currentDateZoned = toZonedTime(currentDateUTC, tz);
 
   // Extract time components from scheduledTime in profile's timezone
-  const scheduledTime = moment(habit.scheduledTime.toDate()).tz(tz);
-  const hours = scheduledTime.hours();
-  const minutes = scheduledTime.minutes();
-  const seconds = scheduledTime.seconds();
+  const scheduledTimeUTC = habit.scheduledTime.toDate();
+  const scheduledTimeZoned = toZonedTime(scheduledTimeUTC, tz);
+  const hours = getHours(scheduledTimeZoned);
+  const minutes = getMinutes(scheduledTimeZoned);
+  const seconds = getSeconds(scheduledTimeZoned);
+
+  // Helper to set time and convert back to UTC
+  const setTimeAndConvert = (date) => {
+    let result = setHours(date, hours);
+    result = setMinutes(result, minutes);
+    result = setSeconds(result, seconds);
+    result = setMilliseconds(result, 0);
+    return fromZonedTime(result, tz);
+  };
 
   switch (habit.frequency) {
     case 'daily':
       // Add 1 day to current nextScheduledDate
-      const nextDaily = currentDate.clone().add(1, 'day');
-      nextDaily.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
-      return nextDaily.toDate();
+      const nextDaily = addDays(currentDateZoned, 1);
+      return setTimeAndConvert(nextDaily);
 
     case 'weekdays':
       // Find next weekday (Monday-Friday)
-      let nextWeekday = currentDate.clone().add(1, 'day');
-      nextWeekday.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
+      let nextWeekday = addDays(currentDateZoned, 1);
 
       // Skip weekends (0 = Sunday, 6 = Saturday)
-      while (nextWeekday.day() === 0 || nextWeekday.day() === 6) {
-        nextWeekday.add(1, 'day');
+      while (getDay(nextWeekday) === 0 || getDay(nextWeekday) === 6) {
+        nextWeekday = addDays(nextWeekday, 1);
       }
-      return nextWeekday.toDate();
+      return setTimeAndConvert(nextWeekday);
 
     case 'weekly':
       // Add 7 days to current nextScheduledDate
-      const nextWeekly = currentDate.clone().add(7, 'days');
-      nextWeekly.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
-      return nextWeekly.toDate();
+      const nextWeekly = addDays(currentDateZoned, 7);
+      return setTimeAndConvert(nextWeekly);
 
     case 'custom':
       // Find next day that matches customDays array
       const customDays = habit.customDays || [];
       if (customDays.length === 0) {
         // Fallback to daily if no custom days specified
-        const fallback = currentDate.clone().add(1, 'day');
-        fallback.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
-        return fallback.toDate();
+        const fallback = addDays(currentDateZoned, 1);
+        return setTimeAndConvert(fallback);
       }
 
-      // Convert custom days to moment day numbers (0=Sunday, 1=Monday, etc.)
+      // Convert custom days to day numbers (0=Sunday, 1=Monday, etc.)
       const dayMap = {
         'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
         'thursday': 4, 'friday': 5, 'saturday': 6
@@ -1398,28 +1406,26 @@ function calculateNextOccurrence(habit, profileTimeZone = 'America/Los_Angeles')
       const targetDays = new Set(customDays.map(day => dayMap[day.toLowerCase()]));
 
       // Search for next matching day (up to 14 days ahead)
-      let nextCustom = currentDate.clone().add(1, 'day');
-      nextCustom.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
+      let nextCustom = addDays(currentDateZoned, 1);
 
       for (let i = 0; i < 14; i++) {
-        if (targetDays.has(nextCustom.day())) {
-          return nextCustom.toDate();
+        if (targetDays.has(getDay(nextCustom))) {
+          return setTimeAndConvert(nextCustom);
         }
-        nextCustom.add(1, 'day');
+        nextCustom = addDays(nextCustom, 1);
       }
 
       // Fallback if no match found
-      return nextCustom.toDate();
+      return setTimeAndConvert(nextCustom);
 
     case 'once':
       // One-time habits should not be updated - return far future
-      return moment().add(100, 'years').toDate();
+      return addYears(new Date(), 100);
 
     default:
       // Fallback to daily
-      const defaultNext = currentDate.clone().add(1, 'day');
-      defaultNext.hours(hours).minutes(minutes).seconds(seconds).milliseconds(0);
-      return defaultNext.toDate();
+      const defaultNext = addDays(currentDateZoned, 1);
+      return setTimeAndConvert(defaultNext);
   }
 }
 

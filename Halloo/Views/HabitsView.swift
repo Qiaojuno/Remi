@@ -626,7 +626,7 @@ struct HabitsView: View {
         habitsPendingDeletion.remove(habit.id)
 
         // Optimistic UI update: immediately remove from local state with iOS-native spring animation
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        _ = withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             locallyDeletedHabitIds.insert(habit.id)
         }
 
@@ -650,7 +650,7 @@ struct HabitsView: View {
 
                 // Revert optimistic update on error with spring animation
                 await MainActor.run {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    _ = withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         locallyDeletedHabitIds.remove(habit.id)
                     }
                     UINotificationFeedbackGenerator().notificationOccurred(.error)

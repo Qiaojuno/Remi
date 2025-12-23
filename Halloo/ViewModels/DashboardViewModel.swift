@@ -224,15 +224,13 @@ final class DashboardViewModel: ObservableObject, AppStateViewModel {
     /// Logger for dashboard operations tracking and error diagnosis
     private let logger = Logger(subsystem: "com.halloo.app", category: "Dashboard")
 
-    /// ProfileViewModel reference for accessing profiles (single source of truth)
+    /// AppState reference for accessing profiles (single source of truth)
     /// Dashboard reads profiles but does not manage them
-    // PHASE 4: Migrating to AppState
-    private weak var profileViewModel: ProfileViewModel?  // TODO Phase 5: Remove completely
     weak var appState: AppState?
 
-    /// Computed property to access profiles from ProfileViewModel
+    /// Computed property to access profiles from AppState
     private var profiles: [ElderlyProfile] {
-        return profileViewModel?.profiles ?? []
+        return appState?.profiles ?? []
     }
 
     // MARK: - Internal Dashboard Coordination Properties
@@ -383,13 +381,11 @@ final class DashboardViewModel: ObservableObject, AppStateViewModel {
     init(
         databaseService: DatabaseServiceProtocol,
         authService: AuthenticationServiceProtocol,
-        dataSyncCoordinator: DataSyncCoordinator,
-        profileViewModel: ProfileViewModel? = nil
+        dataSyncCoordinator: DataSyncCoordinator
     ) {
         self.databaseService = databaseService
         self.authService = authService
         self.dataSyncCoordinator = dataSyncCoordinator
-        self.profileViewModel = profileViewModel
 
         // Enable real-time family and elderly care data synchronization
         setupDataSync()
@@ -423,17 +419,6 @@ final class DashboardViewModel: ObservableObject, AppStateViewModel {
                 self?.updateTasksFromAppState(tasks: tasks, profiles: appState.profiles)
             }
             .store(in: &cancellables)
-    }
-
-    /// DEPRECATED: Set ProfileViewModel reference (use setAppState instead)
-    /// Kept for backward compatibility during Phase 4 transition
-    func setProfileViewModel(_ profileViewModel: ProfileViewModel) {
-        self.profileViewModel = profileViewModel
-
-        // If AppState not set yet, auto-select from ProfileViewModel
-        if appState == nil {
-            updateProfileSelection(from: profileViewModel.profiles)
-        }
     }
 
     /// Update profile selection and pending confirmations when profiles change

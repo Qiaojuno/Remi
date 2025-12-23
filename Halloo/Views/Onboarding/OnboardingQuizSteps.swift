@@ -1465,7 +1465,17 @@ struct FreeTrialIntroView: View {
                     .opacity(showContent ? 1 : 0)
                     .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
-                // Empty middle space for asset (to be added later)
+                // Phone demo image
+                Spacer()
+
+                Image("PhoneDemo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 400)
+                    .padding(.horizontal, 40)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.easeOut(duration: 0.5).delay(0.2), value: showContent)
+
                 Spacer()
 
                 // Bottom section
@@ -3146,7 +3156,7 @@ struct LoadingPlanView: View {
     }
 
     private func showCheckmark(_ index: Int) {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+        _ = withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
             self.completedBullets.insert(index)
         }
         hapticGenerator.impactOccurred()

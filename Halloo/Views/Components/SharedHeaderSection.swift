@@ -116,7 +116,7 @@ extension View {
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         self
-            .onChange(of: isPresented.wrappedValue) { newValue in
+            .onChange(of: isPresented.wrappedValue) { _, newValue in
                 if newValue {
                     var transaction = Transaction()
                     transaction.disablesAnimations = true
@@ -357,9 +357,9 @@ struct SettingsView: View {
 
     // MARK: - Actions
     private func performSignOut() {
-        _Concurrency.Task.detached {
+        let authService = container.resolve(AuthenticationServiceProtocol.self)
+        _Concurrency.Task {
             do {
-                let authService = self.container.resolve(AuthenticationServiceProtocol.self)
                 try await authService.signOut()
                 await MainActor.run {
                     self.dismissWithoutAnimation?()

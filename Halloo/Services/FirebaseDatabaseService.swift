@@ -388,7 +388,8 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             return nil
         }
 
-        let data = document.data()
+        var data = document.data()
+        data["id"] = document.documentID
         return try decodeFromFirestore(data, as: SMSResponse.self)
     }
 
@@ -399,8 +400,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             .order(by: "receivedAt", descending: true)
             .getDocuments()
 
-        return try snapshot.documents.map { document in
-            try decodeFromFirestore(document.data(), as: SMSResponse.self)
+        return snapshot.documents.compactMap { document in
+            var data = document.data()
+            data["id"] = document.documentID
+            return try? decodeFromFirestore(data, as: SMSResponse.self)
         }
     }
 
@@ -410,8 +413,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             .order(by: "receivedAt", descending: true)
             .getDocuments()
 
-        return try snapshot.documents.map { document in
-            try decodeFromFirestore(document.data(), as: SMSResponse.self)
+        return snapshot.documents.compactMap { document in
+            var data = document.data()
+            data["id"] = document.documentID
+            return try? decodeFromFirestore(data, as: SMSResponse.self)
         }
     }
 
@@ -428,8 +433,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             .order(by: "receivedAt", descending: true)
             .getDocuments()
 
-        return try snapshot.documents.map { document in
-            try decodeFromFirestore(document.data(), as: SMSResponse.self)
+        return snapshot.documents.compactMap { document in
+            var data = document.data()
+            data["id"] = document.documentID
+            return try? decodeFromFirestore(data, as: SMSResponse.self)
         }
     }
 
@@ -444,9 +451,14 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
             return snapshot.documents.compactMap { document in
                 do {
-                    return try decodeFromFirestore(document.data(), as: SMSResponse.self)
+                    var data = document.data()
+                    data["id"] = document.documentID
+                    return try decodeFromFirestore(data, as: SMSResponse.self)
                 } catch {
+                    // Only log in DEBUG to avoid console spam
+                    #if DEBUG
                     print("⚠️ [FirebaseDatabaseService] Skipping message \(document.documentID): \(error.localizedDescription)")
+                    #endif
                     return nil
                 }
             }
@@ -466,8 +478,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             .order(by: "receivedAt", descending: true)
             .getDocuments()
 
-        return try snapshot.documents.map { document in
-            try decodeFromFirestore(document.data(), as: SMSResponse.self)
+        return snapshot.documents.compactMap { document in
+            var data = document.data()
+            data["id"] = document.documentID
+            return try? decodeFromFirestore(data, as: SMSResponse.self)
         }
     }
 
@@ -479,8 +493,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
             .order(by: "receivedAt", descending: true)
             .getDocuments()
 
-        return try snapshot.documents.map { document in
-            try decodeFromFirestore(document.data(), as: SMSResponse.self)
+        return snapshot.documents.compactMap { document in
+            var data = document.data()
+            data["id"] = document.documentID
+            return try? decodeFromFirestore(data, as: SMSResponse.self)
         }
     }
 
@@ -555,7 +571,13 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
         do {
             let downloadURL = try await photoRef.downloadURL()
             return downloadURL.absoluteString
-        } catch {
+        } catch let error as NSError {
+            // Only log unexpected errors (not "object not found" which is expected)
+            #if DEBUG
+            if error.domain != StorageErrorDomain || error.code != StorageErrorCode.objectNotFound.rawValue {
+                print("⚠️ [FirebaseDatabaseService] Photo URL fetch failed for profile \(profileId): \(error.localizedDescription)")
+            }
+            #endif
             return nil
         }
     }
@@ -1168,9 +1190,9 @@ extension FirebaseDatabaseService {
         let profileRef = CollectionPath.userProfiles(userId: userId)
             .document(profileId, in: db)
 
-        // Count items before deletion for verification
-        let habitsSnapshot = try await profileRef.collection("habits").getDocuments()
-        let messagesSnapshot = try await profileRef.collection("messages").getDocuments()
+        // Count items before deletion for verification (prefetch for Firestore batch delete)
+        _ = try await profileRef.collection("habits").getDocuments()
+        _ = try await profileRef.collection("messages").getDocuments()
 
         // Also count gallery events linked to this profile
         let galleryEventsSnapshot = try await CollectionPath.userGalleryEvents(userId: userId)

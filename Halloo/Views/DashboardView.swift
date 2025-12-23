@@ -132,16 +132,8 @@ struct DashboardView: View {
             }
         }
         .onAppear {
-            /*
-             * DATA LOADING & PROFILE SELECTION:
-             * 1. Connect DashboardViewModel to ProfileViewModel (single source of truth)
-             * 2. Load dashboard data and auto-select first profile for task filtering
-             * 3. Sync UI selection state with ViewModel selection state
-             */
-            viewModel.setProfileViewModel(profileViewModel)
-
-            // PHASE 3: Sync selectedProfileIndex with ViewModel's selectedProfileId
-            // Read from appState (single source of truth)
+            // Sync selectedProfileIndex with ViewModel's selectedProfileId
+            // Profiles are accessed via AppState (single source of truth)
             if let selectedId = viewModel.selectedProfileId,
                let index = appState.profiles.firstIndex(where: { $0.id == selectedId }) {
                 selectedProfileIndex = index

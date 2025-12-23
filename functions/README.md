@@ -65,7 +65,7 @@ Receives incoming SMS and status callbacks from Twilio.
 **Twilio Configuration:**
 Set this as your webhook URL in Twilio Console:
 ```
-https://us-central1-remi-91351.cloudfunctions.net/twilioWebhook
+https://us-central1-{your-project-id}.cloudfunctions.net/twilioWebhook
 ```
 
 ### `cleanupOldGalleryEvents`
@@ -84,7 +84,7 @@ Automated data retention - runs daily at midnight PST.
 
 **Manual testing:**
 ```bash
-curl -X POST http://localhost:5001/remi-91351/us-central1/manualCleanup \
+curl -X POST http://localhost:5001/{your-project-id}/us-central1/manualCleanup \
   -H "Content-Type: application/json" \
   -d '{"daysOld": 7}'
 ```
@@ -98,7 +98,7 @@ HTTP endpoint for manual cleanup testing.
 **Usage:**
 ```bash
 # Test with events older than 7 days
-curl -X POST https://us-central1-remi-91351.cloudfunctions.net/manualCleanup \
+curl -X POST https://us-central1-{your-project-id}.cloudfunctions.net/manualCleanup \
   -H "Content-Type: application/json" \
   -d '{"daysOld": 7}'
 ```
@@ -110,7 +110,7 @@ curl -X POST https://us-central1-remi-91351.cloudfunctions.net/manualCleanup \
 firebase emulators:start
 
 # Functions will be available at:
-# http://localhost:5001/remi-91351/us-central1/sendSMS
+# http://localhost:5001/{your-project-id}/us-central1/sendSMS
 ```
 
 ## Security Features

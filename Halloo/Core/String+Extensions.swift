@@ -64,6 +64,14 @@ extension String {
         }
     }
 
+    /// Validates if phone number is in E.164 format (+[country code][number])
+    /// Required format for Twilio SMS API
+    var isValidE164PhoneNumber: Bool {
+        let phoneRegex = "^\\+[1-9]\\d{1,14}$"
+        let phonePredicate = NSPredicate(format: "SELF MATCHES %@", phoneRegex)
+        return phonePredicate.evaluate(with: self)
+    }
+
     /// E.164 format phone number for Twilio SMS (e.g., +17788143739)
     ///
     /// Converts any phone number format to E.164 standard required by Twilio.

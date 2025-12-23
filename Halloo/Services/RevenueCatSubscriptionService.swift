@@ -60,7 +60,7 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
     func configure(apiKey: String, userId: String?) {
         // Configure RevenueCat SDK
-        Purchases.logLevel = .debug // Use .info or .warn in production
+        Purchases.logLevel = .warn
         Purchases.configure(withAPIKey: apiKey)
 
         // Identify user if userId provided

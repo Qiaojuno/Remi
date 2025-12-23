@@ -848,7 +848,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     /// to restore them by checking if the photo file exists in Firebase Storage.
     /// Useful for recovering from bugs where photoURL was accidentally cleared.
     func restoreMissingProfilePhotos() async {
-        guard let userId = authService.currentUser?.uid else {
+        guard authService.currentUser?.uid != nil else {
             return
         }
 
@@ -885,7 +885,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     /// photos in Firebase Storage but the URL may have expired or become invalid.
     /// Call this when AsyncImage fails to load a profile photo despite having a photoURL.
     func refreshProfilePhotoURLs() async {
-        guard let userId = authService.currentUser?.uid else {
+        guard authService.currentUser?.uid != nil else {
             return
         }
 
@@ -1117,7 +1117,11 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
 
                     // Persist confirmation status for family synchronization
                     _Concurrency.Task {
-                        try? await databaseService.updateElderlyProfile(updatedProfile)
+                        do {
+                            try await databaseService.updateElderlyProfile(updatedProfile)
+                        } catch {
+                            logger.error("Failed to persist profile confirmation: \(error.localizedDescription)")
+                        }
                         // Broadcast profile status update to Dashboard and family members
                         self.dataSyncCoordinator.broadcastProfileUpdate(updatedProfile)
                     }

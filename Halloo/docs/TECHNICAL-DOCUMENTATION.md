@@ -189,7 +189,6 @@ Profile(id: "A1B2C3D4-E5F6-...", phoneNumber: "+17788143739")
 
 ```swift
 .onAppear {
-    viewModel.setProfileViewModel(profileViewModel)
     loadData()
 
     // ONE-TIME MIGRATION: Run this once to fix old data
@@ -223,7 +222,6 @@ Profile(id: "A1B2C3D4-E5F6-...", phoneNumber: "+17788143739")
 
 ```swift
 .onAppear {
-    viewModel.setProfileViewModel(profileViewModel)
     loadData()
 
     // ONE-TIME CLEANUP: Delete old habits with phone-number profileIds
@@ -409,14 +407,14 @@ exports.cleanupOldGalleryEvents = functions.pubsub
 
 **Usage:**
 ```bash
-curl -X POST https://us-central1-remi-91351.cloudfunctions.net/manualCleanup \
+curl -X POST https://us-central1-{your-project-id}.cloudfunctions.net/manualCleanup \
   -H "Content-Type: application/json" \
   -d '{"daysOld": 7}'
 ```
 
 **Testing locally:**
 ```bash
-curl -X POST http://localhost:5001/remi-91351/us-central1/manualCleanup \
+curl -X POST http://localhost:5001/{your-project-id}/us-central1/manualCleanup \
   -H "Content-Type: application/json" \
   -d '{"daysOld": 7}'
 ```
@@ -578,7 +576,7 @@ firebase deploy --only storage
 firebase emulators:start
 
 # Test manual cleanup with 7-day threshold
-curl -X POST http://localhost:5001/remi-91351/us-central1/manualCleanup \
+curl -X POST http://localhost:5001/{your-project-id}/us-central1/manualCleanup \
   -H "Content-Type: application/json" \
   -d '{"daysOld": 7}'
 ```
@@ -598,7 +596,7 @@ curl -X POST http://localhost:5001/remi-91351/us-central1/manualCleanup \
 firebase functions:log --only cleanupOldGalleryEvents
 
 # Check Cloud Storage bucket
-gsutil ls -r gs://remi-91351.appspot.com/gallery-archive/
+gsutil ls -r gs://{your-project-id}.appspot.com/gallery-archive/
 ```
 
 ## Migration Plan

@@ -17,11 +17,11 @@ final class Container: ObservableObject {
     private init() {
         setupServices()
     }
-    
+        
     // MARK: - Service Registration
     private func setupServices() {
-        // Check if Firebase is configured
-        let useFirebaseServices = checkFirebaseConfiguration()
+        // Verify Firebase is configured (logs warning if not)
+        _ = checkFirebaseConfiguration()
 
         // Core Services - Firebase only (Mock services removed for MVP)
         registerSingleton(AuthenticationServiceProtocol.self) {

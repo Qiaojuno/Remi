@@ -70,11 +70,8 @@ final class SubscriptionManager: ObservableObject {
     /// - Returns: True if user has at least one active subscription
     func hasActiveSubscription() async -> Bool {
         #if DEBUG
-        // ⚠️ DEBUG BYPASS: Set to true to bypass subscription check in debug builds
-        // Set to false when testing actual purchases/paywall
-        let debugBypass = false
-
-        if debugBypass {
+        // ⚠️ DEBUG BYPASS: Set environment variable BYPASS_SUBSCRIPTION=1 to bypass
+        if ProcessInfo.processInfo.environment["BYPASS_SUBSCRIPTION"] == "1" {
             return true
         }
         #endif

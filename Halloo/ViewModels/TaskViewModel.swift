@@ -608,7 +608,7 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
                 throw TaskError.maxTasksReached
             }
 
-            for (index, scheduledTime) in scheduledTimes.enumerated() {
+            for scheduledTime in scheduledTimes {
 
                 // Calculate the correct first occurrence based on frequency
                 // Use profile's timezone to ensure SMS is sent at the correct local time
@@ -735,12 +735,6 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
 
             // 2. Try Firebase update
             try await databaseService.updateTask(updatedTask)
-
-            // Reschedule notifications if schedule changed
-            let scheduleChanged = task.frequency != frequency ||
-                                task.scheduledTime != (scheduledTimes.first ?? Date()) ||
-                                task.customDays != Array(customDays) ||
-                                task.status != updatedTask.status
 
             await MainActor.run {
                 self.resetForm()

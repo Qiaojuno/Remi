@@ -1034,7 +1034,13 @@ private struct PaywallGateContent: View {
             } else {
                 // Log out user and return to welcome page
                 let authService = container.resolve(AuthenticationServiceProtocol.self)
-                try? await authService.signOut()
+                do {
+                    try await authService.signOut()
+                } catch {
+                    #if DEBUG
+                    print("⚠️ Sign out failed during paywall restore: \(error.localizedDescription)")
+                    #endif
+                }
             }
         }
     }
