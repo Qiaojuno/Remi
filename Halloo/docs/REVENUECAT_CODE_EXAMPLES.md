@@ -172,7 +172,7 @@ struct UpgradeBanner: View {
                         .font(.headline)
                         .foregroundColor(.primary)
 
-                    Text("Get unlimited profiles, tasks & more")
+                    Text("Get 2 recipients, unlimited tasks & more")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -356,8 +356,8 @@ struct SubscriptionBannerView: View {
 // Usage:
 SubscriptionBannerView(
     event: "premium_feature",
-    title: "Unlock Unlimited Profiles",
-    subtitle: "Create as many profiles as you need"
+    title: "Unlock Premium",
+    subtitle: "Get 2 recipients with unlimited tasks"
 )
 ```
 

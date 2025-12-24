@@ -540,7 +540,7 @@ try await subscriptionService.identify(userId: authService.currentUser!.uid)
 ### Entitlement: "Remi Unlimited"
 - Product IDs: `monthly`, `yearly` (configured in RevenueCat Dashboard)
 - Entitlement ID: `"Remi Unlimited"` (used in code)
-- Grants: Unlimited profiles, tasks, premium features
+- Grants: 2 recipients, unlimited tasks, premium features
 
 ### Build Configuration
 - **Debug builds**: Automatically use Test Store API key (safe for development)

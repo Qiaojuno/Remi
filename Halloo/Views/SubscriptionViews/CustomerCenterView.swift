@@ -150,7 +150,7 @@ struct CustomerCenterView: View {
                 .foregroundColor(.secondary)
 
             VStack(alignment: .leading, spacing: 8) {
-                FeatureRow(icon: "checkmark.circle.fill", text: "Unlimited profiles")
+                FeatureRow(icon: "checkmark.circle.fill", text: "2 recipients")
                 FeatureRow(icon: "checkmark.circle.fill", text: "Unlimited tasks & reminders")
                 FeatureRow(icon: "checkmark.circle.fill", text: "Priority support")
                 FeatureRow(icon: "checkmark.circle.fill", text: "Advanced features")
