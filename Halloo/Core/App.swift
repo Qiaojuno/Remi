@@ -230,9 +230,15 @@ struct HalloApp: App {
         }()
 
         // Configure Superwall to use RevenueCat as the purchase controller
+        let options = SuperwallOptions()
+        #if DEBUG
+        options.logging.level = .debug  // Enable debug logging to diagnose product issues
+        #endif
+
         Superwall.configure(
             apiKey: SUPERWALL_API_KEY,
-            purchaseController: PurchaseController()
+            purchaseController: PurchaseController(),
+            options: options
         )
 
         // Optional: Set user attributes for targeting

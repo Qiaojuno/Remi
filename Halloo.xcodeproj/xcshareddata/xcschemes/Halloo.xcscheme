@@ -77,13 +77,6 @@
       <StoreKitConfigurationFileReference
          identifier = "../StoreKit.storekit">
       </StoreKitConfigurationFileReference>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "BYPASS_SUBSCRIPTION"
-            value = "1"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
