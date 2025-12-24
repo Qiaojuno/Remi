@@ -74,17 +74,16 @@ struct ContentView: View {
     // MARK: - Computed Properties
 
     /// Controls whether tab swiping is enabled
-    /// Disabled on HabitsView (tab 2) to prevent conflict with swipe-to-delete gestures
-    /// Also restricted to only Dashboard ↔ Gallery (tabs 0-1)
+    /// Enabled on all tabs for full swipe navigation
     private var allowsTabSwiping: Bool {
-        selectedTab != 2  // Disable on Habits tab (index 2)
+        true  // Enable swiping on all tabs
     }
 
     /// Controls which tab transitions are allowed
-    /// Only allows swiping between Dashboard (0) and Gallery (1)
+    /// Allows swiping between all 3 tabs (Dashboard, Gallery, Habits)
     private func isValidTabTransition(from currentTab: Int, to newTab: Int) -> Bool {
-        // Only allow transitions between tabs 0 and 1 (Dashboard ↔ Gallery)
-        let validTabs = Set([0, 1])
+        // Allow transitions between all tabs (0, 1, 2)
+        let validTabs = Set([0, 1, 2])
         return validTabs.contains(currentTab) && validTabs.contains(newTab)
     }
 
@@ -223,14 +222,10 @@ struct ContentView: View {
                             // Horizontal wins unless vertical is significantly more
                             guard verticalDistance < horizontalDistance * verticalThreshold else { return }
 
-                            // Prevent swiping beyond boundaries and to disabled tabs
+                            // Prevent swiping beyond boundaries
                             let swipeDirection = value.translation.width > 0 ? "right" : "left"
                             if selectedTab == 0 && swipeDirection == "right" {
                                 // Can't swipe right from Dashboard (leftmost)
-                                return
-                            }
-                            if selectedTab == 1 && swipeDirection == "left" {
-                                // Can't swipe left from Gallery (Habits navigation disabled)
                                 return
                             }
                             if selectedTab == 2 && swipeDirection == "left" {
@@ -277,7 +272,6 @@ struct ContentView: View {
                             if horizontalDistance < 0 && shouldChangeTab {
                                 if selectedTab < 2 {
                                     let newTab = selectedTab + 1
-                                    // Only allow transition if valid (Dashboard ↔ Gallery only)
                                     if isValidTabTransition(from: selectedTab, to: newTab) {
                                         previousTab = selectedTab
                                         selectedTab = newTab
@@ -299,7 +293,6 @@ struct ContentView: View {
                             else if horizontalDistance > 0 && shouldChangeTab {
                                 if selectedTab > 0 {
                                     let newTab = selectedTab - 1
-                                    // Only allow transition if valid (Dashboard ↔ Gallery only)
                                     if isValidTabTransition(from: selectedTab, to: newTab) {
                                         previousTab = selectedTab
                                         selectedTab = newTab
@@ -322,7 +315,7 @@ struct ContentView: View {
                                 isHorizontalDragging = false
                             }
                         }
-                    : nil  // No gesture on Habits tab - allows swipe-to-delete to work without conflict
+                    : nil
                 )
 
                 // LAYER 100: Static chrome (header + nav, never animates)
@@ -530,6 +523,10 @@ struct ContentView: View {
 
             await MainActor.run {
                 if authService?.isAuthenticated == true {
+                    // ✅ FIX: Mark onboarding complete for returning authenticated users
+                    // This ensures they go to PaywallGateView instead of OnboardingContainerView
+                    onboardingViewModel?.isComplete = true
+
                     // Load all user data and setup real-time listeners
                     _Concurrency.Task {
                         await appState.loadUserData()

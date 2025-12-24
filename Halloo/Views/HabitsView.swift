@@ -166,9 +166,9 @@ struct HabitsView: View {
                             weekSelectorCard
                                 .padding(.horizontal, geometry.size.width * 0.04)
 
-                            // Spacing before habits section
+                            // Spacing before habits section (matches spacing above)
                             Spacer()
-                                .frame(height: 3)
+                                .frame(height: 16)
 
                             // Individual habit cards
                             if filteredHabits.isEmpty {
@@ -193,6 +193,10 @@ struct HabitsView: View {
                                         .frame(height: 3)
                                 }
                             }
+
+                            // Spacing before delete button
+                            Spacer()
+                                .frame(height: 16)
 
                             // Delete profile button as its own card
                             deleteProfileButtonCard
@@ -380,25 +384,10 @@ struct HabitsView: View {
         .frame(height: 500)
     }
 
-    // MARK: - 📋 Week Selector Card (Separated)
-    /// Standalone card containing only the week filter
-    /// No shadow for cleaner appearance
+    // MARK: - 📋 Week Selector Card (Pill Design)
+    /// Compact pill-based week selector with merging highlights
     private var weekSelectorCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title
-            Text("Repeating Messages")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.black)
-                .padding(.horizontal, 16)
-
-            // Week selector buttons
-            weekSelectorSection
-                .padding(.horizontal, 12)
-        }
-        .padding(.vertical, 16)
-        .background(Color.white)
-        .cornerRadius(10)
-        .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
+        weekSelectorSection
     }
 
     // MARK: - 📋 Empty State - No Habits
@@ -416,7 +405,7 @@ struct HabitsView: View {
     }
 
     // MARK: - 🗑️ Delete Profile Button Card
-    /// Delete profile button as standalone card
+    /// Delete profile button as standalone pill
     private var deleteProfileButtonCard: some View {
         Button(action: {
             guard !isDeleteButtonCoolingDown else {
@@ -426,21 +415,14 @@ struct HabitsView: View {
             HapticFeedback.medium()
             showingProfileDeleteConfirmation = true
         }) {
-            HStack {
-                Text("Delete Profile")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-
-                Spacer()
-
-                Text("🚨")
-                    .font(.system(size: 22))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
+            Text("Delete Profile")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
         }
-        .background(Color.black)
-        .cornerRadius(10)
+        .background(Color(hex: "DC3545"))
+        .clipShape(Capsule())
         .disabled(isDeleteButtonCoolingDown)
         .alert("Delete Profile", isPresented: $showingProfileDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -457,43 +439,62 @@ struct HabitsView: View {
         }
     }
     
-    // MARK: - Week Selector Component (3-letter abbreviations, pill buttons)
+    // MARK: - Week Selector Component (Mon-Sun pill design with merging highlights)
+
+    /// Days ordered Monday-first (ISO week style)
+    private let weekDaysMonFirst = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    /// Maps Mon-first index to Sun-first index (for selectedDays compatibility)
+    private let monFirstToSunFirst = [1, 2, 3, 4, 5, 6, 0] // Mon=1, Tue=2, ..., Sun=0
+
     private var weekSelectorSection: some View {
         HStack(spacing: 0) {
-            ForEach(0..<7, id: \.self) { dayIndex in
-                let isSelected = selectedDays.contains(dayIndex)
+            ForEach(0..<7, id: \.self) { monFirstIndex in
+                let sunFirstIndex = monFirstToSunFirst[monFirstIndex]
+                let isSelected = selectedDays.contains(sunFirstIndex)
+
+                // Check adjacent days for corner merging (in Mon-first order)
+                let prevMonFirstIndex = monFirstIndex - 1
+                let nextMonFirstIndex = monFirstIndex + 1
+                let prevSelected = prevMonFirstIndex >= 0 && selectedDays.contains(monFirstToSunFirst[prevMonFirstIndex])
+                let nextSelected = nextMonFirstIndex < 7 && selectedDays.contains(monFirstToSunFirst[nextMonFirstIndex])
+
+                // Edge padding for first/last items
+                let isFirstDay = monFirstIndex == 0
+                let isLastDay = monFirstIndex == 6
 
                 Button(action: {
-                    if selectedDays.contains(dayIndex) {
-                        selectedDays.remove(dayIndex)
+                    HapticFeedback.light()
+                    if selectedDays.contains(sunFirstIndex) {
+                        selectedDays.remove(sunFirstIndex)
                     } else {
-                        selectedDays.insert(dayIndex)
+                        selectedDays.insert(sunFirstIndex)
                     }
                 }) {
-                    Text(weekDays[dayIndex])
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(isSelected ? Color.white : Color(hex: "9f9f9f")) // White when selected, light grey when not
-                        .frame(width: 39, height: 39)
+                    Text(weekDaysMonFirst[monFirstIndex])
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .padding(.leading, isFirstDay ? 12 : 0)
+                        .padding(.trailing, isLastDay ? 12 : 0)
                         .background(
-                            Circle()
-                                .fill(isSelected ? Color.black : Color.white) // Black when selected, white when not
+                            MergingPillBackground(
+                                isFirst: !prevSelected,
+                                isLast: !nextSelected
+                            )
+                            .fill(Color.white)
+                            .opacity(isSelected ? 1 : 0)
                         )
-                        .overlay(
-                            // Grey stroke when unselected
-                            Circle()
-                                .stroke(isSelected ? Color.clear : Color(hex: "E8E8E8"), lineWidth: 1)
-                        )
-                }
-
-                // Add flexible spacing between buttons (except after last)
-                if dayIndex < 6 {
-                    Spacer(minLength: 2)
                 }
             }
         }
-        .frame(height: 39)
+        .frame(height: 44)
+        .background(Color(hex: "f0f0f0"))
+        .clipShape(Capsule())
+        .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
+        .animation(.easeInOut(duration: 0.2), value: selectedDays)
     }
-    
+
     // MARK: - Habits List Section
     private var habitsListSection: some View {
         Group {
@@ -1196,6 +1197,85 @@ extension Weekday {
         case .thursday: return 4
         case .friday: return 5
         case .saturday: return 6
+        }
+    }
+}
+
+// MARK: - Merging Pill Background Shape
+/// Custom shape that rounds corners based on adjacency for merged selection effect
+struct MergingPillBackground: Shape {
+    let isFirst: Bool  // Round left corners
+    let isLast: Bool   // Round right corners
+
+    func path(in rect: CGRect) -> Path {
+        // Use half the height for capsule-matching radius
+        let radius: CGFloat = min(rect.height / 2, 22)
+
+        let topLeft: CGFloat = isFirst ? radius : 0
+        let bottomLeft: CGFloat = isFirst ? radius : 0
+        let topRight: CGFloat = isLast ? radius : 0
+        let bottomRight: CGFloat = isLast ? radius : 0
+
+        return Path { path in
+            path.move(to: CGPoint(x: rect.minX + topLeft, y: rect.minY))
+
+            // Top edge
+            path.addLine(to: CGPoint(x: rect.maxX - topRight, y: rect.minY))
+
+            // Top right corner
+            if topRight > 0 {
+                path.addArc(
+                    center: CGPoint(x: rect.maxX - topRight, y: rect.minY + topRight),
+                    radius: topRight,
+                    startAngle: .degrees(-90),
+                    endAngle: .degrees(0),
+                    clockwise: false
+                )
+            }
+
+            // Right edge
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
+
+            // Bottom right corner
+            if bottomRight > 0 {
+                path.addArc(
+                    center: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY - bottomRight),
+                    radius: bottomRight,
+                    startAngle: .degrees(0),
+                    endAngle: .degrees(90),
+                    clockwise: false
+                )
+            }
+
+            // Bottom edge
+            path.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
+
+            // Bottom left corner
+            if bottomLeft > 0 {
+                path.addArc(
+                    center: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY - bottomLeft),
+                    radius: bottomLeft,
+                    startAngle: .degrees(90),
+                    endAngle: .degrees(180),
+                    clockwise: false
+                )
+            }
+
+            // Left edge
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeft))
+
+            // Top left corner
+            if topLeft > 0 {
+                path.addArc(
+                    center: CGPoint(x: rect.minX + topLeft, y: rect.minY + topLeft),
+                    radius: topLeft,
+                    startAngle: .degrees(180),
+                    endAngle: .degrees(270),
+                    clockwise: false
+                )
+            }
+
+            path.closeSubpath()
         }
     }
 }

@@ -14,11 +14,6 @@ struct ProfileGalleryItemView: View {
         Color.purple                  // Profile slot 3
     ]
     
-    // Profile emojis for consistency
-    private let profileEmojis = [
-        "👴🏻", "👵🏻", "👨🏻", "👩🏻", "👴🏽", "👵🏽", 
-        "👴🏿", "👵🏿", "🧓🏻", "🧓🏽", "🧓🏿"
-    ]
     
     var body: some View {
         ZStack {
@@ -80,20 +75,22 @@ struct ProfileGalleryItemView: View {
                         Circle()
                             .fill(profileBackgroundColor)
                             .overlay(
-                                Text(profileEmoji)
-                                    .font(.system(size: 16))
+                                Text(profileInitial)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
                             )
                     }
                     .frame(width: 40, height: 40)
                     .clipShape(Circle())
                 }
             } else {
-                // Emoji placeholder
+                // Initial letter placeholder
                 Circle()
                     .fill(profileBackgroundColor)
                     .overlay(
-                        Text(profileEmoji)
-                            .font(.system(size: 16))
+                        Text(profileInitial)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
                     )
                     .frame(width: 40, height: 40)
             }
@@ -119,14 +116,8 @@ struct ProfileGalleryItemView: View {
         return profileStrokeColor // Full opacity background
     }
     
-    private var profileEmoji: String {
-        guard case .profileCreated(let data) = event.eventData else {
-            return "👤"
-        }
-        
-        // Generate consistent emoji based on profile slot + name hash
-        let emojiIndex = (event.profileSlot + abs(data.profileName.hashValue)) % profileEmojis.count
-        return profileEmojis[emojiIndex]
+    private var profileInitial: String {
+        String(profileName.prefix(1)).uppercased()
     }
 }
 

@@ -28,6 +28,9 @@ struct GalleryView: View {
     @State private var selectedEventForDetail: GalleryHistoryEvent?
     @State private var showingAccountSettings = false
 
+    // MARK: - Animation
+    @Namespace private var filterAnimation
+
     // MARK: - Initialization
     init(selectedTab: Binding<Int>, showingCreateActionSheet: Binding<Bool>, showHeader: Bool = true) {
         self._selectedTab = selectedTab
@@ -200,7 +203,7 @@ extension GalleryView {
         HStack(spacing: 0) {
             ForEach(GalleryFilter.allCases, id: \.self) { filter in
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
                         selectedFilter = filter
                     }
                 }) {
@@ -208,19 +211,24 @@ extension GalleryView {
                         .font(.system(size: 13, weight: selectedFilter == filter ? .semibold : .regular))
                         .foregroundColor(selectedFilter == filter ? .black : Color(hex: "9f9f9f"))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 10)
                         .background(
-                            selectedFilter == filter ?
-                            Color(hex: "f9f9f9") : Color.clear
+                            ZStack {
+                                if selectedFilter == filter {
+                                    Capsule()
+                                        .fill(Color.white)
+                                        .shadow(color: Color(hex: "6f6f6f").opacity(0.15), radius: 4, x: 0, y: 2)
+                                        .matchedGeometryEffect(id: "filterPill", in: filterAnimation)
+                                }
+                            }
                         )
-                        .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
         }
-        .padding(3)
+        .padding(4)
         .background(Color(hex: "f0f0f0"))
-        .cornerRadius(8)
+        .clipShape(Capsule())
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
@@ -318,11 +326,11 @@ extension GalleryView {
         ]
     }
     
-    // Group events by date
+    // Group events by month
     private var groupedEventsByDate: [(date: Date, events: [GalleryHistoryEvent])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: filteredEvents) { event in
-            calendar.startOfDay(for: event.createdAt)
+            calendar.date(from: calendar.dateComponents([.year, .month], from: event.createdAt))!
         }
 
         let result = grouped.map { (date: $0.key, events: $0.value.sorted { $0.createdAt > $1.createdAt }) }
@@ -349,7 +357,7 @@ extension GalleryView {
     // Format date for section headers
     private func formatDateHeader(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM d, yyyy"
+        formatter.dateFormat = "MMMM yyyy"
         return formatter.string(from: date)
     }
 

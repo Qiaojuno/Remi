@@ -448,13 +448,14 @@ struct GalleryDetailView: View {
                     }
                 }
             } else {
-                // Emoji fallback as full-size photo
+                // Initial letter fallback as full-size photo
                 Rectangle()
                     .fill(profileColor) // Full opacity background
                     .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width)
                     .overlay(
-                        Text(profileEmoji)
-                            .font(.system(size: 120)) // Large emoji to fill space
+                        Text(profileInitial)
+                            .font(.system(size: 120, weight: .bold))
+                            .foregroundColor(.white)
                     )
             }
         }
@@ -479,12 +480,6 @@ struct GalleryDetailView: View {
         return colors[event.profileSlot % colors.count]
     }
     
-    private var profileEmoji: String {
-        let emojis = ["👴🏻", "👵🏻", "👴🏽", "👵🏽", "👴🏿", "👵🏿"]
-        let emojiIndex = (event.profileSlot + abs(event.profileName.hashValue)) % emojis.count
-        return emojis[emojiIndex]
-    }
-
     private var profileInitial: String {
         String(event.profileName.prefix(1)).uppercased()
     }

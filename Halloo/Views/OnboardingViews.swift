@@ -370,6 +370,16 @@ struct WelcomeView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
     @State private var showingLogin = false
+    @State private var currentWordIndex = 0
+    @State private var wordOpacity: Double = 1.0
+
+    private let rotatingWords = [
+        (text: "Automatically", colors: [Color(hex: "6BB6FF"), Color(hex: "4A9DFF")]),      // Blue
+        (text: "Stress Free", colors: [Color(hex: "A855F7"), Color(hex: "7C3AED")]),        // Purple
+        (text: "With Text", colors: [Color(hex: "34D399"), Color(hex: "10B981")])           // Green
+    ]
+
+    private let timer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -397,30 +407,44 @@ struct WelcomeView: View {
                         .opacity(showContent ? 1 : 0)
                         .animation(.easeOut(duration: 0.6).delay(0.1), value: showContent)
 
-                    // Tagline with gradient on "automatically"
-                    (
-                        Text("Keep your parents healthy,")
+                    // Tagline with rotating gradient words
+                    VStack(spacing: 0) {
+                        Text("Keep them reminded")
                             .foregroundColor(.black)
-                        +
-                        Text(" automatically")
+                            .font(.system(size: 28, weight: .bold))
+                            .tracking(-1.0)
+
+                        Text(rotatingWords[currentWordIndex].text)
+                            .font(.system(size: 28, weight: .bold))
+                            .tracking(-1.0)
                             .foregroundStyle(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(hex: "6BB6FF"),
-                                        Color(hex: "4A9DFF")
-                                    ]),
+                                    gradient: Gradient(colors: rotatingWords[currentWordIndex].colors),
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                    )
-                    .font(.system(size: 28, weight: .bold))
-                    .tracking(-1.0)
+                            .opacity(wordOpacity)
+                            .animation(.easeInOut(duration: 0.6), value: wordOpacity)
+                    }
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
                     .padding(.top, 48)
                     .opacity(showContent ? 1 : 0)
                     .animation(.easeOut(duration: 0.6).delay(0.2), value: showContent)
+                    .onReceive(timer) { _ in
+                        // Fade out
+                        withAnimation(.easeInOut(duration: 0.6)) {
+                            wordOpacity = 0
+                        }
+                        // Change word and fade in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            currentWordIndex = (currentWordIndex + 1) % rotatingWords.count
+                            withAnimation(.easeInOut(duration: 0.6)) {
+                                wordOpacity = 1
+                            }
+                        }
+                    }
                 }
 
                 Spacer()

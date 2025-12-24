@@ -88,6 +88,10 @@ struct SharedHeaderSection: View {
                 Image(systemName: "person")
                     .font(.title2)
                     .foregroundColor(.black)
+                    .frame(width: 45, height: 45)
+                    .background(Color.white)
+                    .clipShape(Circle())
+                    .shadow(color: Color(hex: "6f6f6f").opacity(0.125), radius: 6, x: 0, y: 2)
             }
             }
             /*

@@ -70,8 +70,11 @@ final class SubscriptionManager: ObservableObject {
     /// - Returns: True if user has at least one active subscription
     func hasActiveSubscription() async -> Bool {
         #if DEBUG
-        // ⚠️ DEBUG BYPASS: Set environment variable BYPASS_SUBSCRIPTION=1 to bypass
-        if ProcessInfo.processInfo.environment["BYPASS_SUBSCRIPTION"] == "1" {
+        // ⚠️ TEMPORARY DEBUG BYPASS - Remove before release!
+        // Set to `true` to bypass paywall for testing
+        let bypassPaywall = true
+        if bypassPaywall {
+            print("🔓 [SubscriptionManager] DEBUG BYPASS ACTIVE - skipping paywall")
             return true
         }
         #endif
