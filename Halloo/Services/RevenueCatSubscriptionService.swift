@@ -77,10 +77,15 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         // Set up customer info listener
         setupCustomerInfoListener()
 
-        // Fetch initial customer info
+        // Fetch initial customer info and sync to Firestore
         _Concurrency.Task {
             do {
-                _ = try await fetchCustomerInfo()
+                let customerInfo = try await fetchCustomerInfo()
+
+                // SECURITY: Sync initial subscription status to Firestore
+                await MainActor.run {
+                    SubscriptionManager.shared.handleCustomerInfoUpdate(customerInfo)
+                }
             } catch {
                 print("❌ RevenueCat failed to fetch customer info: \(error.localizedDescription)")
             }
@@ -94,6 +99,12 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         customerInfoTask = _Concurrency.Task { [weak self] in
             for await customerInfo in Purchases.shared.customerInfoStream {
                 self?._currentCustomerInfo = customerInfo
+
+                // SECURITY: Sync subscription status to Firestore for server-side validation
+                // This ensures Cloud Functions can verify subscription before sending SMS
+                await MainActor.run {
+                    SubscriptionManager.shared.handleCustomerInfoUpdate(customerInfo)
+                }
             }
         }
     }
@@ -139,6 +150,11 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         do {
             let (customerInfo, _) = try await Purchases.shared.logIn(userId)
             _currentCustomerInfo = customerInfo
+
+            // SECURITY: Sync subscription status after user identification
+            await MainActor.run {
+                SubscriptionManager.shared.handleCustomerInfoUpdate(customerInfo)
+            }
         } catch {
             print("❌ RevenueCat failed to identify user: \(error.localizedDescription)")
             throw error
@@ -161,6 +177,12 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         do {
             let customerInfo = try await Purchases.shared.restorePurchases()
             _currentCustomerInfo = customerInfo
+
+            // SECURITY: Sync subscription status after restoring purchases
+            await MainActor.run {
+                SubscriptionManager.shared.handleCustomerInfoUpdate(customerInfo)
+            }
+
             return customerInfo
         } catch {
             print("❌ RevenueCat failed to restore purchases: \(error.localizedDescription)")

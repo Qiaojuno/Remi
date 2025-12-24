@@ -15,6 +15,142 @@ const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
 const twilioPhoneNumber = defineSecret('TWILIO_PHONE_NUMBER');
 
+// Define secret for RevenueCat webhook authentication
+const revenueCatWebhookAuthHeader = defineSecret('REVENUECAT_WEBHOOK_AUTH_HEADER');
+
+// =============================================================================
+// SUBSCRIPTION VALIDATION HELPERS
+// =============================================================================
+
+/**
+ * Check if a user has an active subscription
+ *
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<{isActive: boolean, expiresAt: Date|null, productId: string|null}>}
+ */
+async function checkUserSubscription(userId) {
+  try {
+    const userDoc = await admin.firestore().collection('users').doc(userId).get();
+
+    if (!userDoc.exists) {
+      return { isActive: false, expiresAt: null, productId: null };
+    }
+
+    const userData = userDoc.data();
+
+    // Check subscription status fields (synced by RevenueCat webhook)
+    const subscriptionActive = userData.subscriptionActive === true;
+    const expiresAt = userData.subscriptionExpiresAt?.toDate() || null;
+    const productId = userData.subscriptionProductId || null;
+
+    // Double-check expiration hasn't passed (safety net)
+    if (subscriptionActive && expiresAt && expiresAt < new Date()) {
+      // Subscription expired but flag wasn't updated - fix it
+      await admin.firestore().collection('users').doc(userId).update({
+        subscriptionActive: false,
+        subscriptionExpiredAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return { isActive: false, expiresAt, productId };
+    }
+
+    return { isActive: subscriptionActive, expiresAt, productId };
+
+  } catch (error) {
+    console.error('❌ Subscription check failed:', error.message);
+    // Fail closed - deny access if we can't verify subscription
+    return { isActive: false, expiresAt: null, productId: null };
+  }
+}
+
+/**
+ * Pause all active habits for a user when subscription expires
+ *
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<number>} - Number of habits paused
+ */
+async function pauseUserHabits(userId) {
+  try {
+    // Find all active habits for this user across all profiles
+    const habitsSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .where('userId', '==', userId)
+      .where('status', '==', 'active')
+      .get();
+
+    if (habitsSnapshot.empty) {
+      return 0;
+    }
+
+    // Batch update all habits to paused status
+    const batch = admin.firestore().batch();
+    let count = 0;
+
+    for (const habitDoc of habitsSnapshot.docs) {
+      batch.update(habitDoc.ref, {
+        status: 'paused',
+        pausedReason: 'subscription_expired',
+        pausedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      count++;
+    }
+
+    await batch.commit();
+    console.log(`⏸️ Paused ${count} habits for user ${userId} due to subscription expiration`);
+
+    return count;
+
+  } catch (error) {
+    console.error('❌ Failed to pause habits:', error.message);
+    return 0;
+  }
+}
+
+/**
+ * Reactivate habits for a user when subscription is renewed
+ * Only reactivates habits that were paused due to subscription expiration
+ *
+ * @param {string} userId - Firebase user ID
+ * @returns {Promise<number>} - Number of habits reactivated
+ */
+async function reactivateUserHabits(userId) {
+  try {
+    // Find all habits paused due to subscription expiration
+    const habitsSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .where('userId', '==', userId)
+      .where('status', '==', 'paused')
+      .where('pausedReason', '==', 'subscription_expired')
+      .get();
+
+    if (habitsSnapshot.empty) {
+      return 0;
+    }
+
+    // Batch update all habits to active status
+    const batch = admin.firestore().batch();
+    let count = 0;
+
+    for (const habitDoc of habitsSnapshot.docs) {
+      batch.update(habitDoc.ref, {
+        status: 'active',
+        pausedReason: admin.firestore.FieldValue.delete(),
+        pausedAt: admin.firestore.FieldValue.delete(),
+        reactivatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      count++;
+    }
+
+    await batch.commit();
+    console.log(`▶️ Reactivated ${count} habits for user ${userId} after subscription renewal`);
+
+    return count;
+
+  } catch (error) {
+    console.error('❌ Failed to reactivate habits:', error.message);
+    return 0;
+  }
+}
+
 /**
  * Cloud Function to send SMS via Twilio
  *
@@ -86,6 +222,15 @@ exports.sendSMS = onCall({
   }
 
   const userData = userDoc.data();
+
+  // SECURITY: Check subscription status before allowing SMS
+  const subscription = await checkUserSubscription(userId);
+  if (!subscription.isActive) {
+    throw new functions.https.HttpsError(
+      'permission-denied',
+      'Active subscription required to send SMS. Please renew your subscription.'
+    );
+  }
 
   // Check if user has exceeded their SMS quota
   if (userData.smsQuotaUsed >= userData.smsQuotaLimit) {
@@ -735,6 +880,13 @@ exports.sendScheduledTaskReminders = onSchedule({
       const userId = pathParts[1];
       const profileId = pathParts[3];
 
+      // SECURITY: Check subscription status before sending SMS
+      const subscription = await checkUserSubscription(userId);
+      if (!subscription.isActive) {
+        smsSkipped++;
+        continue; // Skip SMS for users without active subscription
+      }
+
       // Get profile to retrieve phone number
       const profileDoc = await admin.firestore()
         .doc(`users/${userId}/profiles/${profileId}`)
@@ -1218,6 +1370,12 @@ exports.checkNoReplyAndNotify = onSchedule({
         continue;
       }
 
+      // SECURITY: Check subscription status before sending nudge SMS
+      const subscription = await checkUserSubscription(userId);
+      if (!subscription.isActive) {
+        continue; // Skip nudge for users without active subscription
+      }
+
       // Check if elderly user replied after the SMS was sent
       const smsSentAt = smsLog.sentAt.toDate();
       const replySnapshot = await admin.firestore()
@@ -1655,4 +1813,222 @@ function getTaskReminderMessage(habit, profile) {
   // Build final message
   return `${greeting} ${prompt} ${habit.title}\n\n${instructions}`;
 }
+
+// =============================================================================
+// REVENUECAT WEBHOOK - SUBSCRIPTION STATUS SYNC
+// =============================================================================
+
+/**
+ * RevenueCat Webhook: Syncs subscription status to Firestore
+ *
+ * Configure this webhook URL in RevenueCat Dashboard:
+ * https://us-central1-{project-id}.cloudfunctions.net/revenueCatWebhook
+ *
+ * Events handled:
+ * - INITIAL_PURCHASE: New subscription started
+ * - RENEWAL: Subscription renewed
+ * - CANCELLATION: Subscription cancelled (still active until expiration)
+ * - EXPIRATION: Subscription expired (no longer active)
+ * - BILLING_ISSUE: Payment failed
+ * - PRODUCT_CHANGE: Plan upgrade/downgrade
+ * - SUBSCRIBER_ALIAS: User account linked
+ *
+ * SECURITY:
+ * - Validates Authorization header against stored secret
+ * - Uses RevenueCat's app_user_id which should match Firebase UID
+ *
+ * Required Secret:
+ * - REVENUECAT_WEBHOOK_AUTH_HEADER: Authorization header value from RevenueCat
+ *
+ * To set up:
+ * 1. Go to RevenueCat Dashboard → Project Settings → Integrations → Webhooks
+ * 2. Add webhook URL: https://us-central1-{project-id}.cloudfunctions.net/revenueCatWebhook
+ * 3. Copy the Authorization header value
+ * 4. Set Firebase secret: firebase functions:secrets:set REVENUECAT_WEBHOOK_AUTH_HEADER
+ */
+exports.revenueCatWebhook = onRequest(
+  {
+    memory: '256MiB',
+    timeoutSeconds: 60,
+    maxInstances: 10,
+    secrets: [revenueCatWebhookAuthHeader]
+  },
+  async (req, res) => {
+    // Only accept POST requests
+    if (req.method !== 'POST') {
+      return res.status(405).send('Method Not Allowed');
+    }
+
+    // SECURITY: Validate Authorization header
+    const authHeader = req.headers.authorization;
+    const expectedAuth = revenueCatWebhookAuthHeader.value();
+
+    if (!authHeader || authHeader.trim() !== expectedAuth.trim()) {
+      console.error('❌ RevenueCat webhook: Invalid authorization header');
+      return res.status(401).send('Unauthorized');
+    }
+
+    try {
+      const event = req.body;
+
+      // Validate event structure
+      if (!event || !event.event) {
+        console.error('❌ RevenueCat webhook: Invalid event structure');
+        return res.status(400).send('Invalid event structure');
+      }
+
+      const eventType = event.event.type;
+      const appUserId = event.event.app_user_id;
+
+      // Skip anonymous users (starts with $RCAnonymousID)
+      if (!appUserId || appUserId.startsWith('$RCAnonymous')) {
+        console.log('⏭️ Skipping anonymous user event:', eventType);
+        return res.status(200).send('OK - Skipped anonymous user');
+      }
+
+      // The app_user_id should be the Firebase UID (set via Purchases.shared.logIn)
+      const userId = appUserId;
+
+      // Check if user exists in Firestore
+      const userDoc = await admin.firestore().collection('users').doc(userId).get();
+      if (!userDoc.exists) {
+        console.warn(`⚠️ RevenueCat webhook: User not found in Firestore: ${userId}`);
+        // Still return 200 to prevent RevenueCat from retrying
+        return res.status(200).send('OK - User not found');
+      }
+
+      // Extract subscription info from event
+      const subscriberInfo = event.event.subscriber_attributes || {};
+      const entitlements = event.event.entitlements || {};
+      const productId = event.event.product_id || null;
+      const expirationAtMs = event.event.expiration_at_ms;
+      const purchasedAtMs = event.event.purchased_at_ms;
+
+      // Determine subscription status based on event type
+      let subscriptionUpdate = {};
+
+      switch (eventType) {
+        case 'INITIAL_PURCHASE':
+        case 'RENEWAL':
+        case 'UNCANCELLATION':
+        case 'PRODUCT_CHANGE':
+          // Subscription is active
+          subscriptionUpdate = {
+            subscriptionActive: true,
+            subscriptionProductId: productId,
+            subscriptionPurchasedAt: purchasedAtMs
+              ? admin.firestore.Timestamp.fromMillis(purchasedAtMs)
+              : admin.firestore.FieldValue.serverTimestamp(),
+            subscriptionExpiresAt: expirationAtMs
+              ? admin.firestore.Timestamp.fromMillis(expirationAtMs)
+              : null,
+            subscriptionEventType: eventType,
+            subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            // Clear any expired flags
+            subscriptionExpiredAt: admin.firestore.FieldValue.delete()
+          };
+
+          // Reactivate habits that were paused due to subscription expiration
+          if (eventType === 'RENEWAL' || eventType === 'UNCANCELLATION' || eventType === 'INITIAL_PURCHASE') {
+            const reactivated = await reactivateUserHabits(userId);
+            if (reactivated > 0) {
+              subscriptionUpdate.habitsReactivatedAt = admin.firestore.FieldValue.serverTimestamp();
+              subscriptionUpdate.habitsReactivatedCount = reactivated;
+            }
+          }
+
+          console.log(`✅ Subscription activated for user ${userId}: ${eventType}`);
+          break;
+
+        case 'EXPIRATION':
+        case 'BILLING_ISSUE':
+          // Subscription is no longer active
+          subscriptionUpdate = {
+            subscriptionActive: false,
+            subscriptionProductId: productId,
+            subscriptionExpiredAt: admin.firestore.FieldValue.serverTimestamp(),
+            subscriptionEventType: eventType,
+            subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+
+          // Pause all active habits for this user
+          const paused = await pauseUserHabits(userId);
+          if (paused > 0) {
+            subscriptionUpdate.habitsPausedAt = admin.firestore.FieldValue.serverTimestamp();
+            subscriptionUpdate.habitsPausedCount = paused;
+          }
+
+          console.log(`⏹️ Subscription expired for user ${userId}: ${eventType}, paused ${paused} habits`);
+          break;
+
+        case 'CANCELLATION':
+          // User cancelled but subscription still active until expiration
+          subscriptionUpdate = {
+            subscriptionCancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+            subscriptionWillExpireAt: expirationAtMs
+              ? admin.firestore.Timestamp.fromMillis(expirationAtMs)
+              : null,
+            subscriptionEventType: eventType,
+            subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+            // Note: subscriptionActive remains true until EXPIRATION event
+          };
+
+          console.log(`⚠️ Subscription cancelled for user ${userId}, expires at: ${new Date(expirationAtMs)}`);
+          break;
+
+        case 'SUBSCRIBER_ALIAS':
+          // User account was linked - just log it
+          console.log(`🔗 User alias created: ${userId}`);
+          subscriptionUpdate = {
+            subscriptionAliasCreatedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+          break;
+
+        case 'TRANSFER':
+          // Subscription transferred to this user
+          subscriptionUpdate = {
+            subscriptionActive: true,
+            subscriptionTransferredAt: admin.firestore.FieldValue.serverTimestamp(),
+            subscriptionEventType: eventType,
+            subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+
+          console.log(`📤 Subscription transferred to user ${userId}`);
+          break;
+
+        default:
+          // Unknown event type - log but don't fail
+          console.log(`📋 Unknown RevenueCat event: ${eventType} for user ${userId}`);
+          subscriptionUpdate = {
+            lastRevenueCatEvent: eventType,
+            lastRevenueCatEventAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+      }
+
+      // Update Firestore with subscription status
+      await admin.firestore().collection('users').doc(userId).update(subscriptionUpdate);
+
+      // Log webhook event for audit trail
+      await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('subscriptionEvents')
+        .add({
+          eventType: eventType,
+          productId: productId,
+          expirationAt: expirationAtMs ? new Date(expirationAtMs).toISOString() : null,
+          purchasedAt: purchasedAtMs ? new Date(purchasedAtMs).toISOString() : null,
+          rawEvent: event.event,
+          processedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+      return res.status(200).send('OK');
+
+    } catch (error) {
+      console.error('❌ RevenueCat webhook error:', error);
+      // Return 500 so RevenueCat retries the webhook
+      return res.status(500).send('Internal Server Error');
+    }
+  }
+);
 

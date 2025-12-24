@@ -60,6 +60,12 @@ final class PurchaseController: SuperwallKit.PurchaseController {
                 return .cancelled
             }
 
+            // SECURITY: Sync subscription status to Firestore after successful purchase
+            // This ensures Cloud Functions can immediately validate subscription for SMS
+            await MainActor.run {
+                SubscriptionManager.shared.handleCustomerInfoUpdate(result.customerInfo)
+            }
+
             return .purchased
 
         } catch let error as ErrorCode {
@@ -79,7 +85,12 @@ final class PurchaseController: SuperwallKit.PurchaseController {
     func restorePurchases() async -> SuperwallKit.RestorationResult {
         do {
             // Delegate restoration to RevenueCat
-            _ = try await Purchases.shared.restorePurchases()
+            let customerInfo = try await Purchases.shared.restorePurchases()
+
+            // SECURITY: Sync subscription status to Firestore after restore
+            await MainActor.run {
+                SubscriptionManager.shared.handleCustomerInfoUpdate(customerInfo)
+            }
 
             // Return success with restored customer info
             return .restored

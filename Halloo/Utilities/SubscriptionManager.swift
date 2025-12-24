@@ -19,6 +19,8 @@ import Foundation
 import SwiftUI
 import SuperwallKit
 import RevenueCat
+import FirebaseFirestore
+import FirebaseAuth
 
 /// High-level subscription utilities for the Hallo app
 ///
@@ -68,16 +70,13 @@ final class SubscriptionManager: ObservableObject {
 
     /// Check if user has any active subscription
     /// - Returns: True if user has at least one active subscription
+    ///
+    /// - Important: This method checks RevenueCat entitlements.
+    ///   Server-side validation also occurs in Cloud Functions for SMS operations.
     func hasActiveSubscription() async -> Bool {
-        #if DEBUG
-        // ⚠️ TEMPORARY DEBUG BYPASS - Remove before release!
-        // Set to `true` to bypass paywall for testing
-        let bypassPaywall = true
-        if bypassPaywall {
-            print("🔓 [SubscriptionManager] DEBUG BYPASS ACTIVE - skipping paywall")
-            return true
-        }
-        #endif
+        // SECURITY: No client-side bypass allowed
+        // All subscription checks must go through RevenueCat
+        // Server-side validation is the authoritative source for SMS operations
 
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
@@ -165,6 +164,80 @@ final class SubscriptionManager: ObservableObject {
         } catch {
             print("❌ [SubscriptionManager] Restore failed: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    // MARK: - Firestore Subscription Sync
+
+    /// Sync subscription status to Firestore for server-side validation
+    ///
+    /// This method should be called:
+    /// - On app launch after authentication
+    /// - After purchase completion
+    /// - After restore purchases
+    ///
+    /// This provides a fallback in case RevenueCat webhook events are delayed or missed.
+    /// The Cloud Functions use this Firestore data to validate subscription before sending SMS.
+    ///
+    /// - Returns: True if sync was successful
+    @discardableResult
+    func syncSubscriptionStatusToFirestore() async -> Bool {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("⚠️ [SubscriptionManager] Cannot sync: No authenticated user")
+            return false
+        }
+
+        do {
+            let customerInfo = try await Purchases.shared.customerInfo()
+            let hasActive = !customerInfo.entitlements.active.isEmpty
+
+            // Get subscription details
+            let expirationDate = customerInfo.entitlements.active.values
+                .compactMap { $0.expirationDate }
+                .max()
+
+            let productId = customerInfo.activeSubscriptions.first
+
+            // Prepare Firestore update
+            var subscriptionData: [String: Any] = [
+                "subscriptionActive": hasActive,
+                "subscriptionSyncedAt": FieldValue.serverTimestamp(),
+                "subscriptionSyncSource": "ios_app"
+            ]
+
+            if let productId = productId {
+                subscriptionData["subscriptionProductId"] = productId
+            }
+
+            if let expirationDate = expirationDate {
+                subscriptionData["subscriptionExpiresAt"] = Timestamp(date: expirationDate)
+            }
+
+            // If subscription is not active, record expiration
+            if !hasActive {
+                subscriptionData["subscriptionExpiredAt"] = FieldValue.serverTimestamp()
+            }
+
+            // Update Firestore
+            try await Firestore.firestore()
+                .collection("users")
+                .document(userId)
+                .updateData(subscriptionData)
+
+            print("✅ [SubscriptionManager] Synced subscription status to Firestore: active=\(hasActive)")
+            return true
+
+        } catch {
+            print("❌ [SubscriptionManager] Failed to sync subscription to Firestore: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// Called when RevenueCat customer info updates (e.g., after purchase, renewal, expiration)
+    /// This should be set up as a listener in App.swift
+    func handleCustomerInfoUpdate(_ customerInfo: RevenueCat.CustomerInfo) {
+        _Concurrency.Task {
+            await syncSubscriptionStatusToFirestore()
         }
     }
 }
