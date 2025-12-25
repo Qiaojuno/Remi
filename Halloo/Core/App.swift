@@ -46,6 +46,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
 
     // MARK: - FCM Token Handling (MessagingDelegate)
 
+    /// Pending FCM token that arrived before user was authenticated
+    /// Will be stored once authentication completes
+    private static var pendingFCMToken: String?
+
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else {
             return
@@ -58,10 +62,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
     }
 
     /// Stores FCM token in Firestore for the current user
+    /// If user is not authenticated yet, queues the token for later storage
     private func storeFCMToken(_ token: String) async {
         guard let userId = Auth.auth().currentUser?.uid else {
+            // ✅ FIX: Queue token for storage once user authenticates
+            // This happens when FCM delivers token before Firebase Auth restores session
+            AppDelegate.pendingFCMToken = token
+            print("⚠️ [Push] User not authenticated yet, queuing FCM token for later")
             return
         }
+
+        // Clear any pending token since we're storing now
+        AppDelegate.pendingFCMToken = nil
 
         let db = Firestore.firestore()
         do {
@@ -70,8 +82,33 @@ class AppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate, UNUserNot
                 "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
                 "fcmPlatform": "ios"
             ], merge: true)
+            print("✅ [Push] FCM token stored successfully")
         } catch {
             print("❌ [Push] Failed to store FCM token: \(error.localizedDescription)")
+        }
+    }
+
+    /// Stores any pending FCM token that arrived before authentication
+    /// Called after user successfully authenticates
+    static func storePendingFCMTokenIfNeeded() async {
+        guard let token = pendingFCMToken,
+              let userId = Auth.auth().currentUser?.uid else {
+            return
+        }
+
+        pendingFCMToken = nil
+        print("📤 [Push] Storing queued FCM token after authentication")
+
+        let db = Firestore.firestore()
+        do {
+            try await db.collection("users").document(userId).setData([
+                "fcmToken": token,
+                "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
+                "fcmPlatform": "ios"
+            ], merge: true)
+            print("✅ [Push] Queued FCM token stored successfully")
+        } catch {
+            print("❌ [Push] Failed to store queued FCM token: \(error.localizedDescription)")
         }
     }
 
@@ -337,6 +374,9 @@ struct HalloApp: App {
 
             // Re-register FCM token for this user (in case token changed while logged out)
             await refreshFCMToken()
+
+            // ✅ FIX: Store any FCM token that arrived before auth was restored
+            await AppDelegate.storePendingFCMTokenIfNeeded()
         }
     }
 

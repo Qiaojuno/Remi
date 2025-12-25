@@ -1342,6 +1342,8 @@ exports.checkNoReplyAndNotify = onSchedule({
     }
 
     let notificationsSent = 0;
+    let galleryEventsCreated = 0;
+    let nudgesSent = 0;
     let alreadyReplied = 0;
     let alreadyNotified = 0;
     let noFcmToken = 0;
@@ -1425,19 +1427,90 @@ exports.checkNoReplyAndNotify = onSchedule({
         smsLogId: smsLogDoc.id
       };
 
+      // ✅ FIX: Create gallery event and send nudge SMS REGARDLESS of push notification success
+      // Previously, these were inside if (pushResult.success) which meant missed habits
+      // were not recorded when FCM token was missing
+
+      // Generate nudge message first so we can include it in gallery event
+      const nudgeMessages = [
+        `Looks like you missed "${habitTitle}". ⏰`,
+        `You missed "${habitTitle}"! ⏰`,
+        `"${habitTitle}" was missed. ⏱️`,
+        `Missed "${habitTitle}" this time. ⌛`,
+        `30 minutes passed - "${habitTitle}" was marked as missed. ⏱️`,
+        `"${habitTitle}" wasn't completed in time. ⏰`,
+        `Time's up on "${habitTitle}"! ⌛`
+      ];
+      const nudgeMessage = nudgeMessages[Math.floor(Math.random() * nudgeMessages.length)];
+
+      // Create gallery event for the missed/unreplied task
+      // Shows: sent message (blue) → nudge message (blue)
+      const galleryEventRef = admin.firestore()
+        .collection(`users/${userId}/gallery_events`)
+        .doc();
+
+      await galleryEventRef.set({
+        id: galleryEventRef.id,
+        userId: userId,
+        profileId: profileId,
+        eventType: 'taskResponse',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        eventData: {
+          taskResponse: {
+            _0: {
+              taskId: habitId,
+              textResponse: null,
+              photoData: null,
+              responseType: 'text',
+              taskTitle: habitTitle,
+              sentMessage: smsLog.message,
+              replyMessage: nudgeMessage
+            }
+          }
+        }
+      });
+      galleryEventsCreated++;
+
+      // Send the nudge SMS to the elderly user
+      const profileData = profileDoc.data();
+      let nudgeSmsSuccess = false;
+      if (profileData.phoneNumber && !profileData.smsOptedOut) {
+        try {
+          const twilioClient = twilio(
+            twilioAccountSid.value(),
+            twilioAuthToken.value()
+          );
+
+          await twilioClient.messages.create({
+            body: nudgeMessage,
+            from: twilioPhoneNumber.value(),
+            to: profileData.phoneNumber
+          });
+          nudgeSmsSuccess = true;
+          nudgesSent++;
+
+        } catch (smsError) {
+          console.error('❌ Nudge SMS failed:', smsError.message);
+          // Continue - don't fail the whole function for nudge SMS failure
+        }
+      }
+
+      // Attempt push notification (best effort - gallery event already created)
       const pushResult = await sendPushNotification(userId, notification, pushData);
 
       if (pushResult.success) {
         notificationsSent++;
 
-        // Mark smsLog as notified to prevent duplicate notifications
+        // Mark smsLog as fully processed
         await smsLogDoc.ref.update({
           noReplyNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
           noReplyNotificationSent: true,
-          noReplyPushMessageId: pushResult.messageId
+          noReplyPushMessageId: pushResult.messageId,
+          noReplyGalleryEventId: galleryEventRef.id,
+          noReplyNudgeSent: nudgeSmsSuccess
         });
 
-        // Also log to a dedicated collection for analytics
+        // Log to analytics collection
         await admin.firestore()
           .collection(`users/${userId}/noReplyNotifications`)
           .add({
@@ -1449,90 +1522,63 @@ exports.checkNoReplyAndNotify = onSchedule({
             smsSentAt: smsLog.sentAt,
             notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
             pushMessageId: pushResult.messageId,
+            galleryEventId: galleryEventRef.id,
+            nudgeSent: nudgeSmsSuccess,
             minutesSinceSmsSent: Math.floor((now - smsSentAt) / 60000)
           });
-
-        // Generate nudge message first so we can include it in gallery event
-        const nudgeMessages = [
-          `Looks like you missed "${habitTitle}". ⏰`,
-          `You missed "${habitTitle}"! ⏰`,
-          `"${habitTitle}" was missed. ⏱️`,
-          `Missed "${habitTitle}" this time. ⌛`,
-          `30 minutes passed - "${habitTitle}" was marked as missed. ⏱️`,
-          `"${habitTitle}" wasn't completed in time. ⏰`,
-          `Time's up on "${habitTitle}"! ⌛`
-        ];
-        const nudgeMessage = nudgeMessages[Math.floor(Math.random() * nudgeMessages.length)];
-
-        // Create gallery event for the unreplied message
-        // Shows: sent message (blue) → nudge message (blue)
-        const galleryEventRef = admin.firestore()
-          .collection(`users/${userId}/gallery_events`)
-          .doc();
-
-        await galleryEventRef.set({
-          id: galleryEventRef.id,
-          userId: userId,
-          profileId: profileId,
-          eventType: 'taskResponse',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          eventData: {
-            taskResponse: {
-              _0: {
-                taskId: habitId,
-                textResponse: null,
-                photoData: null,
-                responseType: 'text',
-                taskTitle: habitTitle,
-                sentMessage: smsLog.message,
-                replyMessage: nudgeMessage
-              }
-            }
-          }
-        });
-
-        // Send the nudge SMS to the elderly user
-        const profileData = profileDoc.data();
-        if (profileData.phoneNumber && !profileData.smsOptedOut) {
-          try {
-            const twilioClient = twilio(
-              twilioAccountSid.value(),
-              twilioAuthToken.value()
-            );
-
-            await twilioClient.messages.create({
-              body: nudgeMessage,
-              from: twilioPhoneNumber.value(),
-              to: profileData.phoneNumber
-            });
-
-          } catch (smsError) {
-            console.error('❌ Nudge SMS failed:', smsError.message);
-            // Continue - don't fail the whole function for nudge SMS failure
-          }
-        }
 
       } else if (pushResult.error === 'No FCM token registered for user') {
         noFcmToken++;
 
-        // Still mark as processed to avoid re-checking
+        // Mark as processed - gallery event was still created
         await smsLogDoc.ref.update({
           noReplyCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
           noReplyNotificationSkipped: true,
-          noReplySkipReason: 'no_fcm_token'
+          noReplySkipReason: 'no_fcm_token',
+          noReplyGalleryEventId: galleryEventRef.id,
+          noReplyNudgeSent: nudgeSmsSuccess
         });
+
+        // Still log to analytics (push failed but gallery event created)
+        await admin.firestore()
+          .collection(`users/${userId}/noReplyNotifications`)
+          .add({
+            smsLogId: smsLogDoc.id,
+            habitId: habitId,
+            profileId: profileId,
+            profileName: profileName,
+            habitTitle: habitTitle,
+            smsSentAt: smsLog.sentAt,
+            notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+            pushFailed: true,
+            pushFailReason: 'no_fcm_token',
+            galleryEventId: galleryEventRef.id,
+            nudgeSent: nudgeSmsSuccess,
+            minutesSinceSmsSent: Math.floor((now - smsSentAt) / 60000)
+          });
 
       } else {
         errors++;
         console.error('❌ No-reply push failed:', pushResult.error);
+
+        // Mark as processed even on push error - gallery event was still created
+        await smsLogDoc.ref.update({
+          noReplyCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+          noReplyNotificationSkipped: true,
+          noReplySkipReason: pushResult.error,
+          noReplyGalleryEventId: galleryEventRef.id,
+          noReplyNudgeSent: nudgeSmsSuccess
+        });
       }
     }
 
     // Only log if work was done
-    if (notificationsSent > 0 || alreadyReplied > 0) {
+    if (galleryEventsCreated > 0 || alreadyReplied > 0) {
       console.log('NoReply check:', {
         checked: smsLogsSnapshot.size,
-        sent: notificationsSent,
+        galleryEvents: galleryEventsCreated,
+        nudges: nudgesSent,
+        pushSent: notificationsSent,
         replied: alreadyReplied,
         alreadyNotified: alreadyNotified,
         noToken: noFcmToken,
@@ -1542,6 +1588,8 @@ exports.checkNoReplyAndNotify = onSchedule({
 
     return {
       checked: smsLogsSnapshot.size,
+      galleryEventsCreated,
+      nudgesSent,
       notificationsSent,
       alreadyReplied,
       alreadyNotified,

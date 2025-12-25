@@ -364,20 +364,25 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
         // Set up the auth state listener first
         setupAuthStateListener()
 
-        // Check if user is already signed in
+        // Check if user is already signed in (Firebase persists auth in Keychain)
         if let firebaseUser = auth.currentUser {
+            // ✅ FIX: Immediately update isAuthenticated SYNCHRONOUSLY before any async work
+            // This prevents the race condition where UI renders before auth state is restored
+            await MainActor.run {
+                self.isAuthenticated = true
+                self.authBoolSubject.send(true)
+            }
+
+            // Then fetch user data from Firestore (can take time)
             do {
                 let user = try await createUserFromFirebaseUser(firebaseUser)
                 await MainActor.run {
                     authStateSubject.send(user)
-                    authBoolSubject.send(true)
                 }
             } catch {
                 print("❌ FirebaseAuth failed to create user from Firebase user: \(error.localizedDescription)")
-                await MainActor.run {
-                    authStateSubject.send(nil)
-                    authBoolSubject.send(false)
-                }
+                // Keep isAuthenticated true - Firebase user exists, just Firestore fetch failed
+                // User can still use the app with basic auth info
             }
         }
     }

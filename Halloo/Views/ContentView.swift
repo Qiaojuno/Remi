@@ -568,6 +568,9 @@ struct ContentView: View {
                             await self.syncSubscriptionSDKIdentities(userId: userId)
                         }
 
+                        // ✅ FIX: Store any FCM token that arrived before user logged in
+                        await AppDelegate.storePendingFCMTokenIfNeeded()
+
                         await self.appState.loadUserData()
 
                         // Restore any missing photoURL references from Storage
