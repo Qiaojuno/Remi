@@ -414,7 +414,7 @@ extension GalleryView {
             }
         }
         .frame(width: 112, height: 112)
-        .cornerRadius(3)
+        .cornerRadius(12)
         .allowsHitTesting(false) // Make unclickable
     }
 }

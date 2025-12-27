@@ -249,12 +249,14 @@ final class OnboardingViewModel: ObservableObject {
             return true
         case .step1WhoFor:
             return true
+        case .nameInput:
+            return true  // Validation handled in view
         case .step2ReminderFrequency:
             return true
         case .step3MedicationProblem:
-            return true  // Informational screen - no validation needed
+            return true  // Informational screen
         case .step3bProofScreen:
-            return true  // Informational screen - no validation needed
+            return true  // Informational screen
         case .step4aTechComfort:
             return true
         case .step4CurrentReminders:
@@ -264,35 +266,37 @@ final class OnboardingViewModel: ObservableObject {
         case .step5aCurrentFrustration:
             return true
         case .empathyBreak:
-            return true  // Informational screen - no validation needed
+            return true  // Informational screen
         case .reminderTiming:
             return true
         case .step4HabitFocus:
             return true
+        case .toneSelection:
+            return true  // Validation handled in view
         case .step5WhatMatters:
-            return true  // Optional question - no validation needed
+            return true
         case .step6NotificationPromise:
-            return true  // Informational screen - no validation needed
+            return true  // Informational screen
         case .notificationPermission:
-            return true  // Permission request - no validation needed
+            return true  // Permission request
         case .referralSource:
-            return true  // Optional question - no validation needed
+            return true
         case .planReadyTeaser:
-            return true  // Teaser screen - user clicks to continue
+            return true
         case .loadingPlan:
-            return true  // Loading screen - auto-advances
+            return true
         case .personalizedPlan:
-            return true  // Summary screen - no validation needed
+            return true
         case .step7SocialProof:
-            return true  // Social proof screen - no validation needed
+            return true
         case .saveYourProgress:
-            return authService.currentUser != nil // Can proceed after auth
+            return authService.currentUser != nil
         case .freeTrialIntro:
-            return true  // Informational screen - no validation needed
+            return true
         case .freeTrialReminder:
-            return true  // Informational screen - no validation needed
+            return true
         case .step6Paywall:
-            return true // Always can proceed after selecting plan
+            return true
         case .profileSetupConfirmation:
             return true
         case .preferences:
@@ -346,33 +350,46 @@ final class OnboardingViewModel: ObservableObject {
     /// Calculated progress percentage for onboarding workflow visualization
     ///
     /// Shows families how much of the setup process remains.
-    /// Progress bar covers steps from step1WhoFor (1/16) to step7SocialProof (16/16 = 100%).
-    /// Used for progress bars and completion indicators.
+    /// Progress bar covers steps from step1WhoFor through step7SocialProof.
+    /// New flow order: Identity → Motivation → Objection → Pain → Co-Creation → Logistics → Social Proof
     var progressPercentage: Double {
-        // 15 steps with progress bar: step1 through step7SocialProof
-        // (notificationPermission shares step 13 with step6NotificationPromise since it may be skipped)
-        let totalSteps: Double = 15
+        // 16 steps with progress bar (notificationPermission shares with step6NotificationPromise)
+        let totalSteps: Double = 16
         let stepNumber: Double
 
         switch currentStep {
         case .welcome: stepNumber = 0
+
+        // PHASE 1: Identity & Motivation
         case .step1WhoFor: stepNumber = 1
-        case .step2ReminderFrequency: stepNumber = 2
-        case .step3MedicationProblem: stepNumber = 3
+        case .nameInput: stepNumber = 2
+        case .step5WhatMatters: stepNumber = 3
+
+        // PHASE 2: Objection Handling
         case .step4aTechComfort: stepNumber = 4
-        case .step4CurrentReminders: stepNumber = 5
-        case .step4bSatisfaction: stepNumber = 6
+
+        // PHASE 3: Pain Amplification
+        case .step3MedicationProblem: stepNumber = 5
+        case .step4CurrentReminders: stepNumber = 6
         case .step5aCurrentFrustration: stepNumber = 7
         case .empathyBreak: stepNumber = 8
-        case .reminderTiming: stepNumber = 9
-        case .step4HabitFocus: stepNumber = 10
+
+        // PHASE 4: Co-Creation
+        case .step4HabitFocus: stepNumber = 9
+        case .toneSelection: stepNumber = 10
         case .step3bProofScreen: stepNumber = 11
-        case .step5WhatMatters: stepNumber = 12
-        case .step6NotificationPromise: stepNumber = 13
-        case .notificationPermission: stepNumber = 13  // Same as promise - may be skipped
-        case .referralSource: stepNumber = 14
-        case .step7SocialProof: stepNumber = 15  // Give us a Rating - 100%
-        // Steps after step7SocialProof don't show progress bar
+
+        // PHASE 5: Logistics Last
+        case .reminderTiming: stepNumber = 12
+        case .step2ReminderFrequency: stepNumber = 13
+
+        // PHASE 6: Social Proof & Conversion
+        case .step6NotificationPromise: stepNumber = 14
+        case .notificationPermission: stepNumber = 14  // Shares with promise (may be skipped)
+        case .referralSource: stepNumber = 15
+        case .step7SocialProof: stepNumber = 16  // 100%
+
+        // Post-quiz steps don't show progress bar
         case .planReadyTeaser,
              .loadingPlan,
              .personalizedPlan,
@@ -381,8 +398,9 @@ final class OnboardingViewModel: ObservableObject {
              .freeTrialReminder,
              .step6Paywall,
              .profileSetupConfirmation,
-             .preferences:
-            stepNumber = 15
+             .preferences,
+             .step4bSatisfaction:  // Deprecated step - never reached
+            stepNumber = 17
         }
 
         return stepNumber / totalSteps
@@ -514,42 +532,57 @@ final class OnboardingViewModel: ObservableObject {
         case .welcome:
             // New flow: "Let's get started" button calls startQuiz() directly
             startQuiz()
+
+        // PHASE 1: Identity & Motivation
         case .step1WhoFor:
-            currentStep = .step2ReminderFrequency
+            currentStep = .nameInput
             updateProgress()
-        case .step2ReminderFrequency:
-            currentStep = .step3MedicationProblem
+        case .nameInput:
+            currentStep = .step5WhatMatters  // North Star motivation
             updateProgress()
-        case .step3MedicationProblem:
+        case .step5WhatMatters:
             currentStep = .step4aTechComfort
             updateProgress()
+
+        // PHASE 2: Objection Handling
         case .step4aTechComfort:
+            currentStep = .step3MedicationProblem
+            updateProgress()
+
+        // PHASE 3: Pain Amplification
+        case .step3MedicationProblem:
             currentStep = .step4CurrentReminders
             updateProgress()
         case .step4CurrentReminders:
-            currentStep = .step4bSatisfaction
-            updateProgress()
-        case .step4bSatisfaction:
             currentStep = .step5aCurrentFrustration
             updateProgress()
         case .step5aCurrentFrustration:
             currentStep = .empathyBreak
             updateProgress()
         case .empathyBreak:
-            currentStep = .reminderTiming
-            updateProgress()
-        case .reminderTiming:
             currentStep = .step4HabitFocus
             updateProgress()
+
+        // PHASE 4: Co-Creation / IKEA Effect
         case .step4HabitFocus:
+            currentStep = .toneSelection
+            updateProgress()
+        case .toneSelection:
             currentStep = .step3bProofScreen
             updateProgress()
         case .step3bProofScreen:
-            currentStep = .step5WhatMatters
+            currentStep = .reminderTiming
             updateProgress()
-        case .step5WhatMatters:
+
+        // PHASE 5: Logistics Last
+        case .reminderTiming:
+            currentStep = .step2ReminderFrequency  // Moved to end
+            updateProgress()
+        case .step2ReminderFrequency:
             currentStep = .step6NotificationPromise
             updateProgress()
+
+        // PHASE 6: Social Proof & Conversion
         case .step6NotificationPromise:
             currentStep = .notificationPermission
             updateProgress()
@@ -572,7 +605,6 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .saveYourProgress
             updateProgress()
         case .saveYourProgress:
-            // After auth, proceed to free trial intro
             currentStep = .freeTrialIntro
             updateProgress()
         case .freeTrialIntro:
@@ -582,14 +614,15 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .step6Paywall
             updateProgress()
         case .step6Paywall:
-            // After paywall, onboarding is complete - go to dashboard
             isComplete = true
         case .profileSetupConfirmation:
-            // Deprecated - skip to complete
             isComplete = true
         case .preferences:
-            // Deprecated - skip to complete
             isComplete = true
+        case .step4bSatisfaction:
+            // Deprecated step - skip to next
+            currentStep = .step5aCurrentFrustration
+            updateProgress()
         }
     }
 
@@ -598,45 +631,60 @@ final class OnboardingViewModel: ObservableObject {
         switch currentStep {
         case .welcome:
             break
+
+        // PHASE 1: Identity & Motivation
         case .step1WhoFor:
             currentStep = .welcome
             OnboardingProgressBar.resetProgress()
             updateProgress()
-        case .step2ReminderFrequency:
+        case .nameInput:
             currentStep = .step1WhoFor
             updateProgress()
-        case .step3MedicationProblem:
-            currentStep = .step2ReminderFrequency
+        case .step5WhatMatters:
+            currentStep = .nameInput
             updateProgress()
+
+        // PHASE 2: Objection Handling
         case .step4aTechComfort:
-            currentStep = .step3MedicationProblem
+            currentStep = .step5WhatMatters
             updateProgress()
-        case .step4CurrentReminders:
+
+        // PHASE 3: Pain Amplification
+        case .step3MedicationProblem:
             currentStep = .step4aTechComfort
             updateProgress()
-        case .step4bSatisfaction:
-            currentStep = .step4CurrentReminders
+        case .step4CurrentReminders:
+            currentStep = .step3MedicationProblem
             updateProgress()
         case .step5aCurrentFrustration:
-            currentStep = .step4bSatisfaction
+            currentStep = .step4CurrentReminders
             updateProgress()
         case .empathyBreak:
             currentStep = .step5aCurrentFrustration
             updateProgress()
-        case .reminderTiming:
+
+        // PHASE 4: Co-Creation
+        case .step4HabitFocus:
             currentStep = .empathyBreak
             updateProgress()
-        case .step4HabitFocus:
-            currentStep = .reminderTiming
-            updateProgress()
-        case .step3bProofScreen:
+        case .toneSelection:
             currentStep = .step4HabitFocus
             updateProgress()
-        case .step5WhatMatters:
+        case .step3bProofScreen:
+            currentStep = .toneSelection
+            updateProgress()
+
+        // PHASE 5: Logistics Last
+        case .reminderTiming:
             currentStep = .step3bProofScreen
             updateProgress()
+        case .step2ReminderFrequency:
+            currentStep = .reminderTiming
+            updateProgress()
+
+        // PHASE 6: Social Proof & Conversion
         case .step6NotificationPromise:
-            currentStep = .step5WhatMatters
+            currentStep = .step2ReminderFrequency
             updateProgress()
         case .notificationPermission:
             currentStep = .step6NotificationPromise
@@ -649,15 +697,12 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .referralSource
             updateProgress()
         case .planReadyTeaser:
-            // Skip back to rating (not notification permission)
             currentStep = .step7SocialProof
             updateProgress()
         case .loadingPlan:
-            // Loading screen shouldn't have back button, but if somehow triggered, go to teaser
             currentStep = .planReadyTeaser
             updateProgress()
         case .personalizedPlan:
-            // Go back to customize plan screen (skip loading screen)
             currentStep = .planReadyTeaser
             updateProgress()
         case .saveYourProgress:
@@ -673,12 +718,14 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .freeTrialReminder
             updateProgress()
         case .profileSetupConfirmation:
-            // Deprecated - go back to paywall
             currentStep = .step6Paywall
             updateProgress()
         case .preferences:
-            // Deprecated - go back to paywall
             currentStep = .step6Paywall
+            updateProgress()
+        case .step4bSatisfaction:
+            // Deprecated step - go back to previous
+            currentStep = .step4CurrentReminders
             updateProgress()
         }
     }
@@ -932,34 +979,49 @@ final class OnboardingViewModel: ObservableObject {
 }
 
 // MARK: - Onboarding Models
-/// ✅ CLEANED UP: Removed deprecated enum cases (not persisted, safe to remove)
+/// Onboarding step enum with Value-First psychological arc
+/// Flow: Identity/Motivation → Objection Handling → Pain → Co-Creation → Logistics → Conversion
 enum OnboardingStep: String, CaseIterable {
     case welcome = "welcome"
+
+    // PHASE 1: Identity & Motivation (Who + Why)
     case step1WhoFor = "step1WhoFor"
-    case step2ReminderFrequency = "step2ReminderFrequency"
+    case nameInput = "nameInput"  // NEW: "What's their first name?"
+    case step5WhatMatters = "step5WhatMatters"  // MOVED: North Star motivation
+
+    // PHASE 2: Objection Handling (Tech Fear → Promise)
+    case step4aTechComfort = "step4aTechComfort"  // + reassurance banner
+
+    // PHASE 3: Pain Amplification
     case step3MedicationProblem = "step3MedicationProblem"
-    case step3bProofScreen = "step3bProofScreen"
-    case step4aTechComfort = "step4aTechComfort"  // How comfortable is [name] with technology?
-    case step4CurrentReminders = "step4CurrentReminders"  // What reminders do you currently use?
-    case step4bSatisfaction = "step4bSatisfaction"  // How well is this working for you?
-    case step5aCurrentFrustration = "step5aCurrentFrustration"  // What frustrates you most?
-    case empathyBreak = "empathyBreak"  // Empathy moment after pain questions
-    case reminderTiming = "reminderTiming"  // When would a gentle reminder help most?
+    case step4CurrentReminders = "step4CurrentReminders"
+    case step4bSatisfaction = "step4bSatisfaction"
+    case step5aCurrentFrustration = "step5aCurrentFrustration"
+    case empathyBreak = "empathyBreak"
+
+    // PHASE 4: Co-Creation / IKEA Effect
     case step4HabitFocus = "step4HabitFocus"
-    case step5WhatMatters = "step5WhatMatters"
+    case toneSelection = "toneSelection"  // NEW: "How should Remi speak?"
+    case step3bProofScreen = "step3bProofScreen"
+
+    // PHASE 5: Logistics Last
+    case reminderTiming = "reminderTiming"
+    case step2ReminderFrequency = "step2ReminderFrequency"  // MOVED: Dry details last
+
+    // PHASE 6: Social Proof & Conversion
     case step6NotificationPromise = "step6NotificationPromise"
     case notificationPermission = "notificationPermission"
-    case referralSource = "referralSource"  // Were you recommended by a doctor/home-care worker?
-    case step7SocialProof = "step7SocialProof"  // Give us a Rating (moved before plan)
-    case freeTrialIntro = "freeTrialIntro"  // "We want you to try Remi for free"
-    case freeTrialReminder = "freeTrialReminder"  // "We'll send you a reminder before your free trial ends"
-    case planReadyTeaser = "planReadyTeaser"  // "Your plan is ready!" announcement
-    case loadingPlan = "loadingPlan"  // Loading screen with progress
-    case personalizedPlan = "personalizedPlan"  // Summary of quiz answers
-    case saveYourProgress = "saveYourProgress"  // Auth gate
+    case referralSource = "referralSource"
+    case step7SocialProof = "step7SocialProof"
+    case planReadyTeaser = "planReadyTeaser"
+    case loadingPlan = "loadingPlan"
+    case personalizedPlan = "personalizedPlan"
+    case saveYourProgress = "saveYourProgress"
+    case freeTrialIntro = "freeTrialIntro"
+    case freeTrialReminder = "freeTrialReminder"
     case step6Paywall = "step6Paywall"
     case profileSetupConfirmation = "profileSetupConfirmation"
-    case preferences = "preferences"  // Profile creation view
+    case preferences = "preferences"
 
     var title: String {
         switch self {
@@ -967,6 +1029,10 @@ enum OnboardingStep: String, CaseIterable {
             return "Welcome to Remi"
         case .step1WhoFor:
             return "Who For"
+        case .nameInput:
+            return "Their Name"
+        case .toneSelection:
+            return "Remi's Voice"
         case .step2ReminderFrequency:
             return "Reminder Frequency"
         case .step3MedicationProblem:
@@ -1024,6 +1090,10 @@ enum OnboardingStep: String, CaseIterable {
             return "Create reminders for anyone you love"
         case .step1WhoFor:
             return "Who are you downloading Remi for?"
+        case .nameInput:
+            return "We'll personalize Remi just for them"
+        case .toneSelection:
+            return "Choose how Remi should speak to them"
         case .step2ReminderFrequency:
             return "How often do they need reminders?"
         case .step3MedicationProblem:

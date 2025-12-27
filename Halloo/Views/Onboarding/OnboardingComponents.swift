@@ -21,6 +21,7 @@ enum OnboardingUI {
     static let backgroundColor = Color(hex: "f9f9f9")
     static let gradientColor = Color(hex: "B3B3B3")
     static let successGreen = Color(hex: "228B22")
+    static let empathyBreakBackground = Color(hex: "E8F5E9")  // Sage green for emotional reset
 
     // Spacing
     static let horizontalPadding: CGFloat = 24
@@ -39,7 +40,7 @@ enum OnboardingUI {
     static let optionAnimationDelay: TimeInterval = 0.1
 
     // Total steps in quiz flow (notification permission, teaser, loading not counted)
-    static let totalSteps = 17
+    static let totalSteps = 16
 }
 
 // MARK: - Progress Bar
@@ -201,10 +202,28 @@ struct OnboardingStepHeader: View {
     }
 }
 
+// MARK: - Pastel Color Palette for Quiz Options
+
+/// Pastel colors for selected quiz options - cycles based on index
+enum QuizPastelColors {
+    static let palette: [Color] = [
+        Color(hex: "A8D5FF"),  // Pastel Blue - calming, trustworthy
+        Color(hex: "B8E6C1"),  // Pastel Green - positive, growth
+        Color(hex: "D4C4F5"),  // Pastel Lavender - gentle, creative
+        Color(hex: "FFCDB2"),  // Pastel Coral - warm, friendly
+        Color(hex: "B5EAD7"),  // Pastel Mint - fresh, light
+        Color(hex: "FFE5D9")   // Pastel Peach - soft, approachable
+    ]
+
+    static func color(for index: Int) -> Color {
+        palette[index % palette.count]
+    }
+}
+
 // MARK: - Quiz Option Button
 
 /// Reusable option button for single-select quiz questions
-/// Simple white→black toggle design with subtle shadow
+/// White → Pastel color toggle design with subtle shadow
 /// Sequential scale + spring animation for modern, premium feel
 struct QuizOptionButton: View {
     let text: String
@@ -213,6 +232,10 @@ struct QuizOptionButton: View {
     let onTap: () -> Void
     @State private var isVisible = false
 
+    private var selectedColor: Color {
+        QuizPastelColors.color(for: index)
+    }
+
     var body: some View {
         Button(action: {
             onTap()
@@ -220,12 +243,18 @@ struct QuizOptionButton: View {
         }) {
             Text(text)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(isSelected ? .white : .black)
+                .foregroundColor(.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
                 .padding(.horizontal, 16)
-                .background(isSelected ? Color.black : Color.white)
-                .cornerRadius(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 50)
+                        .fill(Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 50)
+                        .stroke(isSelected ? selectedColor : Color.clear, lineWidth: 3)
+                )
                 .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
         .scaleEffect(isVisible ? 1.0 : 0.92)
@@ -243,7 +272,7 @@ struct QuizOptionButton: View {
 // MARK: - Quiz Multi-Select Button
 
 /// Reusable option button for multi-select quiz questions
-/// White button with checkbox on right (empty→black with checkmark)
+/// White button with checkbox (empty → pastel color with checkmark)
 /// Sequential scale + spring animation for modern, premium feel
 struct QuizMultiSelectButton: View {
     let text: String
@@ -253,26 +282,30 @@ struct QuizMultiSelectButton: View {
     let onTap: () -> Void
     @State private var isVisible = false
 
+    private var selectedColor: Color {
+        QuizPastelColors.color(for: index)
+    }
+
     var body: some View {
         Button(action: {
             onTap()
             HapticFeedback.medium()
         }) {
             HStack(spacing: 12) {
-                // Checkbox on the left
+                // Checkbox on the left with pastel color when selected
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color.black.opacity(0.2), lineWidth: 2)
+                        .strokeBorder(isSelected ? selectedColor : Color.black.opacity(0.2), lineWidth: 2)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isSelected ? Color.black : Color.white)
+                                .fill(isSelected ? selectedColor : Color.white)
                         )
                         .frame(width: 24, height: 24)
 
                     if isSelected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.black.opacity(0.7))
                     }
                 }
 
@@ -287,8 +320,14 @@ struct QuizMultiSelectButton: View {
             }
             .padding(.vertical, 20)
             .padding(.horizontal, 16)
-            .background(Color.white)
-            .cornerRadius(12)
+            .background(
+                RoundedRectangle(cornerRadius: 50)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 50)
+                    .stroke(isSelected ? selectedColor : Color.clear, lineWidth: 3)
+            )
             .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
         .scaleEffect(isVisible ? 1.0 : 0.92)

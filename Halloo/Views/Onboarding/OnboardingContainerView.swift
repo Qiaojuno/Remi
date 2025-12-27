@@ -31,26 +31,29 @@ struct OnboardingContainerView: View {
             case .welcome:
                 WelcomeView()
 
+            // PHASE 1: Identity & Motivation
             case .step1WhoFor:
                 Step1View()
 
-            case .step2ReminderFrequency:
-                Step2View()
+            case .nameInput:
+                NameInputStepView()
 
+            case .step5WhatMatters:
+                Step5View()
+
+            // PHASE 2: Objection Handling
+            case .step4aTechComfort:
+                Step4aTechComfortView()
+
+            // PHASE 3: Pain Amplification
             case .step3MedicationProblem:
                 Step3View()
-
-            case .step3bProofScreen:
-                Step3bView()
 
             case .step4CurrentReminders:
                 Step4CurrentRemindersView()
 
-            case .step4aTechComfort:
-                Step4aTechComfortView()
-
             case .step4bSatisfaction:
-                Step4bSatisfactionView()
+                EmptyView() // Deprecated step - navigation skips this
 
             case .step5aCurrentFrustration:
                 Step5aCurrentFrustrationView()
@@ -58,15 +61,24 @@ struct OnboardingContainerView: View {
             case .empathyBreak:
                 EmpathyBreakView()
 
-            case .reminderTiming:
-                ReminderTimingView()
-
+            // PHASE 4: Co-Creation
             case .step4HabitFocus:
                 Step4View()
 
-            case .step5WhatMatters:
-                Step5View()
+            case .toneSelection:
+                ToneSelectionView()
 
+            case .step3bProofScreen:
+                Step3bView()
+
+            // PHASE 5: Logistics Last
+            case .reminderTiming:
+                ReminderTimingView()
+
+            case .step2ReminderFrequency:
+                Step2View()
+
+            // PHASE 6: Social Proof & Conversion
             case .step6NotificationPromise:
                 Step6View()
 
@@ -76,11 +88,8 @@ struct OnboardingContainerView: View {
             case .referralSource:
                 ReferralSourceView()
 
-            case .freeTrialIntro:
-                FreeTrialIntroView()
-
-            case .freeTrialReminder:
-                FreeTrialReminderView()
+            case .step7SocialProof:
+                Step7View()
 
             case .planReadyTeaser:
                 PlanReadyTeaserView()
@@ -91,11 +100,14 @@ struct OnboardingContainerView: View {
             case .personalizedPlan:
                 PersonalizedPlanView()
 
-            case .step7SocialProof:
-                Step7View()
-
             case .saveYourProgress:
                 SaveYourProgressView()
+
+            case .freeTrialIntro:
+                FreeTrialIntroView()
+
+            case .freeTrialReminder:
+                FreeTrialReminderView()
 
             case .step6Paywall:
                 PaywallStepView()
@@ -104,7 +116,6 @@ struct OnboardingContainerView: View {
                 ProfileSetupConfirmationView()
 
             case .preferences:
-                // Show CreateProfileView
                 Text("Create Profile (TODO)")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(hex: "f9f9f9"))

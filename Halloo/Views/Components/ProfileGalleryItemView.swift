@@ -21,7 +21,7 @@ struct ProfileGalleryItemView: View {
             Rectangle()
                 .fill(Color(hex: "f0f0f0"))
                 .frame(width: 112, height: 112) // Match existing photo dimensions
-                .cornerRadius(3) // Match existing corner radius
+                .cornerRadius(12) // Softer rounding to match onboarding carousel
 
             // Profile creation content
             VStack(spacing: 8) {

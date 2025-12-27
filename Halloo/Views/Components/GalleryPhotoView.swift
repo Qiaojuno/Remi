@@ -40,7 +40,7 @@ struct GalleryPhotoView: View {
 
     // MARK: - Configuration
     private let photoSize: CGFloat = 112 // Standard gallery photo size
-    private let cornerRadius: CGFloat = 3 // Figma spec
+    private let cornerRadius: CGFloat = 12 // Softer rounding to match onboarding carousel
 
     // Profile colors (same as ProfileImageView)
     private let profileColors: [Color] = [
