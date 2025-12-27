@@ -50,7 +50,7 @@ struct Step1View: View {
                             .opacity(showContent ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
-                        Text("Who's this for?")
+                        Text("Who're we sending messages to?")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -312,7 +312,7 @@ struct Step4CurrentRemindersView: View {
                 VStack(spacing: 24) {
                     // Header
                     VStack(spacing: 12) {
-                        Text("What should Remi take over?")
+                        Text("What should Remi help take over?")
                             .font(.system(size: 32, weight: .bold))
                             .tracking(-1.0)
                             .foregroundColor(.black)
@@ -999,13 +999,12 @@ struct ToneSelectionView: View {
 
                 Spacer()
 
-                // Card stack - use id to force recreation when saved tone changes
+                // Card stack
                 ToneCardStack(
                     toneOptions: toneOptions,
                     currentIndex: $currentToneIndex,
                     initialIndex: restoredToneIndex
                 )
-                .id(viewModel.userAnswers["remi_tone"] ?? "default")
                 .opacity(showContent ? 1 : 0)
                 .animation(.easeOut(duration: 0.5).delay(0.3), value: showContent)
 
@@ -1123,20 +1122,26 @@ struct ToneCardStack: View {
                 }
             })
         .onAppear {
-            stackedCards = Array(0..<toneOptions.count)
-            if initialIndex > 0 && initialIndex < toneOptions.count {
-                // Reorder so initialIndex is at front
-                while stackedCards[0] != initialIndex {
-                    let first = stackedCards.removeFirst()
-                    stackedCards.append(first)
-                }
-            }
-            // Ensure currentIndex matches the top card on initial load
-            currentIndex = stackedCards[0]
+            rebuildStackForIndex(initialIndex)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 showCards = true
             }
         }
+        .onChange(of: initialIndex) { _, newIndex in
+            rebuildStackForIndex(newIndex)
+        }
+    }
+
+    private func rebuildStackForIndex(_ index: Int) {
+        // Rebuild stackedCards so the specified index is at front
+        stackedCards = Array(0..<toneOptions.count)
+        if index >= 0 && index < toneOptions.count {
+            while stackedCards[0] != index {
+                let first = stackedCards.removeFirst()
+                stackedCards.append(first)
+            }
+        }
+        currentIndex = stackedCards[0]
     }
 
     private func toneCard(for index: Int) -> some View {
@@ -1438,44 +1443,41 @@ struct TextMessageCell: View {
 
     var body: some View {
         ZStack {
-            // Light gray background
+            // Dark background matching gallery - exact color from GalleryPhotoView
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(hex: "f5f5f5"))
+                .fill(Color(red: 0.08, green: 0.08, blue: 0.12))
 
-            // SMS conversation bubbles
-            VStack(spacing: 4) {
-                // Outgoing message (blue, right aligned)
+            // SMS conversation bubbles - matching gallery format
+            VStack(spacing: 6) {
+                // Outgoing message bubble (blue, top right) with 3 lines
                 HStack {
                     Spacer()
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(hex: "007AFF"))
-                        .frame(width: 38, height: 16)
-                        .overlay(
-                            VStack(spacing: 2) {
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.white.opacity(0.9))
-                                    .frame(width: 28, height: 2)
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.white.opacity(0.9))
-                                    .frame(width: 22, height: 2)
-                            }
-                        )
+                    MiniSpeechBubble(
+                        textLines: [
+                            [(11, 1.5), (13, 1.5), (15, 1.5)],
+                            [(18, 1.5), (17, 1.5)],
+                            [(10, 1.5), (14, 1.5), (12, 1.5)]
+                        ],
+                        isOutgoing: true,
+                        backgroundColor: Color(hex: "007AFF"),
+                        tailInset: 8
+                    )
                 }
-                .padding(.trailing, 8)
+                .padding(.trailing, 6)
 
-                // Incoming message (gray, left aligned)
+                // Incoming message bubble (gray, bottom left) with 1 line
                 HStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(hex: "E5E5EA"))
-                        .frame(width: 32, height: 12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.black.opacity(0.3))
-                                .frame(width: 22, height: 2)
-                        )
+                    MiniSpeechBubble(
+                        textLines: [
+                            [(13, 1.5), (15, 1.5), (10, 1.5)]
+                        ],
+                        isOutgoing: false,
+                        backgroundColor: Color(hex: "E5E5EA"),
+                        tailInset: 8
+                    )
                     Spacer()
                 }
-                .padding(.leading, 8)
+                .padding(.leading, 6)
             }
 
             // Confirmation checkmark overlay
@@ -2129,8 +2131,8 @@ struct ReferralSourceView: View {
     @State private var showContent = false
 
     let options = [
-        "Yes",
-        "No"
+        "👨‍⚕️ Yes",
+        "🙅 No"
     ]
 
     var body: some View {
@@ -2145,7 +2147,7 @@ struct ReferralSourceView: View {
                 VStack(spacing: 32) {
                     // Header
                     VStack(spacing: 12) {
-                        Text("Were you recommended Remi by a Doctor or Home-care worker?")
+                        Text("Were you recommended Remi by a Doctor?")
                             .font(.system(size: 28, weight: .bold))
                             .tracking(-0.5)
                             .foregroundColor(.black)
@@ -2530,6 +2532,10 @@ struct Step7View: View {
                             .padding(20)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(QuizPastelColors.color(for: 0), lineWidth: 2)
+                            )
                             .cornerRadius(12)
                             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
 
@@ -2556,6 +2562,10 @@ struct Step7View: View {
                             .padding(20)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(QuizPastelColors.color(for: 1), lineWidth: 2)
+                            )
                             .cornerRadius(12)
                             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
 
@@ -2582,6 +2592,10 @@ struct Step7View: View {
                             .padding(20)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(QuizPastelColors.color(for: 2), lineWidth: 2)
+                            )
                             .cornerRadius(12)
                             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
                         }
@@ -2619,7 +2633,6 @@ struct Step7View: View {
 struct PersonalizedPlanView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
-    @State private var improvementProgress: CGFloat = 0
 
     // Helper to format recipient name
     private var recipientName: String {
@@ -2824,56 +2837,6 @@ struct PersonalizedPlanView: View {
                             .opacity(showContent ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
-                            // Improvement chance card
-                            VStack(alignment: .leading, spacing: 10) {
-                                // 89% text
-                                Text("89%")
-                                    .font(.system(size: 36, weight: .bold))
-                                    .foregroundColor(.black)
-
-                                // Progress bar with circle indicator
-                                GeometryReader { geometry in
-                                    ZStack(alignment: .leading) {
-                                        // Background track
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(height: 12)
-
-                                        // Progress fill with pink-to-blue gradient
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [Color(hex: "E4D4F4"), Color(hex: "7BA4F4")],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                            .frame(width: geometry.size.width * improvementProgress, height: 12)
-
-                                        // Circle indicator
-                                        Circle()
-                                            .fill(Color.white)
-                                            .frame(width: 20, height: 20)
-                                            .shadow(color: Color.black.opacity(0.15), radius: 3, x: 0, y: 1)
-                                            .offset(x: max(0, (geometry.size.width * improvementProgress) - 10))
-                                            .opacity(improvementProgress > 0 ? 1 : 0)
-                                    }
-                                }
-                                .frame(height: 20)
-
-                                // Description text
-                                Text("Chance of improvement with Remi")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.gray)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.white)
-                            )
-                            .opacity(showContent ? 1 : 0)
-                            .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
                         }
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
 
@@ -3658,12 +3621,6 @@ struct PersonalizedPlanView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     showContent = true
                 }
-                // Animate progress bar after card fades in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    withAnimation(.easeOut(duration: 0.8)) {
-                        improvementProgress = 0.89
-                    }
-                }
             }
         }
     }
@@ -3771,36 +3728,31 @@ struct PlanReadyTeaserView: View {
                 Spacer()
 
                 VStack(spacing: 24) {
-                    // Lottie animation (matching notification banner size/position)
+                    // Lottie animation
                     LottieView(animation: .named("verification"))
                         .playing(loopMode: .playOnce)
                         .frame(width: 200, height: 200)
                         .scaleEffect(showContent ? 1.0 : 0.85)
-                        .offset(y: showContent ? 0 : -20)
-                        .opacity(showContent ? 1 : 0)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: showContent)
+                    .offset(y: showContent ? 0 : -20)
+                    .opacity(showContent ? 1 : 0)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2), value: showContent)
 
                     // Title and description
                     VStack(spacing: 16) {
-                        // Title - with gradient on "customized plan"
-                        (Text("Time to generate your\n")
-                            .foregroundColor(.black)
-                         +
-                         Text("customized plan!")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color(hex: "0E9883"), Color(hex: "4ECDC4")],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        )
-                            .font(.system(size: 32, weight: .bold))
-                            .tracking(-1.0)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .opacity(showContent ? 1 : 0)
-                            .animation(.easeIn(duration: 0.4).delay(0.3), value: showContent)
+                        // Title - with subtle glowing green on "customized plan"
+                        VStack(spacing: 0) {
+                            Text("Time to generate your")
+                                .foregroundColor(.black)
+                            Text("customized plan!")
+                                .foregroundColor(Color(hex: "0E9883"))
+                                .shadow(color: Color(hex: "0E9883").opacity(0.2), radius: 6, x: 0, y: 2)
+                        }
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-1.0)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeIn(duration: 0.4).delay(0.3), value: showContent)
 
                         // Description - exact same specs as "We'll ping you"
                         Text("Let us personalize Remi for you")
@@ -3897,11 +3849,31 @@ struct LoadingPlanView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Percentage counter
-            Text("\(Int(progress * 100))%")
-                .font(.system(size: 64, weight: .bold))
-                .foregroundColor(.black)
-                .padding(.bottom, 32)
+            // Circular progress indicator with percentage in center
+            ZStack {
+                // Background track circle
+                Circle()
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 16)
+                    .frame(width: 240, height: 240)
+
+                // Progress arc - always blue
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        Color(hex: "007AFF"),
+                        style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                    )
+                    .frame(width: 240, height: 240)
+                    .rotationEffect(.degrees(-90)) // Start from top
+                    .animation(.easeInOut(duration: 0.1), value: progress)
+
+                // Percentage text in center - always blue
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundColor(Color(hex: "007AFF"))
+            }
+            .shadow(color: Color(hex: "007AFF").opacity(0.4), radius: 16, x: 0, y: 6)
+            .padding(.bottom, 32)
 
             // Headline
             Text("We're building your plan")
@@ -3914,32 +3886,7 @@ struct LoadingPlanView: View {
                 .font(.system(size: 28, weight: .bold))
                 .tracking(-1.0)
                 .foregroundColor(.black)
-                .padding(.bottom, 32)
-
-            // Progress bar with pink-to-blue gradient
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background track
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 8)
-
-                    // Progress fill with gradient
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "E4D4F4"), Color(hex: "7BA4F4")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geometry.size.width * progress, height: 8)
-                        .animation(.easeInOut(duration: 0.1), value: progress)
-                }
-            }
-            .frame(height: 8)
-            .padding(.horizontal, 40)
-            .padding(.bottom, 24)
+                .padding(.bottom, 24)
 
             // Current task message
             Text(currentMessage)
@@ -3949,20 +3896,19 @@ struct LoadingPlanView: View {
                 .padding(.horizontal, 40)
                 .padding(.bottom, 48)
 
-            // What we're personalizing (bullet list)
-            VStack(alignment: .leading, spacing: 8) {
+            // What we're personalizing (centered text with checkmarks)
+            VStack(spacing: 8) {
                 Text("We're personalizing:")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.black)
                     .padding(.bottom, 8)
 
-                BulletPoint(text: "Reminder schedule for \(recipientName)", showCheckmark: completedBullets.contains(0))
-                BulletPoint(text: "Best daily habits", showCheckmark: completedBullets.contains(1))
-                BulletPoint(text: "SMS message style", showCheckmark: completedBullets.contains(2))
-                BulletPoint(text: "Check-in frequency", showCheckmark: completedBullets.contains(3))
-                BulletPoint(text: "Family notifications", showCheckmark: completedBullets.contains(4))
+                LoadingCheckItem(text: "Reminder schedule for \(recipientName)", index: 0, showCheckmark: completedBullets.contains(0))
+                LoadingCheckItem(text: "Best daily habits", index: 1, showCheckmark: completedBullets.contains(1))
+                LoadingCheckItem(text: "SMS message style", index: 2, showCheckmark: completedBullets.contains(2))
+                LoadingCheckItem(text: "Check-in frequency", index: 3, showCheckmark: completedBullets.contains(3))
+                LoadingCheckItem(text: "Family notifications", index: 4, showCheckmark: completedBullets.contains(4))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 40)
 
             Spacer()
@@ -4031,7 +3977,15 @@ struct LoadingPlanView: View {
                 }
 
                 // Update message at key points
-                if currentPercentage == 60 {
+                if currentPercentage == 20 {
+                    // Pause at 20% for artificial delay
+                    timer.invalidate()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.currentMessage = "Processing your preferences..."
+                        currentPercentage += 1
+                        self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
+                    }
+                } else if currentPercentage == 60 {
                     // Pause at 60% for artificial delay
                     timer.invalidate()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -4048,9 +4002,9 @@ struct LoadingPlanView: View {
                         self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
                     }
                 } else if currentPercentage == 100 {
-                    // Done - advance to next screen
+                    // Done - pause at 100% then advance
                     timer.invalidate()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         self.viewModel.nextStep()
                     }
                 } else {
@@ -4089,9 +4043,9 @@ struct LoadingPlanView: View {
                         self.continueCountingFrom(currentPercentage, totalDuration: totalDuration, incrementDelay: incrementDelay)
                     }
                 } else if currentPercentage == 100 {
-                    // Done - advance to next screen
+                    // Done - pause at 100% then advance
                     timer.invalidate()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         self.viewModel.nextStep()
                     }
                 } else {
@@ -4102,25 +4056,21 @@ struct LoadingPlanView: View {
     }
 }
 
-// Helper view for bullet points with optional checkmark
-private struct BulletPoint: View {
+// Helper view for centered loading items with checkmark
+private struct LoadingCheckItem: View {
     let text: String
+    let index: Int
     let showCheckmark: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("•")
-                .font(.system(size: 15))
-                .foregroundColor(.black)
+        HStack(spacing: 8) {
             Text(text)
                 .font(.system(size: 15))
                 .foregroundColor(.black)
 
-            Spacer()
-
-            // Always reserve space for checkmark to prevent layout shift
+            // Checkmark appears when complete
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 20))
+                .font(.system(size: 16))
                 .foregroundColor(.black)
                 .opacity(showCheckmark ? 1 : 0)
                 .scaleEffect(showCheckmark ? 1 : 0.5)

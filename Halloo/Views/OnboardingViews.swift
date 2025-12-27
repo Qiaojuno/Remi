@@ -374,9 +374,9 @@ struct WelcomeView: View {
     @State private var wordOpacity: Double = 1.0
 
     private let rotatingWords = [
-        (text: "Automatically", colors: [Color(hex: "6BB6FF"), Color(hex: "4A9DFF")]),      // Blue
-        (text: "Stress Free", colors: [Color(hex: "A855F7"), Color(hex: "7C3AED")]),        // Purple
-        (text: "With Text", colors: [Color(hex: "34D399"), Color(hex: "10B981")])           // Green
+        (text: "Automatically", color: Color(hex: "4A9DFF")),      // Blue
+        (text: "Stress Free", color: Color(hex: "A855F7")),        // Purple
+        (text: "With Text", color: Color(hex: "10B981"))           // Green
     ]
 
     private let timer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
@@ -417,13 +417,8 @@ struct WelcomeView: View {
                         Text(rotatingWords[currentWordIndex].text)
                             .font(.system(size: 28, weight: .bold))
                             .tracking(-1.0)
-                            .foregroundStyle(
-                                LinearGradient(
-                                    gradient: Gradient(colors: rotatingWords[currentWordIndex].colors),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .foregroundColor(rotatingWords[currentWordIndex].color)
+                            .shadow(color: rotatingWords[currentWordIndex].color.opacity(0.3), radius: 8, x: 0, y: 2)
                             .opacity(wordOpacity)
                             .animation(.easeInOut(duration: 0.6), value: wordOpacity)
                     }
