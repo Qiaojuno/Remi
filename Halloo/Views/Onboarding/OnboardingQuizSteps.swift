@@ -1332,32 +1332,32 @@ struct Step3View: View {
 /// Mix of ~40% text messages and ~60% pastel photo placeholders
 struct AutoScrollingGalleryCarousel: View {
     // Gallery items - mixed content types for realistic feel
-    // .photo = pastel icon cell, .text = SMS conversation cell
+    // .realPhoto = actual photos from assets, .text = SMS conversation cell
     private let galleryItems: [CarouselItemType] = [
         // Row 1
-        .photo(color: Color(hex: "FFE5E5"), icon: "heart.fill", hasCheck: false),
+        .realPhoto(imageName: "IMG_3746", hasCheck: false),
         .text(hasCheck: true),
-        .photo(color: Color(hex: "E5FFE5"), icon: "leaf.fill", hasCheck: false),
+        .realPhoto(imageName: "IMG_1376", hasCheck: true),
         // Row 2
-        .photo(color: Color(hex: "FFF5E5"), icon: "cup.and.saucer.fill", hasCheck: true),
-        .photo(color: Color(hex: "F0E5FF"), icon: "moon.stars.fill", hasCheck: false),
+        .realPhoto(imageName: "IMG_5436", hasCheck: true),
+        .realPhoto(imageName: "IMG_3747", hasCheck: false),
         .text(hasCheck: true),
         // Row 3
         .text(hasCheck: false),
-        .photo(color: Color(hex: "F5FFE5"), icon: "figure.walk", hasCheck: true),
-        .photo(color: Color(hex: "E5E5FF"), icon: "pills.fill", hasCheck: true),
+        .realPhoto(imageName: "Camping", hasCheck: true),
+        .realPhoto(imageName: "IMG_3746", hasCheck: false),
         // Row 4
-        .photo(color: Color(hex: "FFF0E5"), icon: "photo.fill", hasCheck: false),
+        .realPhoto(imageName: "IMG_1376", hasCheck: false),
         .text(hasCheck: true),
-        .photo(color: Color(hex: "FFE5FF"), icon: "star.fill", hasCheck: false),
+        .realPhoto(imageName: "IMG_5436", hasCheck: true),
         // Row 5
         .text(hasCheck: true),
-        .photo(color: Color(hex: "FFF5F0"), icon: "fork.knife", hasCheck: false),
-        .photo(color: Color(hex: "F0FFE5"), icon: "eye.fill", hasCheck: true),
+        .realPhoto(imageName: "IMG_3747", hasCheck: false),
+        .realPhoto(imageName: "IMG_2498 2", hasCheck: true),
         // Row 6
-        .photo(color: Color(hex: "FFE5F5"), icon: "gift.fill", hasCheck: false),
+        .realPhoto(imageName: "IMG_3746", hasCheck: false),
         .text(hasCheck: false),
-        .photo(color: Color(hex: "E5FFFF"), icon: "phone.fill", hasCheck: true),
+        .realPhoto(imageName: "IMG_1376", hasCheck: true),
     ]
 
     private let columns = 3
@@ -1411,10 +1411,59 @@ struct AutoScrollingGalleryCarousel: View {
     }
 }
 
+// MARK: - Horizontal Gallery Carousel (single row, auto-scrolling)
+
+struct HorizontalGalleryCarousel: View {
+    private let galleryItems: [CarouselItemType] = [
+        .realPhoto(imageName: "IMG_3746", hasCheck: true),
+        .text(hasCheck: true),
+        .realPhoto(imageName: "IMG_1376", hasCheck: false),
+        .realPhoto(imageName: "IMG_5436", hasCheck: true),
+        .text(hasCheck: false),
+        .realPhoto(imageName: "IMG_3747", hasCheck: true),
+        .realPhoto(imageName: "Camping", hasCheck: false),
+        .text(hasCheck: true),
+        .realPhoto(imageName: "IMG_2498 2", hasCheck: true),
+    ]
+
+    private let itemSize: CGFloat = 85
+    private let spacing: CGFloat = 10
+    private let scrollSpeed: Double = 30 // Points per second
+
+    // Triple items for seamless loop
+    private var loopedItems: [CarouselItemType] {
+        galleryItems + galleryItems + galleryItems
+    }
+
+    private var singleSetWidth: CGFloat {
+        CGFloat(galleryItems.count) * (itemSize + spacing)
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            TimelineView(.animation) { timeline in
+                let elapsedTime = timeline.date.timeIntervalSinceReferenceDate
+                let rawOffset = elapsedTime * scrollSpeed
+                let offset = rawOffset.truncatingRemainder(dividingBy: Double(singleSetWidth))
+
+                HStack(spacing: spacing) {
+                    ForEach(0..<loopedItems.count, id: \.self) { index in
+                        CarouselCell(item: loopedItems[index], size: itemSize)
+                    }
+                }
+                .offset(x: -CGFloat(offset))
+            }
+        }
+        .frame(height: itemSize)
+        .clipped()
+    }
+}
+
 // MARK: - Carousel Item Types
 
 enum CarouselItemType {
     case photo(color: Color, icon: String, hasCheck: Bool)
+    case realPhoto(imageName: String, hasCheck: Bool)
     case text(hasCheck: Bool)
 }
 
@@ -1428,6 +1477,9 @@ struct CarouselCell: View {
         switch item {
         case .photo(let color, let icon, let hasCheck):
             GalleryItemCell(color: color, icon: icon, hasCheck: hasCheck)
+                .frame(width: size, height: size)
+        case .realPhoto(let imageName, let hasCheck):
+            RealPhotoCell(imageName: imageName, hasCheck: hasCheck)
                 .frame(width: size, height: size)
         case .text(let hasCheck):
             TextMessageCell(hasCheck: hasCheck)
@@ -1536,6 +1588,38 @@ extension Color {
     func blended(with other: Color, amount: Double) -> Color {
         // Simple approximation - returns a darker version
         return self.opacity(1 - amount)
+    }
+}
+
+/// Real photo cell using actual images from assets
+struct RealPhotoCell: View {
+    let imageName: String
+    let hasCheck: Bool
+
+    var body: some View {
+        ZStack {
+            Image(imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 85, height: 85)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            // Confirmation checkmark overlay
+            if hasCheck {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(Color(hex: "10B981"))
+                            .background(Circle().fill(Color.white).padding(2))
+                    }
+                    Spacer()
+                }
+                .padding(6)
+            }
+        }
     }
 }
 
@@ -2732,6 +2816,7 @@ struct PersonalizedPlanView: View {
     }
 
     // Generate sample SMS message based on selected tone
+    // Matches the format used in TwilioSMSService.getTaskReminderMessage
     private var sampleSMSMessage: String {
         let tone = viewModel.userAnswers["remi_tone"] ?? "warm"
         let name = lovedOneName
@@ -2742,15 +2827,15 @@ struct PersonalizedPlanView: View {
 
         switch tone {
         case "warm":
-            return "Hi \(name)! Hope you're having a lovely day. Just a friendly reminder to \(habitAction)! 💊"
+            return "Hi \(name)! Hope you're doing well. Time to \(habitAction)\n\nWhen you're all done, send a quick photo and a little note — I'd love to see 😊"
         case "polite":
-            return "Good morning, \(name). This is a gentle reminder to \(habitAction). Have a wonderful day."
+            return "Good day \(name)! A gentle reminder to \(habitAction)\n\nOnce you're finished, share a picture and a few words about it 💛"
         case "direct":
-            return "Reminder: Time to \(habitAction)."
+            return "Hi \(name), Time to \(habitAction)\n\nReply DONE if you've finished."
         case "playful":
-            return "Hey \(name)! Ready to crush today? Don't forget to \(habitAction)! 💪"
+            return "Hey \(name), Just a little nudge to \(habitAction)\n\nSnap a photo and share how it went when you finish 📸💬"
         default:
-            return "Hi \(name)! Time for your \(habitAction). 💊"
+            return "Hi \(name)! Time to \(habitAction)\n\nYou can reply whenever you're done — I'm cheering you on 💛"
         }
     }
 
@@ -2768,71 +2853,177 @@ struct PersonalizedPlanView: View {
                             .frame(height: OnboardingUI.headerTopSpacing)
 
                         // Header
-                        VStack(spacing: 20) {
-                            // Title and description grouped together
-                            VStack(spacing: 8) {
-                                Text("Congrats! Remi is now set up for \(lovedOneName)")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .tracking(-1.0)
-                                    .foregroundColor(.black)
-                                    .multilineTextAlignment(.center)
+                        VStack(spacing: 12) {
+                            // Checkmark icon
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 48))
+                                .foregroundColor(.black)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.05), value: showContent)
 
-                                Text("They'll receive gentle SMS reminders every morning. We'll use a 'Reply to Confirm' system so you never have to wonder if they did it.")
-                                    .font(.system(size: 16, weight: .regular))
-                                    .foregroundColor(.black)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .opacity(showContent ? 1 : 0)
-                            .animation(.easeOut(duration: 0.4).delay(0.05), value: showContent)
+                            // Congrats text
+                            Text("Congrats")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.gray)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.07), value: showContent)
 
-                            // SMS Preview Mockup - at the top for immediate visualization
+                            // Title
+                            Text("We've made you a\ncustom plan.")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+
+                            // SMS Preview Mockup - at the top for immediate visualization (modern iOS style)
                             VStack(spacing: 0) {
-                                // Message header bar
-                                HStack {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.blue)
-                                    Spacer()
-                                    VStack(spacing: 2) {
-                                        Text("Remi")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundColor(.black)
-                                        Text("Text Message")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.gray)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "info.circle")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.blue)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(Color(hex: "F6F6F6"))
+                                // Message header bar - modern iOS Messages style
+                                ZStack(alignment: .top) {
+                                    // Center: Profile picture overlapping name capsule
+                                    VStack(spacing: 0) {
+                                        // Profile picture circle (floating on top with shadow)
+                                        Image("AppIconNotification")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 56, height: 56)
+                                            .clipShape(Circle())
+                                            .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+                                            .zIndex(1)
 
-                                Divider()
-
-                                // Message bubble
-                                HStack {
-                                    Text(sampleSMSMessage)
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.black)
+                                        // Name on capsule (overlapping behind profile picture)
+                                        HStack(spacing: 4) {
+                                            Text("Remi")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(.black)
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 11, weight: .semibold))
+                                                .foregroundColor(.gray)
+                                        }
                                         .padding(.horizontal, 14)
-                                        .padding(.vertical, 10)
-                                        .background(Color(hex: "E9E9EB"))
-                                        .cornerRadius(18)
-                                        .frame(maxWidth: 260, alignment: .leading)
+                                        .padding(.vertical, 6)
+                                        .background {
+                                            if #available(iOS 15.0, *) {
+                                                Capsule().fill(.ultraThinMaterial)
+                                            } else {
+                                                Capsule().fill(Color(hex: "E5E5EA"))
+                                            }
+                                        }
+                                        .offset(y: -10) // Overlap behind the profile picture
+                                    }
 
-                                    Spacer()
+                                    // Left and right elements - aligned to top
+                                    HStack(alignment: .top) {
+                                        // Back button with notification count on capsule (smaller)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "chevron.left")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(.black)
+                                            // Notification count in black pill
+                                            Text("64")
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background(Capsule().fill(Color.black))
+                                        }
+                                        .padding(.leading, 10)
+                                        .padding(.trailing, 6)
+                                        .padding(.vertical, 5)
+                                        .background {
+                                            if #available(iOS 15.0, *) {
+                                                Capsule().fill(.ultraThinMaterial)
+                                            } else {
+                                                Capsule().fill(Color(hex: "E5E5EA"))
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        // Info button on circle
+                                        ZStack {
+                                            if #available(iOS 15.0, *) {
+                                                Circle()
+                                                    .fill(.ultraThinMaterial)
+                                                    .frame(width: 28, height: 28)
+                                            } else {
+                                                Circle()
+                                                    .fill(Color(hex: "E5E5EA"))
+                                                    .frame(width: 28, height: 28)
+                                            }
+                                            Image(systemName: "info")
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundColor(.black)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color.white)
+                                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+                                .zIndex(1)
+
+                                // Message bubbles with animated replies - fixed height container
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Incoming message (Remi's reminder)
+                                    HStack {
+                                        SpeechBubbleView(
+                                            text: sampleSMSMessage,
+                                            isOutgoing: false,
+                                            backgroundColor: Color(hex: "E9E9EB"),
+                                            textColor: .black,
+                                            maxWidth: 240,
+                                            scale: 0.8
+                                        )
+                                        Spacer()
+                                    }
+
+                                    // Outgoing reply (loved one's photo response)
+                                    HStack {
+                                        Spacer()
+                                        // Photo reply (vertical iPhone format)
+                                        Image("ExamplePic1")
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 100, height: 140)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    }
+
+                                    // Remi's reply to the photo
+                                    HStack {
+                                        SpeechBubbleView(
+                                            text: "Love it! Keep it up 💪",
+                                            isOutgoing: false,
+                                            backgroundColor: Color(hex: "E9E9EB"),
+                                            textColor: .black,
+                                            maxWidth: 200,
+                                            scale: 0.8
+                                        )
+                                        Spacer()
+                                    }
                                 }
                                 .padding(16)
                                 .background(Color.white)
+
+                                // iMessage-style text input box
+                                HStack {
+                                    Spacer()
+                                    Text("This is what sent Texts will look like")
+                                        .font(.system(size: 14, weight: .regular))
+                                        .foregroundColor(Color.gray)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(Color(hex: "F2F2F7"))
+                                )
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 12)
+                                .background(Color.white)
                             }
                             .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                            )
                             .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
                             .opacity(showContent ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
@@ -2845,65 +3036,68 @@ struct PersonalizedPlanView: View {
 
                         // White container card for reminder strategies
                         VStack(alignment: .center, spacing: 16) {
-                            // 5-star rating with laurel wreaths (smaller version)
-                            HStack(spacing: 2) {
-                                // Left laurel wreath
-                                Image("Laurel Wreath")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 20, height: 40)
-                                    .opacity(showContent ? 1 : 0)
-                                    .scaleEffect(showContent ? 1.0 : 0.5)
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.15), value: showContent)
+                            // Two laurel wreath badges side by side
+                            HStack(spacing: 16) {
+                                // Left badge: "A 5 Star App"
+                                HStack(spacing: 2) {
+                                    Image("Laurel Wreath")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 24, height: 48)
 
-                                // 5-star rating Lottie animation
-                                LottieView(animation: .named("5 stars"))
-                                    .playing(loopMode: .playOnce)
-                                    .frame(width: 90, height: 36)
-                                    .opacity(showContent ? 1 : 0)
-                                    .scaleEffect(showContent ? 1.0 : 0.5)
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
+                                    VStack(spacing: 4) {
+                                        LottieView(animation: .named("5 stars"))
+                                            .playing(loopMode: .playOnce)
+                                            .frame(width: 70, height: 28)
 
-                                // Right laurel wreath (flipped)
-                                Image("Laurel Wreath")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 20, height: 40)
-                                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))  // Flip horizontally
-                                    .opacity(showContent ? 1 : 0)
-                                    .scaleEffect(showContent ? 1.0 : 0.5)
-                                    .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.15), value: showContent)
+                                        Text("A 5 Star App")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundColor(.black)
+                                    }
+
+                                    Image("Laurel Wreath")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 24, height: 48)
+                                        .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                                }
+                                .opacity(showContent ? 1 : 0)
+                                .scaleEffect(showContent ? 1.0 : 0.5)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.1), value: showContent)
+
+                                // Right badge: "#1 Family Care App"
+                                HStack(spacing: 2) {
+                                    Image("Laurel Wreath")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 24, height: 48)
+
+                                    VStack(spacing: 4) {
+                                        LottieView(animation: .named("5 stars"))
+                                            .playing(loopMode: .playOnce)
+                                            .frame(width: 70, height: 28)
+
+                                        Text("#1 Family Care App")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundColor(.black)
+                                    }
+
+                                    Image("Laurel Wreath")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 24, height: 48)
+                                        .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                                }
+                                .opacity(showContent ? 1 : 0)
+                                .scaleEffect(showContent ? 1.0 : 0.5)
+                                .animation(.spring(response: 0.6, dampingFraction: 0.6).delay(0.15), value: showContent)
                             }
                             .padding(.bottom, 8)
-
-                            // Section header
-                            HStack(spacing: 8) {
-                                Text("🏆")
-                                    .font(.system(size: 20))
-                                Text("Simple, daily habits")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.black)
-                            }
-                            .frame(maxWidth: .infinity)
-
-                            // Description with blue card background
-                            ZStack {
-                                // Blue card behind text
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(hex: "7BA4F4").opacity(0.15))
-
-                                Text("Remi helps your parents stay on track with gentle text reminders they already know how to use — no apps, no learning curve, just consistency.")
-                                    .font(.system(size: 15, weight: .regular))
-                                    .foregroundColor(.black)
-                                    .lineSpacing(4)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(16)
-                            }
                         }
                         .padding(20)
                         .background(Color.white)
                         .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
                         .opacity(showContent ? 1 : 0)
                         .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
@@ -2911,8 +3105,187 @@ struct PersonalizedPlanView: View {
                         Spacer()
                             .frame(height: 20)
 
-                        // First benefit section: Feel secure about the little things
-                        VStack(spacing: 16) {
+                        // Horizontal gallery carousel (full width, edge to edge)
+                        HorizontalGalleryCarousel()
+                            .frame(height: 100)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.25), value: showContent)
+
+                        Spacer()
+                            .frame(height: 24)
+
+                        // Title and subtitle
+                        VStack(spacing: 8) {
+                            Text("Become Relaxed with Remi")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+
+                            Text("Easy. Simple. Frictionless.")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.3), value: showContent)
+
+                        Spacer()
+                            .frame(height: 16)
+
+                        // Benefit capsules - 3 rows (2-3-2 layout)
+                        VStack(spacing: 8) {
+                            // Row 1: 2 capsules (longer texts)
+                            HStack(spacing: 6) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "bell.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 0))
+                                    Text("Consistent Reminders")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 0), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "heart.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 1))
+                                    Text("Improved Longevity")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 1), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+                            }
+
+                            // Row 2: 3 capsules (shorter texts)
+                            HStack(spacing: 6) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "leaf.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 2))
+                                    Text("Reduce Stress")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 2), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "iphone.slash")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 3))
+                                    Text("No App Needed")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 3), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "photo.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 4))
+                                    Text("Lasting Memories")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 4), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+                            }
+
+                            // Row 3: 2 capsules (longer texts)
+                            HStack(spacing: 6) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 5))
+                                    Text("Improved Adherence")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 5), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "message.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(QuizPastelColors.color(for: 6))
+                                    Text("Simple Text System")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.black)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.white)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(QuizPastelColors.color(for: 6), lineWidth: 2)
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+                            }
+                        }
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.35), value: showContent)
+
+                        Spacer()
+                            .frame(height: 20)
+
+                        // First benefit section: Feel at ease
+                        VStack(spacing: 10) {
                             // Lottie animation
                             LottieView(animation: .named("Relax"))
                                 .playing(loopMode: .loop)
@@ -2921,7 +3294,7 @@ struct PersonalizedPlanView: View {
                                 .animation(.easeOut(duration: 0.4).delay(0.35), value: showContent)
 
                             // Title
-                            Text("Feel secure about the little things")
+                            Text("Feel at ease")
                                 .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(.black)
                                 .multilineTextAlignment(.center)
@@ -2931,38 +3304,11 @@ struct PersonalizedPlanView: View {
 
                             // Benefit points
                             VStack(alignment: .leading, spacing: 14) {
-                                // Point 1: Automated reminders
+                                // Point 1: Clinical backing (blue)
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.blue)
-                                            .frame(width: 24, height: 24)
-
-                                        Image(systemName: "clock.fill")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.white)
-                                    }
-
-                                    (Text("Automated reminders")
-                                        .fontWeight(.bold) +
-                                    Text(" keep habits ")
-                                        .fontWeight(.regular) +
-                                    Text("consistent")
-                                        .fontWeight(.bold) +
-                                    Text(" without effort")
-                                        .fontWeight(.regular))
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.black)
-                                        .fixedSize(horizontal: false, vertical: true)
-
-                                    Spacer()
-                                }
-
-                                // Point 2: Clinical backing
-                                HStack(alignment: .center, spacing: 10) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color.green)
+                                            .fill(QuizPastelColors.color(for: 0))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "checkmark.seal.fill")
@@ -2987,11 +3333,11 @@ struct PersonalizedPlanView: View {
                                     Spacer()
                                 }
 
-                                // Point 3: Know when unanswered
+                                // Point 2: Know when unanswered (green)
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.orange)
+                                            .fill(QuizPastelColors.color(for: 1))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "bell.fill")
@@ -3014,11 +3360,11 @@ struct PersonalizedPlanView: View {
                                     Spacer()
                                 }
 
-                                // Point 4: Simple text
+                                // Point 3: Simple text (purple)
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.purple)
+                                            .fill(QuizPastelColors.color(for: 2))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "message.fill")
@@ -3040,31 +3386,6 @@ struct PersonalizedPlanView: View {
 
                                     Spacer()
                                 }
-
-                                // Point 5: Reduce stress
-                                HStack(alignment: .center, spacing: 10) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color.pink)
-                                            .frame(width: 24, height: 24)
-
-                                        Image(systemName: "heart.fill")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.white)
-                                    }
-
-                                    (Text("Designed to ")
-                                        .fontWeight(.regular) +
-                                    Text("reduce stress")
-                                        .fontWeight(.bold) +
-                                    Text(", not add to it")
-                                        .fontWeight(.regular))
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.black)
-                                        .fixedSize(horizontal: false, vertical: true)
-
-                                    Spacer()
-                                }
                             }
                             .padding(.horizontal, OnboardingUI.horizontalPadding)
                             .opacity(showContent ? 1 : 0)
@@ -3076,56 +3397,36 @@ struct PersonalizedPlanView: View {
                             .frame(height: 20)
 
                         // Experts recommend card
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 8) {
-                                Text("🎩")
-                                    .font(.system(size: 20))
-                                Text("Experts recommend:")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.black)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                            // Card list for reminder strategies
-                            VStack(spacing: 8) {
-                                // Text reminders card
-                                HStack(spacing: 12) {
-                                    Text("💬")
-                                        .font(.system(size: 28))
-                                        .frame(width: 40, height: 40)
-
-                                    Text("Mostly text reminders")
-                                        .font(.system(size: 17, weight: .regular))
-                                        .foregroundColor(.black)
-
-                                    Spacer()
+                        VStack(alignment: .center, spacing: 12) {
+                            // White capsule with 5 yellow stars
+                            HStack(spacing: 4) {
+                                ForEach(0..<5, id: \.self) { _ in
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.yellow)
                                 }
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                                .background(Color(hex: "F5F5F7"))
-                                .cornerRadius(10)
-
-                                // Photo confirmations card
-                                HStack(spacing: 12) {
-                                    Text("📸")
-                                        .font(.system(size: 28))
-                                        .frame(width: 40, height: 40)
-
-                                    Text("Occasional photo confirmations")
-                                        .font(.system(size: 17, weight: .regular))
-                                        .foregroundColor(.black)
-
-                                    Spacer()
-                                }
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                                .background(Color(hex: "F5F5F7"))
-                                .cornerRadius(10)
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.white)
+                            .cornerRadius(20)
+                            .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+
+                            // Quote
+                            Text("'All this time my chronic stress was from the strain of my parents living far away. Getting photos everyday has eased this strain for me so much.'")
+                                .font(.system(size: 20, weight: .regular).italic())
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+
+                            // Author
+                            Text("Sarah B")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
                         }
                         .padding(20)
                         .background(Color.white)
                         .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
                         .opacity(showContent ? 1 : 0)
                         .animation(.easeOut(duration: 0.4).delay(0.55), value: showContent)
@@ -3157,7 +3458,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.green)
+                                            .fill(Color(hex: "7B8FD4"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "heart.fill")
@@ -3184,7 +3485,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.blue)
+                                            .fill(Color(hex: "6B7FC4"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "checkmark.circle.fill")
@@ -3209,7 +3510,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.purple)
+                                            .fill(Color(hex: "5B6FB4"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "chart.line.uptrend.xyaxis")
@@ -3232,7 +3533,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.orange)
+                                            .fill(Color(hex: "8B9FE4"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "figure.2.and.child.holdinghands")
@@ -3259,7 +3560,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.pink)
+                                            .fill(Color(hex: "9BAFE4"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "sparkles")
@@ -3289,10 +3590,48 @@ struct PersonalizedPlanView: View {
                         .padding(.vertical, 20)
 
                         Spacer()
-                            .frame(height: 32)
+                            .frame(height: 20)
+
+                        // Second quote card
+                        VStack(alignment: .center, spacing: 12) {
+                            // White capsule with 5 yellow stars
+                            HStack(spacing: 4) {
+                                ForEach(0..<5, id: \.self) { _ in
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.yellow)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.white)
+                            .cornerRadius(20)
+                            .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+
+                            // Quote
+                            Text("'Long daily calls with my grandpa was hindering my ability to stay on track with work. I now get daily meal updates from him and I don't feel like i'm overbearing or nagging.'")
+                                .font(.system(size: 20, weight: .regular).italic())
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+
+                            // Author
+                            Text("Jaqueline M")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(20)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                        .padding(.horizontal, OnboardingUI.horizontalPadding)
+                        .opacity(showContent ? 1 : 0)
+                        .animation(.easeOut(duration: 0.4).delay(0.6), value: showContent)
+
+                        Spacer()
+                            .frame(height: 20)
 
                         // White container card for personalized plan
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .center, spacing: 16) {
                             // Section header
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 8) {
@@ -3308,31 +3647,36 @@ struct PersonalizedPlanView: View {
                                     .font(.system(size: 14, weight: .regular))
                                     .foregroundColor(.black)
                             }
+                            .frame(maxWidth: .infinity)
 
-                            // Card list for selected habits
-                            VStack(spacing: 8) {
+                            // Card list for selected habits as capsules
+                            VStack(spacing: 10) {
                                 ForEach(Array(habitsToDisplay.enumerated()), id: \.offset) { index, habit in
-                                    HStack(spacing: 12) {
+                                    HStack(spacing: 8) {
                                         Text(habit.emoji)
-                                            .font(.system(size: 28))
-                                            .frame(width: 40, height: 40)
+                                            .font(.system(size: 18))
 
                                         Text(habit.name)
-                                            .font(.system(size: 17, weight: .regular))
+                                            .font(.system(size: 13, weight: .medium))
                                             .foregroundColor(.black)
-
-                                        Spacer()
                                     }
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 16)
-                                    .background(Color(hex: "F5F5F7"))
-                                    .cornerRadius(10)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .background(Color.white)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .stroke(QuizPastelColors.color(for: index), lineWidth: 2)
+                                    )
+                                    .cornerRadius(20)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
                                 }
                             }
+                            .frame(maxWidth: .infinity)
                         }
                         .padding(20)
                         .background(Color.white)
                         .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
                         .padding(.horizontal, OnboardingUI.horizontalPadding)
                         .opacity(showContent ? 1 : 0)
                         .animation(.easeOut(duration: 0.4).delay(0.65), value: showContent)
@@ -3364,7 +3708,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "6BB6D6"))
+                                            .fill(Color(hex: "4CAF50"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "chart.line.uptrend.xyaxis")
@@ -3389,7 +3733,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.green)
+                                            .fill(Color(hex: "FFC107"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "checkmark.seal.fill")
@@ -3414,7 +3758,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.purple)
+                                            .fill(Color.black)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "message.fill")
@@ -3439,7 +3783,7 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.orange)
+                                            .fill(Color(hex: "66BB6A"))
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "star.fill")
@@ -3452,31 +3796,6 @@ struct PersonalizedPlanView: View {
                                     Text("long-term success")
                                         .fontWeight(.bold) +
                                     Text(" through consistent check-ins")
-                                        .fontWeight(.regular))
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.black)
-                                        .fixedSize(horizontal: false, vertical: true)
-
-                                    Spacer()
-                                }
-
-                                // Point 5: Real-world results
-                                HStack(alignment: .center, spacing: 10) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color.pink)
-                                            .frame(width: 24, height: 24)
-
-                                        Image(systemName: "person.2.fill")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.white)
-                                    }
-
-                                    (Text("Trusted by ")
-                                        .fontWeight(.regular) +
-                                    Text("thousands of families")
-                                        .fontWeight(.bold) +
-                                    Text(" nationwide")
                                         .fontWeight(.regular))
                                         .font(.system(size: 15))
                                         .foregroundColor(.black)
@@ -3612,10 +3931,32 @@ struct PersonalizedPlanView: View {
                     action: {
                         viewModel.nextStep()
                     },
-                    buttonText: "Save my setup"
+                    buttonText: "Start Reminding \(lovedOneName)"
                 )
                 .opacity(showContent ? 1 : 0)
                 .animation(.easeOut(duration: 0.3).delay(0.75), value: showContent)
+
+                // Payment info
+                HStack(spacing: 16) {
+                    HStack(spacing: 4) {
+                        Text("✅")
+                            .font(.system(size: 12))
+                        Text("Cancel Anytime")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+
+                    HStack(spacing: 4) {
+                        Text("🩵")
+                            .font(.system(size: 12))
+                        Text("Stay Connected")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.black)
+                    }
+                }
+                .padding(.top, 2)
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeOut(duration: 0.3).delay(0.8), value: showContent)
             }
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -3624,7 +3965,6 @@ struct PersonalizedPlanView: View {
             }
         }
     }
-
 }
 
 // MARK: - Step 7: Save Your Progress (Auth Gate)
@@ -3745,7 +4085,6 @@ struct PlanReadyTeaserView: View {
                                 .foregroundColor(.black)
                             Text("customized plan!")
                                 .foregroundColor(Color(hex: "0E9883"))
-                                .shadow(color: Color(hex: "0E9883").opacity(0.2), radius: 6, x: 0, y: 2)
                         }
                         .font(.system(size: 32, weight: .bold))
                         .tracking(-1.0)
