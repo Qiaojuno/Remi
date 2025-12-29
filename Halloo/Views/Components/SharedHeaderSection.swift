@@ -170,8 +170,6 @@ struct SettingsView: View {
     @State private var showingSignOutConfirmation = false
     @State private var showingNotifications = false
     @State private var showingSubscription = false
-    @State private var showingFAQs = false
-    @State private var showingFeedback = false
     @State private var showingPrivacyPolicy = false
     @State private var showingTerms = false
 
@@ -190,12 +188,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingSubscription) {
                 CustomerCenterView()
-            }
-            .fullScreenCoverNoAnimation(isPresented: $showingFAQs) {
-                FAQsView()
-            }
-            .fullScreenCoverNoAnimation(isPresented: $showingFeedback) {
-                FeedbackView()
             }
             .fullScreenCoverNoAnimation(isPresented: $showingPrivacyPolicy) {
                 LegalDocumentView(documentType: .privacy)
@@ -261,26 +253,6 @@ struct SettingsView: View {
                 transaction.disablesAnimations = true
                 withTransaction(transaction) {
                     showingSubscription = true
-                }
-            }
-
-            Divider().background(Color(hex: "E0E0E0"))
-
-            settingsListItem(icon: "questionmark.circle", title: "FAQs", showChevron: true) {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    showingFAQs = true
-                }
-            }
-
-            Divider().background(Color(hex: "E0E0E0"))
-
-            settingsListItem(icon: "bubble.left", title: "Give us feedback", showChevron: true) {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    showingFeedback = true
                 }
             }
 

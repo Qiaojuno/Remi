@@ -1752,6 +1752,13 @@ async function sendPushNotification(userId, notification, data = {}) {
     }
 
     const userData = userDoc.data();
+
+    // Check if user has disabled push notifications
+    if (userData.pushNotificationsEnabled === false) {
+      console.log(`⏭️ Push notifications disabled for user ${userId}, skipping`);
+      return { success: false, error: 'Push notifications disabled by user' };
+    }
+
     const fcmToken = userData.fcmToken;
 
     if (!fcmToken) {

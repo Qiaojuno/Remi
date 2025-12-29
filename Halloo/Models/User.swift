@@ -31,6 +31,11 @@ struct User: Codable, Identifiable, Hashable {
     /// End of current SMS quota period (quota resets after this date)
     var smsQuotaPeriodEnd: Date
 
+    // MARK: - Push Notification Preferences
+    /// Whether push notifications are enabled for no-reply alerts
+    /// When false, Cloud Functions will skip sending FCM push notifications
+    var pushNotificationsEnabled: Bool
+
     /// ✅ ARCHITECTURE: Subscription managed by RevenueCat (not app-side)
     /// - subscriptionStatus: Deprecated (kept for backward compatibility only)
     /// - trialEndDate: Deprecated (RevenueCat handles trials via product config)
@@ -51,7 +56,8 @@ struct User: Codable, Identifiable, Hashable {
         smsQuotaLimit: Int = 50,
         smsQuotaUsed: Int = 0,
         smsQuotaPeriodStart: Date = Date(),
-        smsQuotaPeriodEnd: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+        smsQuotaPeriodEnd: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date(),
+        pushNotificationsEnabled: Bool = true
     ) {
         self.id = id
         self.email = email
@@ -69,6 +75,7 @@ struct User: Codable, Identifiable, Hashable {
         self.smsQuotaUsed = smsQuotaUsed
         self.smsQuotaPeriodStart = smsQuotaPeriodStart
         self.smsQuotaPeriodEnd = smsQuotaPeriodEnd
+        self.pushNotificationsEnabled = pushNotificationsEnabled
     }
 
     // MARK: - Custom Codable Implementation with Diagnostic Logging
@@ -78,6 +85,7 @@ struct User: Codable, Identifiable, Hashable {
         case subscriptionStatus, trialEndDate, quizAnswers
         case profileCount, taskCount, updatedAt, lastSyncTimestamp
         case smsQuotaLimit, smsQuotaUsed, smsQuotaPeriodStart, smsQuotaPeriodEnd
+        case pushNotificationsEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -146,6 +154,9 @@ struct User: Codable, Identifiable, Hashable {
             smsQuotaPeriodEnd = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
         }
 
+        // Push notification preference (defaults to true for backward compatibility)
+        pushNotificationsEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .pushNotificationsEnabled)) ?? true
+
     }
 
     func encode(to encoder: Encoder) throws {
@@ -168,6 +179,7 @@ struct User: Codable, Identifiable, Hashable {
         try container.encode(smsQuotaUsed, forKey: .smsQuotaUsed)
         try container.encode(smsQuotaPeriodStart, forKey: .smsQuotaPeriodStart)
         try container.encode(smsQuotaPeriodEnd, forKey: .smsQuotaPeriodEnd)
+        try container.encode(pushNotificationsEnabled, forKey: .pushNotificationsEnabled)
     }
 }
 

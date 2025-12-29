@@ -1,13 +1,16 @@
 import SwiftUI
 import SuperwallKit
+import FirebaseFirestore
+import FirebaseAuth
 
 // MARK: - Notifications Settings View
 struct NotificationsSettingsView: View {
     @Environment(\.dismissWithoutAnimation) private var dismissWithoutAnimation
-    @State private var pushNotificationsEnabled = true
-    @State private var smsRemindersEnabled = true
-    @State private var taskRemindersEnabled = true
-    @State private var photoResponsesEnabled = true
+    @EnvironmentObject private var appState: AppState
+
+    @State private var noReplyAlertsEnabled = true
+    @State private var isLoading = true
+    @State private var isSaving = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,65 +20,60 @@ struct NotificationsSettingsView: View {
                     HapticFeedback.light()
                     dismissWithoutAnimation?()
                 }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(.black)
-                    }
-                    .padding(.leading, 20)
-
-                    Spacer()
-
-                    Text("Notifications")
-                        .font(.custom("Poppins-Medium", size: 20))
-                        .foregroundColor(.black)
-
-                    Spacer()
-
-                    // Invisible spacer for centering
                     Image(systemName: "chevron.left")
                         .font(.system(size: 20, weight: .medium))
-                        .opacity(0)
-                        .padding(.trailing, 20)
+                        .foregroundColor(.black)
                 }
-                .frame(height: 60)
-                .background(Color(hex: "f9f9f9"))
+                .padding(.leading, 20)
 
-                ScrollView {
+                Spacer()
+
+                Text("Notifications")
+                    .font(.custom("Poppins-Medium", size: 20))
+                    .foregroundColor(.black)
+
+                Spacer()
+
+                // Invisible spacer for centering
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .medium))
+                    .opacity(0)
+                    .padding(.trailing, 20)
+            }
+            .frame(height: 60)
+            .background(Color(hex: "f9f9f9"))
+
+            ScrollView {
                 VStack(spacing: 20) {
-                    // Notification toggles
+                    // Single notification toggle
                     VStack(spacing: 0) {
-                        toggleItem(
-                            title: "Push Notifications",
-                            subtitle: "App notifications for task updates",
-                            isOn: $pushNotificationsEnabled
-                        )
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("No-Reply Alerts")
+                                    .font(.custom("Poppins-Regular", size: 15))
+                                    .foregroundColor(.black)
 
-                        Divider()
-                            .padding(.leading, 16)
+                                Text("Get notified when loved ones don't respond within 30 minutes")
+                                    .font(.custom("Poppins-Regular", size: 13))
+                                    .foregroundColor(Color(hex: "7A7A7A"))
+                            }
 
-                        toggleItem(
-                            title: "SMS Reminders",
-                            subtitle: "Send SMS to family members",
-                            isOn: $smsRemindersEnabled
-                        )
+                            Spacer()
 
-                        Divider()
-                            .padding(.leading, 16)
-
-                        toggleItem(
-                            title: "Task Reminders",
-                            subtitle: "Remind me to check on habits",
-                            isOn: $taskRemindersEnabled
-                        )
-
-                        Divider()
-                            .padding(.leading, 16)
-
-                        toggleItem(
-                            title: "Photo Response Alerts",
-                            subtitle: "When loved ones send photos",
-                            isOn: $photoResponsesEnabled
-                        )
+                            if isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            } else {
+                                Toggle("", isOn: $noReplyAlertsEnabled)
+                                    .labelsHidden()
+                                    .disabled(isSaving)
+                                    .onChange(of: noReplyAlertsEnabled) { _, newValue in
+                                        savePreference(enabled: newValue)
+                                    }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
                     }
                     .background(Color.white)
                     .cornerRadius(12)
@@ -83,7 +81,7 @@ struct NotificationsSettingsView: View {
                     .padding(.top, 20)
 
                     // Info text
-                    Text("You'll receive notifications when your loved ones respond to reminders, complete tasks, or when it's time to send a new reminder.")
+                    Text("When enabled, you'll receive a push notification if your loved one hasn't responded to a reminder within 30 minutes.")
                         .font(.custom("Poppins-Regular", size: 13))
                         .foregroundColor(Color(hex: "7A7A7A"))
                         .padding(.horizontal, 30)
@@ -91,27 +89,59 @@ struct NotificationsSettingsView: View {
             }
         }
         .background(Color(hex: "f9f9f9"))
+        .onAppear {
+            loadPreference()
+        }
     }
 
-    private func toggleItem(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.custom("Poppins-Regular", size: 15))
-                    .foregroundColor(.black)
+    // MARK: - Firestore Operations
 
-                Text(subtitle)
-                    .font(.custom("Poppins-Regular", size: 13))
-                    .foregroundColor(Color(hex: "7A7A7A"))
-            }
-
-            Spacer()
-
-            Toggle("", isOn: isOn)
-                .labelsHidden()
+    private func loadPreference() {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            isLoading = false
+            return
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+
+        Firestore.firestore()
+            .collection("users")
+            .document(userId)
+            .getDocument { snapshot, error in
+                DispatchQueue.main.async {
+                    if let data = snapshot?.data(),
+                       let enabled = data["pushNotificationsEnabled"] as? Bool {
+                        noReplyAlertsEnabled = enabled
+                    } else {
+                        // Default to true if field doesn't exist
+                        noReplyAlertsEnabled = true
+                    }
+                    isLoading = false
+                }
+            }
+    }
+
+    private func savePreference(enabled: Bool) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+
+        isSaving = true
+
+        Firestore.firestore()
+            .collection("users")
+            .document(userId)
+            .updateData([
+                "pushNotificationsEnabled": enabled,
+                "updatedAt": FieldValue.serverTimestamp()
+            ]) { error in
+                DispatchQueue.main.async {
+                    isSaving = false
+                    if let error = error {
+                        print("❌ Failed to save push notification preference: \(error.localizedDescription)")
+                        // Revert toggle on failure
+                        noReplyAlertsEnabled = !enabled
+                    } else {
+                        print("✅ Push notification preference saved: \(enabled)")
+                    }
+                }
+            }
     }
 }
 
