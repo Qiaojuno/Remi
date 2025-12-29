@@ -557,8 +557,15 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             // Step 2: Check permissions
             let userId = try checkCreationPermissions()
 
-            // Step 3: Generate profile ID
-            let e164Phone = phoneNumber.e164PhoneNumber
+            // Step 3: Validate and generate profile ID
+            guard let e164Phone = phoneNumber.validatedE164PhoneNumber,
+                  e164Phone.isValidUSPhone else {
+                await MainActor.run {
+                    errorMessage = "Please enter a valid US phone number"
+                    isLoading = false
+                }
+                return
+            }
             let profileId = IDGenerator.profileID(phoneNumber: e164Phone)
 
             // Step 4: Upload photo (if provided)
@@ -710,7 +717,12 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         errorMessage = nil
 
         do {
-            let e164Phone = phoneNumber.e164PhoneNumber
+            guard let e164Phone = phoneNumber.validatedE164PhoneNumber,
+                  e164Phone.isValidUSPhone else {
+                errorMessage = "Please enter a valid US phone number"
+                isLoading = false
+                return
+            }
             let phoneChanged = e164Phone != profile.phoneNumber
 
             let updatedProfile = ElderlyProfile(
@@ -1169,7 +1181,8 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
     private func handleStopKeyword(for profileId: String, response: SMSResponse) {
         // Check if response contains STOP keywords
         let upperMessage = response.textResponse?.uppercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let stopKeywords = ["STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPALL", "REVOKE", "OPTOUT"]
+        // Matches Twilio Advanced Opt-Out config and Cloud Function
+        let stopKeywords = ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "OPTOUT", "REVOKE"]
 
         guard stopKeywords.contains(upperMessage) else { return }
 
@@ -1527,7 +1540,11 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             return
         }
 
-        let e164Phone = phoneNumber.e164PhoneNumber
+        guard let e164Phone = phoneNumber.validatedE164PhoneNumber,
+              e164Phone.isValidUSPhone else {
+            errorMessage = "Please enter a valid US phone number"
+            return
+        }
 
         // Create profile object but don't persist yet
         let profile = ElderlyProfile(

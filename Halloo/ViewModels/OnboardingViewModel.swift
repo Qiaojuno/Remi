@@ -1146,6 +1146,34 @@ enum OnboardingStep: String, CaseIterable {
     }
 }
 
+// MARK: - Computed Properties for Quiz Personalization
+
+extension OnboardingViewModel {
+    /// Returns the loved one's name for personalization, with intelligent fallback
+    /// - Parameter defaultValue: Fallback if name not set (default: "them")
+    /// - Returns: Name or fallback value
+    func recipientName(default defaultValue: String = "them") -> String {
+        if let name = userAnswers["loved_one_name"], !name.isEmpty {
+            return name
+        }
+        return defaultValue
+    }
+
+    /// Returns relationship-based fallback (e.g., "Mom", "Dad") if name not available
+    var recipientNameWithRelationship: String {
+        if let name = userAnswers["loved_one_name"], !name.isEmpty {
+            return name
+        }
+
+        let relationship = userAnswers["who_to_help"] ?? ""
+        if relationship.contains("Mom") { return "Mom" }
+        if relationship.contains("Dad") { return "Dad" }
+        if relationship.contains("Both") { return "them" }
+
+        return "them"
+    }
+}
+
 struct QuizQuestion {
     let id: String
     var question: String

@@ -72,6 +72,21 @@ extension String {
         return phonePredicate.evaluate(with: self)
     }
 
+    /// Validates and converts phone number to E.164 format
+    /// Returns nil if the result is not valid E.164
+    /// Use this for safe phone number conversion before Twilio operations
+    var validatedE164PhoneNumber: String? {
+        let e164 = self.e164PhoneNumber
+        return e164.isValidE164PhoneNumber ? e164 : nil
+    }
+
+    /// Validates if phone number can be converted to valid E.164 US format
+    /// Specifically for Twilio US-only SMS (must be +1XXXXXXXXXX, 12 chars)
+    var isValidUSPhone: Bool {
+        let e164 = self.e164PhoneNumber
+        return e164.count == 12 && e164.hasPrefix("+1")
+    }
+
     /// E.164 format phone number for Twilio SMS (e.g., +17788143739)
     ///
     /// Converts any phone number format to E.164 standard required by Twilio.

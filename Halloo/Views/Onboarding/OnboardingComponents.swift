@@ -17,11 +17,22 @@ import SwiftUI
 
 /// Simple constants for onboarding UI - avoids magic numbers
 enum OnboardingUI {
-    // Colors
+    // Background Colors
     static let backgroundColor = Color(hex: "f9f9f9")
     static let gradientColor = Color(hex: "B3B3B3")
     static let successGreen = Color(hex: "228B22")
     static let empathyBreakBackground = Color(hex: "E8F5E9")  // Sage green for emotional reset
+
+    // SMS Bubble Colors (iOS standard)
+    static let smsOutgoingBlue = Color(hex: "007AFF")
+    static let smsIncomingGray = Color(hex: "E5E5EA")
+
+    // Confirmation/Success Colors
+    static let confirmationGreen = Color(hex: "10B981")
+    static let confirmationGreenLight = Color(hex: "34D399")
+
+    // Profile Colors
+    static let profileLightBlue = Color(hex: "B9E3FF")
 
     // Spacing
     static let horizontalPadding: CGFloat = 24
@@ -480,6 +491,109 @@ struct AuthButtonsView: View {
                     .padding(.top, 4)
             }
         }
+    }
+}
+
+// MARK: - Habit Capsule Component
+
+/// Reusable habit capsule with emoji, name, and pastel border
+/// Used in Step3bView and PersonalizedPlanView to display selected habits
+struct HabitCapsule: View {
+    let emoji: String
+    let name: String
+    let colorIndex: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(emoji)
+                .font(.system(size: 14))
+            Text(name)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.black)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(QuizPastelColors.color(for: colorIndex), lineWidth: 2)
+        )
+        .cornerRadius(20)
+        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+    }
+}
+
+/// Auto-layout grid for habit capsules (2 per row)
+/// Eliminates duplicated row layout code across quiz steps
+struct HabitCapsuleGrid: View {
+    let habits: [(name: String, emoji: String)]
+    private let columns = 2
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ForEach(0..<rowCount, id: \.self) { rowIndex in
+                HStack(spacing: 8) {
+                    ForEach(habitsForRow(rowIndex).indices, id: \.self) { localIndex in
+                        let globalIndex = (rowIndex * columns) + localIndex
+                        let habit = habitsForRow(rowIndex)[localIndex]
+                        HabitCapsule(
+                            emoji: habit.emoji,
+                            name: habit.name,
+                            colorIndex: globalIndex
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private var rowCount: Int {
+        (habits.count + columns - 1) / columns
+    }
+
+    private func habitsForRow(_ row: Int) -> [(name: String, emoji: String)] {
+        let start = row * columns
+        let end = min(start + columns, habits.count)
+        guard start < habits.count else { return [] }
+        return Array(habits[start..<end])
+    }
+}
+
+// MARK: - Fade-In Animation Modifier
+
+/// Auto-applies fade-in animation with configurable delay
+/// Replaces the repetitive showContent pattern across quiz steps
+struct FadeInOnAppear: ViewModifier {
+    let delay: Double
+    let duration: Double
+
+    @State private var isVisible = false
+
+    init(delay: Double = 0.1, duration: Double = 0.4) {
+        self.delay = delay
+        self.duration = duration
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .animation(.easeOut(duration: duration), value: isVisible)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    isVisible = true
+                }
+            }
+    }
+}
+
+extension View {
+    /// Applies fade-in animation on appear
+    /// - Parameters:
+    ///   - delay: Delay before animation starts (default 0.1s)
+    ///   - duration: Animation duration (default 0.4s)
+    func fadeInOnAppear(delay: Double = 0.1, duration: Double = 0.4) -> some View {
+        self.modifier(FadeInOnAppear(delay: delay, duration: duration))
     }
 }
 

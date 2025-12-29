@@ -444,9 +444,9 @@ exports.twilioWebhook = onRequest(
       return;
     }
 
-    // Check for STOP keywords (opt-out)
+    // Check for STOP keywords (opt-out) - matches Twilio Advanced Opt-Out config
     const upperMessage = messageBody.toUpperCase().trim();
-    const stopKeywords = ['STOP', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'STOPALL'];
+    const stopKeywords = ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'OPTOUT', 'REVOKE'];
 
     if (stopKeywords.includes(upperMessage)) {
       // Update profile to opt-out
@@ -455,6 +455,41 @@ exports.twilioWebhook = onRequest(
         optOutDate: admin.firestore.FieldValue.serverTimestamp(),
         optOutMethod: 'STOP_KEYWORD'
       });
+
+      console.log(`🛑 Profile ${profileDoc.id} opted out via ${upperMessage}`);
+      res.status(200).send('OK');
+      return;
+    }
+
+    // Check for HELP keyword - send help message
+    if (upperMessage === 'HELP') {
+      const twilioClient = twilio(
+        twilioAccountSid.value(),
+        twilioAuthToken.value()
+      );
+
+      await twilioClient.messages.create({
+        body: 'Remi sends daily care reminders from your family. Msg frequency: up to 5 msgs/day. Msg&Data Rates May Apply. Reply STOP to unsubscribe. Terms: https://remi-ios-9ad1c.web.app/terms.html',
+        from: toPhone,
+        to: fromPhone
+      });
+
+      console.log(`ℹ️ HELP message sent to ${fromPhone}`);
+      res.status(200).send('OK');
+      return;
+    }
+
+    // Check for START keyword (re-subscribe after opt-out)
+    if (upperMessage === 'START' || upperMessage === 'UNSTOP') {
+      await profileDoc.ref.update({
+        smsOptedOut: false,
+        optOutDate: null,
+        optOutMethod: null
+      });
+
+      console.log(`✅ Profile ${profileDoc.id} re-subscribed via ${upperMessage}`);
+      res.status(200).send('OK');
+      return;
     }
 
     // Store the incoming message

@@ -27,7 +27,7 @@ struct ElderlyProfile: Codable, Identifiable, Hashable {
     var optOutMethod: String?
 
     // MARK: - Rate Limiting (Safety Protection)
-    /// Maximum SMS allowed per day for this profile (default: 10)
+    /// Maximum SMS allowed per day for this profile (default: 5)
     var dailySMSLimit: Int
 
     /// Last date an SMS was sent to this profile
@@ -54,7 +54,7 @@ struct ElderlyProfile: Codable, Identifiable, Hashable {
         smsOptedOut: Bool = false,
         optOutDate: Date? = nil,
         optOutMethod: String? = nil,
-        dailySMSLimit: Int = 10,
+        dailySMSLimit: Int = 5,
         lastSMSDate: Date? = nil,
         dailySMSCount: Int = 0
     ) {
@@ -115,8 +115,8 @@ struct ElderlyProfile: Codable, Identifiable, Hashable {
         optOutDate = try? container.decodeIfPresent(Date.self, forKey: .optOutDate)
         optOutMethod = try? container.decodeIfPresent(String.self, forKey: .optOutMethod)
 
-        // Rate limiting fields (backward compatibility - default to 10/nil/0)
-        dailySMSLimit = (try? container.decodeIfPresent(Int.self, forKey: .dailySMSLimit)) ?? 10
+        // Rate limiting fields (backward compatibility - default to 5/nil/0)
+        dailySMSLimit = (try? container.decodeIfPresent(Int.self, forKey: .dailySMSLimit)) ?? 5
         lastSMSDate = try? container.decodeIfPresent(Date.self, forKey: .lastSMSDate)
         dailySMSCount = (try? container.decodeIfPresent(Int.self, forKey: .dailySMSCount)) ?? 0
     }

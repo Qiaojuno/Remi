@@ -289,7 +289,8 @@ class TwilioSMSService: SMSServiceProtocol {
 
         // Check for opt-out keywords
         let upperMessage = message.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let optOutKeywords = ["STOP", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "STOPALL", "REVOKE", "OPTOUT"]
+        // Matches Twilio Advanced Opt-Out config and Cloud Function
+        let optOutKeywords = ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "OPTOUT", "REVOKE"]
 
         // Analyze response sentiment
         let isPositive = upperMessage.contains("YES") ||

@@ -195,11 +195,6 @@ struct Step2View: View {
     @State private var selectedOption: String? = nil
     @State private var showContent = false
 
-    // Get recipient name for personalization
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "them"
-    }
-
     let options = [
         "🤗 Full Support",
         "📅 Daily Routine",
@@ -224,7 +219,7 @@ struct Step2View: View {
                 VStack(spacing: 32) {
                     // Header
                     VStack(spacing: 12) {
-                        Text("How much support does \(recipientName) need right now?")
+                        Text("How much support does \(viewModel.recipientName()) need right now?")
                             .font(.system(size: 32, weight: .bold))
                             .tracking(-1.0)
                             .foregroundColor(.black)
@@ -285,11 +280,6 @@ struct Step4CurrentRemindersView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var selectedReminders: Set<String> = []
     @State private var showContent = false
-
-    // Get recipient name for personalization
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "their"
-    }
 
     let reminderOptions = [
         ("Phone calendar/alarms", "📱"),
@@ -408,11 +398,6 @@ struct Step4aTechComfortView: View {
         "❌ Not tech-savvy at all"
     ]
 
-    // Get recipient name from quiz answers
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "they"
-    }
-
     // Check if selected option indicates low tech comfort
     private var isLowTechComfort: Bool {
         selectedComfort == "✨ Prefers simple solutions" || selectedComfort == "❌ Not tech-savvy at all"
@@ -429,7 +414,7 @@ struct Step4aTechComfortView: View {
 
                 VStack(spacing: 24) {
                     // Header
-                    Text("How does \(recipientName) feel about technology?")
+                    Text("How does \(viewModel.recipientName(default: "they")) feel about technology?")
                         .font(.system(size: 32, weight: .bold))
                         .tracking(-1.0)
                         .foregroundColor(.black)
@@ -465,7 +450,7 @@ struct Step4aTechComfortView: View {
                             .foregroundColor(OnboardingUI.successGreen)
                             .font(.system(size: 20))
 
-                        Text("That's exactly why we built Remi. \(recipientName) won't need to download anything — just simple text messages.")
+                        Text("That's exactly why we built Remi. \(viewModel.recipientName(default: "They")) won't need to download anything — just simple text messages.")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.black)
                             .fixedSize(horizontal: false, vertical: true)
@@ -658,10 +643,6 @@ struct EmpathyBreakView: View {
     @State private var showContent = false
     @State private var showButton = false  // Separate state for delayed button
 
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "your loved one"
-    }
-
     var body: some View {
         ZStack {
             // Sage green background for emotional reset (per research doc)
@@ -753,11 +734,6 @@ struct ReminderTimingView: View {
         "🤔 I'm not sure yet"
     ]
 
-    // Get recipient name from quiz answers
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "them"
-    }
-
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
@@ -769,7 +745,7 @@ struct ReminderTimingView: View {
 
                 VStack(spacing: 24) {
                     // Header
-                    Text("When would a gentle reminder help \(recipientName) most?")
+                    Text("When would a gentle reminder help \(viewModel.recipientName()) most?")
                         .font(.system(size: 32, weight: .bold))
                         .tracking(-1.0)
                         .foregroundColor(.black)
@@ -836,20 +812,6 @@ struct Step4View: View {
         ("Other", "✨")
     ]
 
-    // Use loved_one_name if available, otherwise fall back to relationship
-    private var recipientName: String {
-        if let name = viewModel.userAnswers["loved_one_name"], !name.isEmpty {
-            return name
-        }
-        let answer = viewModel.userAnswers["who_to_help"] ?? "them"
-        if answer.contains("Both") || answer.contains("Other") {
-            return "them"
-        }
-        if answer.contains("Mom") { return "Mom" }
-        if answer.contains("Dad") { return "Dad" }
-        return "them"
-    }
-
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
@@ -862,7 +824,7 @@ struct Step4View: View {
                 VStack(spacing: 24) {
                     // Header
                     VStack(spacing: 12) {
-                        Text("Let's design \(recipientName)'s healthy day.")
+                        Text("Let's design \(viewModel.recipientName())'s healthy day.")
                             .font(.system(size: 32, weight: .bold))
                             .tracking(-1.0)
                             .foregroundColor(.black)
@@ -936,10 +898,6 @@ struct ToneSelectionView: View {
     @State private var currentToneIndex: Int = 0
     @State private var showContent = false
 
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "Mom"
-    }
-
     // Colors for each tone option
     private let toneColors: [Color] = [
         Color(hex: "FFB5C5"),  // Warm - soft pink
@@ -960,7 +918,7 @@ struct ToneSelectionView: View {
 
     // Tone options: (label, key, message template, mock reply)
     private var toneOptions: [(label: String, key: String, message: String, reply: String)] {
-        let name = recipientName
+        let name = viewModel.recipientName(default: "Mom")
         return [
             ("Warm & Cheerful", "warm", "Hi \(name)! Hope you're having a lovely day. Time for your medication! 💊", "Thanks sweetie! Just took them 💕"),
             ("Polite & Respectful", "polite", "Good morning, \(name). This is a gentle reminder to take your medication.", "Thank you for the reminder. Done."),
@@ -1283,7 +1241,7 @@ struct Step3View: View {
                          Text("Memories")
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color(hex: "34D399"), Color(hex: "10B981")],
+                                    colors: [OnboardingUI.confirmationGreenLight, OnboardingUI.confirmationGreen],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -1358,6 +1316,10 @@ struct AutoScrollingGalleryCarousel: View {
         .realPhoto(imageName: "IMG_3746", hasCheck: false),
         .text(hasCheck: false),
         .realPhoto(imageName: "IMG_1376", hasCheck: true),
+        // Row 7
+        .realPhoto(imageName: "IMG_3760", hasCheck: true),
+        .realPhoto(imageName: "IMG_3761", hasCheck: false),
+        .text(hasCheck: true),
     ]
 
     private let columns = 3
@@ -1424,6 +1386,8 @@ struct HorizontalGalleryCarousel: View {
         .realPhoto(imageName: "Camping", hasCheck: false),
         .text(hasCheck: true),
         .realPhoto(imageName: "IMG_2498 2", hasCheck: true),
+        .realPhoto(imageName: "IMG_3760", hasCheck: true),
+        .realPhoto(imageName: "IMG_3761", hasCheck: false),
     ]
 
     private let itemSize: CGFloat = 85
@@ -1511,7 +1475,7 @@ struct TextMessageCell: View {
                             [(10, 1.5), (14, 1.5), (12, 1.5)]
                         ],
                         isOutgoing: true,
-                        backgroundColor: Color(hex: "007AFF"),
+                        backgroundColor: OnboardingUI.smsOutgoingBlue,
                         tailInset: 8
                     )
                 }
@@ -1524,7 +1488,7 @@ struct TextMessageCell: View {
                             [(13, 1.5), (15, 1.5), (10, 1.5)]
                         ],
                         isOutgoing: false,
-                        backgroundColor: Color(hex: "E5E5EA"),
+                        backgroundColor: OnboardingUI.smsIncomingGray,
                         tailInset: 8
                     )
                     Spacer()
@@ -1539,7 +1503,7 @@ struct TextMessageCell: View {
                         Spacer()
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(Color(hex: "10B981"))
+                            .foregroundColor(OnboardingUI.confirmationGreen)
                             .background(Circle().fill(Color.white).padding(2))
                     }
                     Spacer()
@@ -1572,7 +1536,7 @@ struct GalleryItemCell: View {
                         Spacer()
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(Color(hex: "10B981"))
+                            .foregroundColor(OnboardingUI.confirmationGreen)
                             .background(Circle().fill(Color.white).padding(2))
                     }
                     Spacer()
@@ -1612,7 +1576,7 @@ struct RealPhotoCell: View {
                         Spacer()
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(Color(hex: "10B981"))
+                            .foregroundColor(OnboardingUI.confirmationGreen)
                             .background(Circle().fill(Color.white).padding(2))
                     }
                     Spacer()
@@ -1628,10 +1592,6 @@ struct RealPhotoCell: View {
 struct Step3bView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
-
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "Mom"
-    }
 
     // Get selected habits with emojis
     private var selectedHabitsWithEmoji: [(name: String, emoji: String)] {
@@ -1669,16 +1629,16 @@ struct Step3bView: View {
                         // Outgoing message (blue, right aligned) - Remi's reminder
                         HStack {
                             Spacer(minLength: 60)
-                            Text("Hi \(recipientName)! 🌞 Time to take your morning walk\n\nText back when you're done — I'd love to hear how it went 💬")
+                            Text("Hi \(viewModel.recipientName(default: "Mom"))! 🌞 Time to take your morning walk\n\nText back when you're done — I'd love to hear how it went 💬")
                                 .font(.system(size: 16, weight: .regular))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                                 .background(
                                     BubbleWithTail(isOutgoing: true, cornerRadius: 16, tailSize: 12)
-                                        .fill(Color(hex: "007AFF"))
+                                        .fill(OnboardingUI.smsOutgoingBlue)
                                 )
-                                .shadow(color: Color(hex: "007AFF").opacity(0.4), radius: 16, x: 0, y: 6)
+                                .shadow(color: OnboardingUI.smsOutgoingBlue.opacity(0.4), radius: 16, x: 0, y: 6)
                                 .opacity(showContent ? 1 : 0)
                                 .offset(x: showContent ? 0 : 30)
                                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: showContent)
@@ -1693,9 +1653,9 @@ struct Step3bView: View {
                                 .padding(.vertical, 10)
                                 .background(
                                     BubbleWithTail(isOutgoing: false, cornerRadius: 16, tailSize: 12)
-                                        .fill(Color(hex: "E5E5EA"))
+                                        .fill(OnboardingUI.smsIncomingGray)
                                 )
-                                .shadow(color: Color(hex: "E5E5EA").opacity(0.5), radius: 16, x: 0, y: 6)
+                                .shadow(color: OnboardingUI.smsIncomingGray.opacity(0.5), radius: 16, x: 0, y: 6)
                                 .opacity(showContent ? 1 : 0)
                                 .offset(x: showContent ? 0 : -30)
                                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.5), value: showContent)
@@ -1720,80 +1680,9 @@ struct Step3bView: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        // Habit capsules - 2 per row layout
+                        // Habit capsules - 2 per row layout (using reusable component)
                         if !selectedHabitsWithEmoji.isEmpty {
-                            VStack(spacing: 8) {
-                                // Row 1: habits 0-1
-                                HStack(spacing: 8) {
-                                    ForEach(Array(selectedHabitsWithEmoji.prefix(2).enumerated()), id: \.offset) { index, habit in
-                                        HStack(spacing: 4) {
-                                            Text(habit.emoji)
-                                                .font(.system(size: 14))
-                                            Text(habit.name)
-                                                .font(.system(size: 13, weight: .medium))
-                                                .foregroundColor(.black)
-                                        }
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(Color.white)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 20)
-                                                .stroke(QuizPastelColors.color(for: index), lineWidth: 2)
-                                        )
-                                        .cornerRadius(20)
-                                        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-                                    }
-                                }
-
-                                // Row 2: habits 2-3
-                                if selectedHabitsWithEmoji.count > 2 {
-                                    HStack(spacing: 8) {
-                                        ForEach(Array(selectedHabitsWithEmoji.dropFirst(2).prefix(2).enumerated()), id: \.offset) { index, habit in
-                                            HStack(spacing: 4) {
-                                                Text(habit.emoji)
-                                                    .font(.system(size: 14))
-                                                Text(habit.name)
-                                                    .font(.system(size: 13, weight: .medium))
-                                                    .foregroundColor(.black)
-                                            }
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                            .background(Color.white)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 20)
-                                                    .stroke(QuizPastelColors.color(for: index + 2), lineWidth: 2)
-                                            )
-                                            .cornerRadius(20)
-                                            .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-                                        }
-                                    }
-                                }
-
-                                // Row 3: habits 4-5
-                                if selectedHabitsWithEmoji.count > 4 {
-                                    HStack(spacing: 8) {
-                                        ForEach(Array(selectedHabitsWithEmoji.dropFirst(4).prefix(2).enumerated()), id: \.offset) { index, habit in
-                                            HStack(spacing: 4) {
-                                                Text(habit.emoji)
-                                                    .font(.system(size: 14))
-                                                Text(habit.name)
-                                                    .font(.system(size: 13, weight: .medium))
-                                                    .foregroundColor(.black)
-                                            }
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                            .background(Color.white)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 20)
-                                                    .stroke(QuizPastelColors.color(for: index + 4), lineWidth: 2)
-                                            )
-                                            .cornerRadius(20)
-                                            .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.top, 8)
+                            HabitCapsuleGrid(habits: selectedHabitsWithEmoji)
                         }
                     }
                 }
@@ -1834,10 +1723,6 @@ struct Step5View: View {
         "Staying connected even when far apart"
     ]
 
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "your loved one"
-    }
-
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
@@ -1858,7 +1743,7 @@ struct Step5View: View {
                             .opacity(showContent ? 1 : 0)
                             .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
 
-                        Text("What matters most to \(recipientName)?")
+                        Text("What matters most to \(viewModel.recipientName(default: "your loved one"))?")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -2297,7 +2182,7 @@ struct FreeTrialIntroView: View {
                 // Header section with identity-focused messaging
                 VStack(spacing: 12) {
                     // Main headline (identity transformation)
-                    Text("Be Present, Not the Manager")
+                    Text("We want you to try Remi for FREE")
                         .font(.system(size: 32, weight: .bold))
                         .tracking(-1.0)
                         .foregroundColor(.black)
@@ -2718,22 +2603,6 @@ struct PersonalizedPlanView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
 
-    // Helper to format recipient name
-    private var recipientName: String {
-        let answer = viewModel.userAnswers["who_to_help"] ?? "them"
-        if answer.contains("Both") {
-            return "your parents"
-        } else if answer.contains("Other") {
-            return "your loved one"
-        } else if answer.contains("Mom") {
-            return "Mom"
-        } else if answer.contains("Dad") {
-            return "Dad"
-        } else {
-            return "your loved one"
-        }
-    }
-
     // Helper to format selected moments
     private var selectedMomentsText: String {
         let moments = Array(viewModel.selectedMoments)
@@ -2906,7 +2775,7 @@ struct PersonalizedPlanView: View {
                                             if #available(iOS 15.0, *) {
                                                 Capsule().fill(.ultraThinMaterial)
                                             } else {
-                                                Capsule().fill(Color(hex: "E5E5EA"))
+                                                Capsule().fill(OnboardingUI.smsIncomingGray)
                                             }
                                         }
                                         .offset(y: -10) // Overlap behind the profile picture
@@ -2934,7 +2803,7 @@ struct PersonalizedPlanView: View {
                                             if #available(iOS 15.0, *) {
                                                 Capsule().fill(.ultraThinMaterial)
                                             } else {
-                                                Capsule().fill(Color(hex: "E5E5EA"))
+                                                Capsule().fill(OnboardingUI.smsIncomingGray)
                                             }
                                         }
 
@@ -2948,7 +2817,7 @@ struct PersonalizedPlanView: View {
                                                     .frame(width: 28, height: 28)
                                             } else {
                                                 Circle()
-                                                    .fill(Color(hex: "E5E5EA"))
+                                                    .fill(OnboardingUI.smsIncomingGray)
                                                     .frame(width: 28, height: 28)
                                             }
                                             Image(systemName: "info")
@@ -4053,11 +3922,6 @@ struct PlanReadyTeaserView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
 
-    // Get recipient name from quiz answers
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "your loved one"
-    }
-
     var body: some View {
         OnboardingStepContainer(
             progress: $viewModel.progress,
@@ -4179,11 +4043,6 @@ struct LoadingPlanView: View {
 
     private let hapticGenerator = UIImpactFeedbackGenerator(style: .light)
 
-    // Get recipient name from quiz answers
-    private var recipientName: String {
-        viewModel.userAnswers["loved_one_name"] ?? "your loved one"
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -4199,7 +4058,7 @@ struct LoadingPlanView: View {
                 Circle()
                     .trim(from: 0, to: progress)
                     .stroke(
-                        Color(hex: "007AFF"),
+                        OnboardingUI.smsOutgoingBlue,
                         style: StrokeStyle(lineWidth: 16, lineCap: .round)
                     )
                     .frame(width: 240, height: 240)
@@ -4209,9 +4068,9 @@ struct LoadingPlanView: View {
                 // Percentage text in center - always blue
                 Text("\(Int(progress * 100))%")
                     .font(.system(size: 56, weight: .bold))
-                    .foregroundColor(Color(hex: "007AFF"))
+                    .foregroundColor(OnboardingUI.smsOutgoingBlue)
             }
-            .shadow(color: Color(hex: "007AFF").opacity(0.4), radius: 16, x: 0, y: 6)
+            .shadow(color: OnboardingUI.smsOutgoingBlue.opacity(0.4), radius: 16, x: 0, y: 6)
             .padding(.bottom, 32)
 
             // Headline
@@ -4221,7 +4080,7 @@ struct LoadingPlanView: View {
                 .foregroundColor(.black)
                 .padding(.bottom, 4)
 
-            Text("for \(recipientName)")
+            Text("for \(viewModel.recipientName(default: "your loved one"))")
                 .font(.system(size: 28, weight: .bold))
                 .tracking(-1.0)
                 .foregroundColor(.black)
@@ -4242,7 +4101,7 @@ struct LoadingPlanView: View {
                     .foregroundColor(.black)
                     .padding(.bottom, 8)
 
-                LoadingCheckItem(text: "Reminder schedule for \(recipientName)", index: 0, showCheckmark: completedBullets.contains(0))
+                LoadingCheckItem(text: "Reminder schedule for \(viewModel.recipientName(default: "your loved one"))", index: 0, showCheckmark: completedBullets.contains(0))
                 LoadingCheckItem(text: "Best daily habits", index: 1, showCheckmark: completedBullets.contains(1))
                 LoadingCheckItem(text: "SMS message style", index: 2, showCheckmark: completedBullets.contains(2))
                 LoadingCheckItem(text: "Check-in frequency", index: 3, showCheckmark: completedBullets.contains(3))

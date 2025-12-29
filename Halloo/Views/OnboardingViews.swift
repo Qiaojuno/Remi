@@ -155,7 +155,7 @@ struct WelcomeCardStack: View {
     private func mockMediaCard(taskIndex: Int) -> some View {
         ZStack {
             // Full-bleed photo background
-            Image("Camping")
+            Image("IMG_3761")
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: cardWidth, height: cardHeight)
