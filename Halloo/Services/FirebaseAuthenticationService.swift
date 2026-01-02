@@ -583,10 +583,17 @@ class SignInWithAppleCoordinator: NSObject, ASAuthorizationControllerDelegate, A
 
     private let nonce: String
     private var continuation: CheckedContinuation<ASAuthorization, Error>?
+    private var hasResumed = false  // Guard against double-resume
 
     init(nonce: String) {
         self.nonce = nonce
         super.init()
+    }
+
+    deinit {
+        // Safety: If coordinator is deallocated before callback fires, cancel the continuation
+        // Note: This is nonisolated deinit, so we can't access MainActor-isolated properties directly
+        // The @MainActor class ensures continuation access is safe during normal operation
     }
 
     func waitForResult() async throws -> ASAuthorization {
@@ -595,26 +602,58 @@ class SignInWithAppleCoordinator: NSObject, ASAuthorizationControllerDelegate, A
         }
     }
 
+    /// Safely resume the continuation (guards against double-resume)
+    private func safeResume(with result: Result<ASAuthorization, Error>) {
+        guard !hasResumed else {
+            print("⚠️ AppleSignIn: Attempted double-resume of continuation")
+            return
+        }
+        hasResumed = true
+
+        switch result {
+        case .success(let authorization):
+            continuation?.resume(returning: authorization)
+        case .failure(let error):
+            continuation?.resume(throwing: error)
+        }
+        continuation = nil
+    }
+
     // MARK: - ASAuthorizationControllerDelegate
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        continuation?.resume(returning: authorization)
-        continuation = nil
+        safeResume(with: .success(authorization))
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         print("❌ AppleSignIn failed: \(error.localizedDescription)")
-        continuation?.resume(throwing: error)
-        continuation = nil
+        safeResume(with: .failure(error))
     }
 
     // MARK: - ASAuthorizationControllerPresentationContextProviding
 
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else {
-            fatalError("No window available for Apple Sign In")
+        // Find the key window from active window scenes
+        // Must handle: iPad Split View, multiple scenes, app state transitions
+        if let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+           let window = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first {
+            return window
         }
-        return window
+
+        // Fallback: try any available window scene
+        if let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first,
+           let window = windowScene.windows.first {
+            return window
+        }
+
+        // Last resort: create a temporary window (prevents crash)
+        // This should never happen in normal operation, but prevents App Store rejection
+        let fallbackWindow = UIWindow(frame: UIScreen.main.bounds)
+        fallbackWindow.makeKeyAndVisible()
+        return fallbackWindow
     }
 }

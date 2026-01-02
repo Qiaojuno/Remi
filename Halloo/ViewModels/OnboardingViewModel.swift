@@ -935,45 +935,51 @@ final class OnboardingViewModel: ObservableObject {
     // MARK: - Sign In Methods
     /// ✅ ARCHITECTURE: Authentication only - no navigation management
     /// ContentView will automatically react to authService.isAuthenticated changes
-    func signInWithApple() async {
+    /// Returns true if sign-in succeeded, false otherwise
+    func signInWithApple() async -> Bool {
         isLoading = true
         errorMessage = nil
 
         do {
             _ = try await authService.signInWithApple()
             // ✅ No navigation logic needed - ContentView reacts to authService.isAuthenticated
+            await MainActor.run {
+                isLoading = false
+            }
+            return true
 
         } catch {
             print("❌ [OnboardingVM] Apple Sign In failed: \(error.localizedDescription)")
             await MainActor.run {
                 errorMessage = error.localizedDescription
+                isLoading = false
                 logger.error("Apple Sign In failed: \(error.localizedDescription)")
             }
-        }
-
-        await MainActor.run {
-            isLoading = false
+            return false
         }
     }
 
-    func signInWithGoogle() async {
+    /// Returns true if sign-in succeeded, false otherwise
+    func signInWithGoogle() async -> Bool {
         isLoading = true
         errorMessage = nil
 
         do {
             _ = try await authService.signInWithGoogle()
             // ✅ No navigation logic needed - ContentView reacts to authService.isAuthenticated
+            await MainActor.run {
+                isLoading = false
+            }
+            return true
 
         } catch {
             print("❌ [OnboardingVM] Google Sign In failed: \(error.localizedDescription)")
             await MainActor.run {
                 errorMessage = error.localizedDescription
+                isLoading = false
                 logger.error("Google Sign In failed: \(error.localizedDescription)")
             }
-        }
-
-        await MainActor.run {
-            isLoading = false
+            return false
         }
     }
 }

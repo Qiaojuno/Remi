@@ -116,9 +116,12 @@ struct OnboardingContainerView: View {
                 ProfileSetupConfirmationView()
 
             case .preferences:
-                Text("Create Profile (TODO)")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(hex: "f9f9f9"))
+                // Profile creation happens in main app - complete onboarding
+                Color(hex: "f9f9f9")
+                    .ignoresSafeArea()
+                    .onAppear {
+                        viewModel.isComplete = true
+                    }
             }
         }
         .environmentObject(viewModel)

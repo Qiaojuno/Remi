@@ -411,13 +411,14 @@ struct OnboardingStepContainer<Content: View>: View {
 /// - Google button: White background with gray border, GoogleIcon asset
 /// - Both buttons use consistent 16pt semibold text, 12pt corner radius
 struct AuthButtonsView: View {
-    /// Async action to perform Apple Sign In (typically viewModel.signInWithApple)
-    let onAppleSignIn: () async -> Void
+    /// Async action to perform Apple Sign In. Returns true if successful.
+    let onAppleSignIn: () async -> Bool
 
-    /// Async action to perform Google Sign In (typically viewModel.signInWithGoogle)
-    let onGoogleSignIn: () async -> Void
+    /// Async action to perform Google Sign In. Returns true if successful.
+    let onGoogleSignIn: () async -> Bool
 
     /// Optional callback after successful authentication (e.g., navigate to next step)
+    /// Only called when authentication actually succeeds.
     /// If nil, relies on reactive navigation via authService.isAuthenticated
     var onAuthComplete: (() -> Void)? = nil
 
@@ -433,8 +434,10 @@ struct AuthButtonsView: View {
                 guard !isAuthenticating else { return }
                 _Concurrency.Task {
                     isAuthenticating = true
-                    await onAppleSignIn()
-                    onAuthComplete?()
+                    let success = await onAppleSignIn()
+                    if success {
+                        onAuthComplete?()
+                    }
                     isAuthenticating = false
                 }
             } label: {
@@ -457,8 +460,10 @@ struct AuthButtonsView: View {
                 guard !isAuthenticating else { return }
                 _Concurrency.Task {
                     isAuthenticating = true
-                    await onGoogleSignIn()
-                    onAuthComplete?()
+                    let success = await onGoogleSignIn()
+                    if success {
+                        onAuthComplete?()
+                    }
                     isAuthenticating = false
                 }
             } label: {
