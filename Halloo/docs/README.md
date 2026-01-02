@@ -303,11 +303,17 @@ grep -r "2025-10" docs/
 
 ---
 
-**Last updated:** 2025-11-18
+**Last updated:** 2025-12-28
 **Maintained by:** Claude Code
 **Project:** Halloo/Remi iOS App
 
-## Recent Updates (2025-11-18)
+## Recent Updates (2025-12-28)
+- ✅ **Push Notification Toggle:** Implemented Firestore-persisted toggle for no-reply alerts
+- ✅ **Settings Simplification:** Removed FAQs and Feedback, simplified to single notification toggle
+- ✅ **Cloud Function Update:** `sendPushNotification()` now checks `pushNotificationsEnabled` preference
+- ✅ **Onboarding Redesign:** All P0-P2 features complete (name input, tone selection, flow reorder, SMS preview)
+
+## Previous Updates (2025-11-18)
 - ✅ RevenueCat SDK integration (v5.48.0) - Complete subscription management
 - ✅ Superwall SDK integration (v4.7.0) - Advanced paywall presentation
 - ✅ SubscriptionManager utility - High-level subscription helpers

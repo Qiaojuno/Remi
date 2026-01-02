@@ -2182,7 +2182,7 @@ struct FreeTrialIntroView: View {
                 // Header section with identity-focused messaging
                 VStack(spacing: 12) {
                     // Main headline (identity transformation)
-                    Text("We want you to try Remi for FREE")
+                    Text("We want you to try\nRemi for FREE")
                         .font(.system(size: 32, weight: .bold))
                         .tracking(-1.0)
                         .foregroundColor(.black)
@@ -2602,6 +2602,11 @@ struct Step7View: View {
 struct PersonalizedPlanView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @State private var showContent = false
+    @State private var selectedResponseType: Int = 0  // 0 = Photo, 1 = Text
+    @State private var showIOSStyle: Bool = true  // Toggle between iOS (blue) and Android (green)
+
+    // Timer for alternating between iOS and Android styles in text mode
+    private let platformTimer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
 
     // Helper to format selected moments
     private var selectedMomentsText: String {
@@ -2650,6 +2655,14 @@ struct PersonalizedPlanView: View {
         }
     }
 
+    // Target date (66 days from today) formatted as "Mar 8, 2026"
+    private var targetDateString: String {
+        let targetDate = Calendar.current.date(byAdding: .day, value: 66, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: targetDate)
+    }
+
     // Helper to format reminder frequency from quiz
     private var frequencyText: String {
         let frequency = viewModel.userAnswers["reminder_frequency"] ?? ""
@@ -2684,9 +2697,8 @@ struct PersonalizedPlanView: View {
         viewModel.userAnswers["loved_one_name"] ?? "Mom"
     }
 
-    // Generate sample SMS message based on selected tone
-    // Matches the format used in TwilioSMSService.getTaskReminderMessage
-    private var sampleSMSMessage: String {
+    // Generate sample SMS message for PHOTO response based on selected tone
+    private var sampleSMSMessagePhoto: String {
         let tone = viewModel.userAnswers["remi_tone"] ?? "warm"
         let name = lovedOneName
 
@@ -2700,12 +2712,40 @@ struct PersonalizedPlanView: View {
         case "polite":
             return "Good day \(name)! A gentle reminder to \(habitAction)\n\nOnce you're finished, share a picture and a few words about it 💛"
         case "direct":
-            return "Hi \(name), Time to \(habitAction)\n\nReply DONE if you've finished."
+            return "Hi \(name), Time to \(habitAction)\n\nSend a photo when you're done."
         case "playful":
             return "Hey \(name), Just a little nudge to \(habitAction)\n\nSnap a photo and share how it went when you finish 📸💬"
         default:
+            return "Hi \(name)! Time to \(habitAction)\n\nSend a photo when you're done — I'd love to see 📸"
+        }
+    }
+
+    // Generate sample SMS message for TEXT response based on selected tone
+    private var sampleSMSMessageText: String {
+        let tone = viewModel.userAnswers["remi_tone"] ?? "warm"
+        let name = lovedOneName
+
+        // Get the first habit for the message
+        let habit = habitsToDisplay.first?.name ?? "Taking medication"
+        let habitAction = habit.lowercased().replacingOccurrences(of: "taking ", with: "take your ").replacingOccurrences(of: "going for a ", with: "go for a ").replacingOccurrences(of: "drinking ", with: "drink some ").replacingOccurrences(of: "sending a daily ", with: "send a ")
+
+        switch tone {
+        case "warm":
+            return "Hi \(name)! Hope you're doing well. Time to \(habitAction)\n\nText back a quick note when you're finished — I'd love to hear 💬"
+        case "polite":
+            return "Good day \(name)! A gentle reminder to \(habitAction)\n\nWhen you're done, send a little message to let me know 🌷"
+        case "direct":
+            return "Hi \(name), Time to \(habitAction)\n\nReply DONE when you've finished."
+        case "playful":
+            return "Hey \(name), Just a little nudge to \(habitAction)\n\nText me back when you're done! 💬"
+        default:
             return "Hi \(name)! Time to \(habitAction)\n\nYou can reply whenever you're done — I'm cheering you on 💛"
         }
+    }
+
+    // Returns the appropriate sample message based on selected response type
+    private var sampleSMSMessage: String {
+        selectedResponseType == 0 ? sampleSMSMessagePhoto : sampleSMSMessageText
     }
 
     var body: some View {
@@ -2725,25 +2765,119 @@ struct PersonalizedPlanView: View {
                         VStack(spacing: 12) {
                             // Checkmark icon
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 48))
+                                .font(.system(size: 20))
                                 .foregroundColor(.black)
                                 .opacity(showContent ? 1 : 0)
                                 .animation(.easeOut(duration: 0.4).delay(0.05), value: showContent)
 
-                            // Congrats text
-                            Text("Congrats")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.gray)
-                                .opacity(showContent ? 1 : 0)
-                                .animation(.easeOut(duration: 0.4).delay(0.07), value: showContent)
-
                             // Title
-                            Text("We've made you a\ncustom plan.")
+                            Text("Help \(viewModel.recipientName(default: "Them")) maintain their independence and happiness in 66 days")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.black)
                                 .multilineTextAlignment(.center)
                                 .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.05), value: showContent)
+
+                            // Subheading
+                            Text("\(viewModel.recipientName(default: "They").capitalized) will build a consistent routine by:")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                                .opacity(showContent ? 1 : 0)
                                 .animation(.easeOut(duration: 0.4).delay(0.1), value: showContent)
+
+                            // Date card (66 days from today)
+                            Text(targetDateString)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.white)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.black, lineWidth: 1.5)
+                                )
+                                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+                                .padding(.top, 16)
+                                .opacity(showContent ? 1 : 0)
+                                .animation(.easeOut(duration: 0.4).delay(0.15), value: showContent)
+
+                            // Benefits list
+                            VStack(spacing: 12) {
+                                BenefitRow(emoji: "✅", description: "They will form new consistent habits")
+                                    .opacity(showContent ? 1 : 0)
+                                    .animation(.easeOut(duration: 0.4).delay(0.2), value: showContent)
+
+                                BenefitRow(emoji: "📈", description: "Improve their task adherence by 40%")
+                                    .opacity(showContent ? 1 : 0)
+                                    .animation(.easeOut(duration: 0.4).delay(0.25), value: showContent)
+
+                                BenefitRow(emoji: "💆", description: "You'll reduce your worry with a daily check")
+                                    .opacity(showContent ? 1 : 0)
+                                    .animation(.easeOut(duration: 0.4).delay(0.3), value: showContent)
+
+                                BenefitRow(emoji: "📸", description: "A gallery of 200+ memories automatically gathered in 66 days")
+                                    .opacity(showContent ? 1 : 0)
+                                    .animation(.easeOut(duration: 0.4).delay(0.35), value: showContent)
+                            }
+                            .padding(.top, 16)
+                            .padding(.bottom, 24)
+
+                            // Response type toggle - two separate cards
+                            HStack(spacing: 12) {
+                                // Photo option
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedResponseType = 0
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "photo.fill")
+                                            .font(.system(size: 14, weight: .medium))
+                                        Text("Photo")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                    .foregroundColor(selectedResponseType == 0 ? .white : .black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(selectedResponseType == 0 ? Color.black : Color.white)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+
+                                // Text option
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedResponseType = 1
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "text.bubble.fill")
+                                            .font(.system(size: 14, weight: .medium))
+                                        Text("Text")
+                                            .font(.system(size: 15, weight: .semibold))
+                                    }
+                                    .foregroundColor(selectedResponseType == 1 ? .white : .black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(selectedResponseType == 1 ? Color.black : Color.white)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 16)
+                            .opacity(showContent ? 1 : 0)
+                            .animation(.easeOut(duration: 0.4).delay(0.4), value: showContent)
 
                             // SMS Preview Mockup - at the top for immediate visualization (modern iOS style)
                             VStack(spacing: 0) {
@@ -2844,35 +2978,107 @@ struct PersonalizedPlanView: View {
                                             maxWidth: 240,
                                             scale: 0.8
                                         )
+                                        .id("reminder-\(selectedResponseType)")
+                                        .transition(.asymmetric(
+                                            insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                            removal: .scale(scale: 0.8).combined(with: .opacity)
+                                        ))
                                         Spacer()
                                     }
 
-                                    // Outgoing reply (loved one's photo response)
-                                    HStack {
-                                        Spacer()
-                                        // Photo reply (vertical iPhone format)
-                                        Image("ExamplePic1")
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 100, height: 140)
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    }
+                                    // Fixed height container for responses to prevent layout shift
+                                    ZStack(alignment: .topTrailing) {
+                                        // Invisible spacer to maintain consistent height
+                                        Color.clear.frame(height: 180)
 
-                                    // Remi's reply to the photo
-                                    HStack {
-                                        SpeechBubbleView(
-                                            text: "Love it! Keep it up 💪",
-                                            isOutgoing: false,
-                                            backgroundColor: Color(hex: "E9E9EB"),
-                                            textColor: .black,
-                                            maxWidth: 200,
-                                            scale: 0.8
-                                        )
-                                        Spacer()
+                                        if selectedResponseType == 0 {
+                                            // Photo response
+                                            VStack(alignment: .trailing, spacing: 12) {
+                                                // Photo reply (vertical iPhone format)
+                                                Image("ExamplePic1")
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 100, height: 140)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                                // Remi's reply to the photo
+                                                HStack {
+                                                    SpeechBubbleView(
+                                                        text: "Love it! Keep it up 💪",
+                                                        isOutgoing: false,
+                                                        backgroundColor: Color(hex: "E9E9EB"),
+                                                        textColor: .black,
+                                                        maxWidth: 200,
+                                                        scale: 0.8
+                                                    )
+                                                    Spacer()
+                                                }
+                                                .frame(maxWidth: .infinity)
+                                            }
+                                            .transition(.asymmetric(
+                                                insertion: .scale(scale: 0.85).combined(with: .opacity),
+                                                removal: .scale(scale: 0.85).combined(with: .opacity)
+                                            ))
+                                        } else {
+                                            // Text response - alternates between iOS (blue) and Android (green)
+                                            VStack(alignment: .trailing, spacing: 12) {
+                                                HStack {
+                                                    Spacer()
+                                                    SpeechBubbleView(
+                                                        text: "All done! 👍",
+                                                        isOutgoing: true,
+                                                        backgroundColor: showIOSStyle ? OnboardingUI.smsOutgoingBlue : Color(hex: "34C759"),
+                                                        textColor: .white,
+                                                        maxWidth: 200,
+                                                        scale: 0.8
+                                                    )
+                                                    .id("text-reply-\(showIOSStyle)")
+                                                    .transition(.asymmetric(
+                                                        insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                                        removal: .scale(scale: 0.8).combined(with: .opacity)
+                                                    ))
+                                                }
+                                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showIOSStyle)
+
+                                                // Platform indicator
+                                                Text(showIOSStyle ? "Works on iPhone" : "Works on Android")
+                                                    .font(.system(size: 11, weight: .medium))
+                                                    .foregroundColor(.gray)
+                                                    .transition(.opacity)
+                                                    .animation(.easeInOut(duration: 0.2), value: showIOSStyle)
+
+                                                // Remi's confirmation reply
+                                                HStack {
+                                                    SpeechBubbleView(
+                                                        text: "Thanks! 💙",
+                                                        isOutgoing: false,
+                                                        backgroundColor: Color(hex: "E9E9EB"),
+                                                        textColor: .black,
+                                                        maxWidth: 200,
+                                                        scale: 0.8
+                                                    )
+                                                    Spacer()
+                                                }
+                                                .frame(maxWidth: .infinity)
+                                            }
+                                            .transition(.asymmetric(
+                                                insertion: .scale(scale: 0.85).combined(with: .opacity),
+                                                removal: .scale(scale: 0.85).combined(with: .opacity)
+                                            ))
+                                            .onReceive(platformTimer) { _ in
+                                                if selectedResponseType == 1 {
+                                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                        showIOSStyle.toggle()
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
+                                    .frame(maxWidth: .infinity)
                                 }
                                 .padding(16)
                                 .background(Color.white)
+                                .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selectedResponseType)
 
                                 // iMessage-style text input box
                                 HStack {
@@ -3177,12 +3383,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(QuizPastelColors.color(for: 0))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 0), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "checkmark.seal.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 0))
                                     }
 
                                     (Text("Backed by ")
@@ -3206,12 +3415,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(QuizPastelColors.color(for: 1))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 1), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "bell.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 1))
                                     }
 
                                     (Text("You'll ")
@@ -3233,12 +3445,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(QuizPastelColors.color(for: 2))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 2), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "message.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 2))
                                     }
 
                                     (Text("Works through ")
@@ -3327,12 +3542,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "7B8FD4"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 0), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "heart.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 0))
                                     }
 
                                     (Text("Keep them ")
@@ -3354,12 +3572,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "6B7FC4"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 1), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 1))
                                     }
 
                                     (Text("Make sure ")
@@ -3379,12 +3600,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "5B6FB4"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 2), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "chart.line.uptrend.xyaxis")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 2))
                                     }
 
                                     (Text("Build habits that ")
@@ -3402,12 +3626,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "8B9FE4"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 3), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "figure.2.and.child.holdinghands")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 3))
                                     }
 
                                     (Text("Stay ")
@@ -3429,12 +3656,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "9BAFE4"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 4), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "sparkles")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 4))
                                     }
 
                                     (Text("Turn ")
@@ -3577,12 +3807,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "4CAF50"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 0), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "chart.line.uptrend.xyaxis")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 0))
                                     }
 
                                     (Text("Up to ")
@@ -3602,12 +3835,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "FFC107"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 1), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "checkmark.seal.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 1))
                                     }
 
                                     (Text("Validated by ")
@@ -3627,12 +3863,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color.black)
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 2), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "message.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 2))
                                     }
 
                                     (Text("Text-based reminders are ")
@@ -3652,12 +3891,15 @@ struct PersonalizedPlanView: View {
                                 HStack(alignment: .center, spacing: 10) {
                                     ZStack {
                                         Circle()
-                                            .fill(Color(hex: "66BB6A"))
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        Circle()
+                                            .stroke(QuizPastelColors.color(for: 3), lineWidth: 2)
                                             .frame(width: 24, height: 24)
 
                                         Image(systemName: "star.fill")
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(QuizPastelColors.color(for: 3))
                                     }
 
                                     (Text("Sustained ")
@@ -4274,5 +4516,23 @@ private struct LoadingCheckItem: View {
                 .scaleEffect(showCheckmark ? 1 : 0.5)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: showCheckmark)
         }
+    }
+}
+
+// Helper view for benefit rows on personalized plan summary
+private struct BenefitRow: View {
+    let emoji: String
+    let description: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(emoji)
+                .font(.system(size: 16))
+
+            Text(description)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.black)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }

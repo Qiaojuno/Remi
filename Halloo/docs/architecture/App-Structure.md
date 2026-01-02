@@ -1,17 +1,23 @@
 # Halloo iOS App - Project Structure & Status
-# Last Updated: 2025-11-18
-# Status: ✅ **BUILD SUCCESSFUL** - RevenueCat + Superwall Subscription Integration Complete
+# Last Updated: 2025-12-28
+# Status: ✅ **BUILD SUCCESSFUL** - Onboarding Redesign + Push Notification Toggle Complete
 
 ## 🚨 CURRENT BUILD STATUS
-**Build Status:** ✅ **BUILD SUCCEEDED** (Verified 2025-10-21)
+**Build Status:** ✅ **BUILD SUCCEEDED** (Verified 2025-12-28)
 **Xcode Build Command:**
 ```bash
 xcodebuild -scheme Halloo \
-  -destination 'platform=iOS Simulator,id=36B6BF87-E66E-4EA2-B453-26FC094FD9E1' \
-  clean build
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  build
 ```
 
-**Recent Changes (2025-11-18):**
+**Recent Changes (2025-12-28):**
+- ✅ **Push Notification Toggle:** User preference persisted to Firestore, Cloud Function checks before sending
+- ✅ **Settings Simplification:** Removed FAQs/Feedback, single "No-Reply Alerts" toggle
+- ✅ **Onboarding Redesign Complete:** Name input, tone selection, Value-First flow reorder, SMS preview
+- ✅ **User Model Update:** Added `pushNotificationsEnabled` field with Codable support
+
+**Previous Changes (2025-11-18):**
 - ✅ **RevenueCat Integration:** Complete subscription management SDK integration
 - ✅ **Superwall Integration:** Advanced paywall presentation with A/B testing support
 - ✅ **Subscription Service:** RevenueCatSubscriptionService implements SubscriptionServiceProtocol

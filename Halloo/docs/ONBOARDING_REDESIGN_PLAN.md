@@ -1,9 +1,9 @@
 # Onboarding Redesign Implementation Plan
 
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-12-25
-**Updated:** 2025-12-25
-**Status:** ✅ APPROVED - Ready for Implementation
+**Updated:** 2025-12-28
+**Status:** ✅ IMPLEMENTED - All P0 Features Complete
 **Objective:** Transform "clinical questionnaire" into "conversational profile builder" with minimal code changes
 
 ---
@@ -570,16 +570,16 @@ struct SMSPreviewMockup: View {
 
 ## Implementation Priority Matrix
 
-| Phase | Impact | Effort | Risk | Priority |
-|-------|--------|--------|------|----------|
-| 6. Flow Reorder | **Critical** | Medium | Medium | **P0 - Do First** |
-| 1. Copy-Only Changes | High | Low | Low | **P0 - Do First** |
-| 2. Name Collection | High | Medium | Low | **P0 - Do First** |
-| 5. Tone Selection | High | Medium | Medium | **P0 - Do First** |
-| 3. Enhanced Empathy Break | Medium | Low | Low | **P1** |
-| 4. Tech Reassurance | Medium | Low | Low | **P1** |
-| 7. Paywall Copy | Medium | Low | Low | **P1** |
-| 8. SMS Preview | Medium | Medium | Medium | **P2** |
+| Phase | Impact | Effort | Risk | Status |
+|-------|--------|--------|------|--------|
+| 6. Flow Reorder | **Critical** | Medium | Medium | ✅ **COMPLETE** |
+| 1. Copy-Only Changes | High | Low | Low | ✅ **COMPLETE** |
+| 2. Name Collection | High | Medium | Low | ✅ **COMPLETE** |
+| 5. Tone Selection | High | Medium | Medium | ✅ **COMPLETE** |
+| 3. Enhanced Empathy Break | Medium | Low | Low | ✅ **COMPLETE** |
+| 4. Tech Reassurance | Medium | Low | Low | ✅ **COMPLETE** |
+| 7. Paywall Copy | Medium | Low | Low | ✅ **COMPLETE** |
+| 8. SMS Preview | Medium | Medium | Medium | ✅ **COMPLETE** |
 
 ### P0 Bundle (Ship Together)
 These four changes are interdependent and should ship as one release:
@@ -689,25 +689,27 @@ Analytics.log("onboarding_tech_reassurance_shown", properties: ["comfort_level":
 
 ---
 
-## Next Steps
+## Implementation Status
 
-### Immediate (P0 Bundle)
-1. ✅ Plan approved - ready for implementation
-2. Create feature branch: `feature/onboarding-redesign-v2`
-3. Implement in order:
-   - Flow reorder (enum + navigation)
-   - Name input step
-   - Tone selection step
-   - Copy updates
-   - Progress bar recalculation
-4. Test full flow on device
-5. Ship and measure
+### ✅ All Features Complete (2025-12-28)
 
-### Follow-up (P1)
-- Enhanced empathy break (1.5s delay, sage background)
-- Tech reassurance banner
-- Paywall copy update in Superwall
+**P0 Bundle - SHIPPED:**
+1. ✅ Flow reorder (Value-First psychological arc)
+2. ✅ Name input step (`loved_one_name` key)
+3. ✅ Tone selection step (`remi_tone` key)
+4. ✅ Copy updates (conversational tone throughout)
+5. ✅ Progress bar recalculation
 
-### Later (P2)
-- SMS preview in personalized plan screen
-- A/B testing infrastructure
+**P1 Features - SHIPPED:**
+- ✅ Enhanced empathy break (delayed button, sage background)
+- ✅ Tech reassurance banner
+- ✅ Paywall copy update
+
+**P2 Features - SHIPPED:**
+- ✅ SMS preview in personalized plan screen
+
+### Files Modified
+- `OnboardingViewModel.swift` - New step enum, reordered navigation
+- `OnboardingQuizSteps.swift` - NameInputStepView, ToneSelectionView, copy updates
+- `OnboardingContainerView.swift` - Route new steps
+- `OnboardingComponents.swift` - Empathy break enhancements

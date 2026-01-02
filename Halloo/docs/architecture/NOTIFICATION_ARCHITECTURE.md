@@ -727,6 +727,28 @@ PROTECTION: ✅ Effective at UI level
 | MAX_WINDOW_MINUTES | 45 | Maximum age of SMS to process |
 | Schedule | Every 5 min | How often checker runs |
 
+### User Preference Toggle (Added 2025-12-28)
+
+Users can disable no-reply push notifications via Settings:
+
+**Firestore Field:** `users/{userId}.pushNotificationsEnabled`
+- `true` (default): Push notifications sent normally
+- `false`: Cloud Function skips FCM push (gallery event still created)
+
+**iOS Implementation:**
+- `NotificationsSettingsView` - Single "No-Reply Alerts" toggle
+- Reads/writes directly to Firestore on toggle change
+- Shows loading spinner while fetching preference
+
+**Cloud Function Check:**
+```javascript
+// In sendPushNotification()
+if (userData.pushNotificationsEnabled === false) {
+  console.log(`⏭️ Push notifications disabled for user ${userId}, skipping`);
+  return { success: false, error: 'Push notifications disabled by user' };
+}
+```
+
 ---
 
 ## Key Timestamps & Their Usage
