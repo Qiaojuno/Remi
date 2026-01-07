@@ -42,6 +42,12 @@ import RevenueCat
 /// - Logs errors for debugging and monitoring
 final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
 
+    // MARK: - Singleton
+
+    /// Shared instance for accessing cached subscription data
+    /// Use this for reading cached customer info without making API calls
+    static let shared = RevenueCatSubscriptionService()
+
     // MARK: - Properties
 
     private var _currentCustomerInfo: CustomerInfo?
@@ -51,9 +57,15 @@ final class RevenueCatSubscriptionService: SubscriptionServiceProtocol {
         _currentCustomerInfo
     }
 
+    /// Check if user has active subscription using cached data (no API call)
+    var hasActiveSubscriptionCached: Bool {
+        guard let customerInfo = _currentCustomerInfo else { return false }
+        return !customerInfo.entitlements.active.isEmpty
+    }
+
     // MARK: - Initialization
 
-    init() {
+    private init() {
     }
 
     // MARK: - Configuration

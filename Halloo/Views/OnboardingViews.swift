@@ -521,7 +521,9 @@ struct WelcomeView: View {
 /// Modal sheet for returning users to log in directly from welcome screen
 ///
 /// Uses shared `AuthButtonsView` component for DRY auth UI.
-/// Sets `isComplete = true` on successful auth to bypass onboarding for returning users.
+/// Checks subscription status after login:
+/// - If subscribed → go directly to dashboard
+/// - If not subscribed → show paywall
 struct LoginSheetView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
     @Environment(\.dismiss) var dismiss
@@ -535,15 +537,11 @@ struct LoginSheetView: View {
                 .padding(.top, 24)
 
             // Shared auth buttons component
-            // ✅ FIX: Set isComplete = true for returning users logging in from Welcome page
-            // This bypasses onboarding since they've already completed it in a previous session
             AuthButtonsView(
                 onAppleSignIn: { await viewModel.signInWithApple() },
                 onGoogleSignIn: { await viewModel.signInWithGoogle() },
                 onAuthComplete: {
-                    // Returning users bypass onboarding → go straight to PaywallGateView/Dashboard
-                    viewModel.isComplete = true
-                    dismiss()
+                    handleAuthComplete()
                 },
                 showPrivacyText: false
             )
@@ -551,6 +549,29 @@ struct LoginSheetView: View {
             .padding(.bottom, 24)
         }
         .background(Color(hex: "f9f9f9"))
+    }
+
+    /// Handle successful authentication for returning users
+    /// Shows paywall if not subscribed, otherwise goes directly to dashboard
+    private func handleAuthComplete() {
+        _Concurrency.Task { @MainActor in
+            // Check subscription status (use cached first, fallback to API)
+            var hasSubscription = SubscriptionManager.shared.hasActiveSubscriptionCached()
+            if !hasSubscription {
+                // Cache might not be populated yet, check API
+                hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+            }
+
+            if hasSubscription {
+                // ✅ CENTRALIZED ROUTING: Use completeOnboardingFlow for proper exit
+                // This saves quiz answers and clears progress before going to dashboard
+                await viewModel.completeOnboardingFlow()
+            } else {
+                // No subscription → show paywall
+                viewModel.currentStep = .step6Paywall
+            }
+            dismiss()
+        }
     }
 }
 
@@ -843,6 +864,13 @@ struct ProfileSetupConfirmationView: View {
 // MARK: - Paywall Step View
 struct PaywallStepView: View {
     @EnvironmentObject var viewModel: OnboardingViewModel
+    @Environment(\.container) private var container
+
+    /// Track if user came from returning user login (no quiz data)
+    private var isReturningUserFlow: Bool {
+        // Returning users have empty quiz answers (they didn't go through the quiz)
+        viewModel.userAnswers.isEmpty
+    }
 
     var body: some View {
         PaywallView(onDismiss: {
@@ -856,13 +884,31 @@ struct PaywallStepView: View {
     private func handlePaywallDismiss() {
         // Check if user now has active subscription after paywall dismissal
         _Concurrency.Task { @MainActor in
-            let hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+            // Small delay to let RevenueCat listener update cache
+            try? await _Concurrency.Task.sleep(nanoseconds: 300_000_000)
+
+            // Check subscription (cache first, then API)
+            var hasSubscription = SubscriptionManager.shared.hasActiveSubscriptionCached()
+            if !hasSubscription {
+                hasSubscription = await SubscriptionManager.shared.hasActiveSubscription()
+            }
 
             if hasSubscription {
-                // User successfully subscribed - complete onboarding and go to dashboard
-                viewModel.isComplete = true
+                // ✅ CENTRALIZED ROUTING: Use completeOnboardingFlow for proper exit
+                // This saves quiz answers and clears progress before going to dashboard
+                await viewModel.completeOnboardingFlow()
+            } else if isReturningUserFlow {
+                // Returning user dismissed without subscribing - log them out
+                let authService = container.resolve(AuthenticationServiceProtocol.self)
+                do {
+                    try await authService.signOut()
+                } catch {
+                    #if DEBUG
+                    print("⚠️ Sign out failed during paywall dismiss: \(error.localizedDescription)")
+                    #endif
+                }
             } else {
-                // User dismissed without subscribing - go back to free trial reminder
+                // New user from quiz flow - go back to free trial reminder
                 viewModel.previousStep()
             }
         }
@@ -1145,8 +1191,11 @@ struct OnboardingCompleteView: View {
                     Spacer()
 
                     Button(action: {
-                        // This will trigger the main app flow
-                        viewModel.isComplete = true
+                        // ✅ CENTRALIZED ROUTING: Use completeOnboardingFlow for proper exit
+                        // This saves quiz answers and clears progress before going to dashboard
+                        _Concurrency.Task {
+                            await viewModel.completeOnboardingFlow()
+                        }
                     }) {
                         Text("Start Using halloo")
                             .font(.system(size: 16, weight: .semibold))

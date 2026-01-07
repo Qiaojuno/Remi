@@ -43,12 +43,22 @@ struct ContentView: View {
         )
     }()
 
+    // MARK: - Centralized App Router
+    // Single source of truth for navigation decisions
+    // Replaces scattered auth/subscription checks across ContentView, OnboardingViewModel, OnboardingViews
+    @StateObject private var appRouter: AppRouter = {
+        let container = Container.shared
+        return AppRouter(
+            authService: container.resolve(AuthenticationServiceProtocol.self),
+            databaseService: container.resolve(DatabaseServiceProtocol.self)
+        )
+    }()
+
     @State private var onboardingViewModel: OnboardingViewModel?
     @State private var profileViewModel: ProfileViewModel?
     @State private var dashboardViewModel: DashboardViewModel?
     @State private var galleryViewModel: GalleryViewModel?
     @State private var authService: FirebaseAuthenticationService?
-    // ✅ REMOVED: @State private var isAuthenticated - Using authService.isAuthenticated as single source of truth
     @State private var selectedTab = 0
     @State private var previousTab = 0  // Track previous tab for Habits (middle) transition direction
     @State private var transitionDirection: Int = 1  // Unused - kept for backward compatibility with bindings
@@ -108,41 +118,51 @@ struct ContentView: View {
     }
     
     // MARK: - Navigation Content
-    // ✅ ARCHITECTURE: Single source of truth for authentication state
-    // Auth state (authService.isAuthenticated) determines view hierarchy
-    // Subscription check happens AFTER authentication AND onboarding completion via PaywallGateView
+    // ✅ ARCHITECTURE: Centralized routing via AppRouter
+    // AppRouter determines destination based on: auth state, subscription status, quiz progress
+    // Single source of truth replaces scattered if/else checks across multiple files
     @ViewBuilder
     private var navigationContent: some View {
-        if let authService = authService {
-            if authService.isAuthenticated {
-                // Check if user is still in onboarding flow
-                if let onboardingVM = onboardingViewModel, !onboardingVM.isComplete {
-                    // ✅ User authenticated but still in onboarding → Continue onboarding
-                    // This allows free trial intro/reminder steps to show before paywall
-                    OnboardingContainerView()
-                        .environmentObject(onboardingVM)
-                } else {
-                    // ✅ User is authenticated AND onboarding complete → Check subscription via PaywallGateView
-                    // PaywallGateView will either:
-                    //   - Show dashboard if subscribed
-                    //   - Show Superwall paywall if not subscribed
-                    PaywallGateView {
-                        authenticatedContent
-                    }
-                    .environmentObject(appState)
-                }
-            } else {
-                // ✅ User not authenticated → Show onboarding/welcome
-                if let onboardingVM = onboardingViewModel {
-                    OnboardingContainerView()
-                        .environmentObject(onboardingVM)
-                } else {
-                    LoadingView()
-                }
-            }
-        } else {
-            // Auth service still initializing
+        switch appRouter.destination {
+        case .loading:
+            // App is resolving where to route - show loading screen
             LoadingView()
+
+        case .onboarding(let resumeStep):
+            // User needs onboarding (not authenticated or has quiz progress)
+            if let onboardingVM = onboardingViewModel {
+                OnboardingContainerView()
+                    .environmentObject(onboardingVM)
+                    .environmentObject(appRouter)
+                    .onAppear {
+                        // If router specifies a resume step, set it
+                        if let step = resumeStep {
+                            onboardingVM.currentStep = step
+                        }
+                    }
+            } else {
+                LoadingView()
+            }
+
+        case .paywall:
+            // User is authenticated but needs subscription
+            if let onboardingVM = onboardingViewModel {
+                OnboardingContainerView()
+                    .environmentObject(onboardingVM)
+                    .environmentObject(appRouter)
+                    .onAppear {
+                        // Route to paywall step
+                        onboardingVM.currentStep = .step6Paywall
+                    }
+            } else {
+                LoadingView()
+            }
+
+        case .dashboard:
+            // User is fully entitled - show main app
+            authenticatedContent
+                .environmentObject(appState)
+                .environmentObject(appRouter)
         }
     }
 
@@ -496,6 +516,10 @@ struct ContentView: View {
 
         // Create ViewModels using Container (all factory methods are @MainActor)
         onboardingViewModel = container.makeOnboardingViewModel()
+
+        // Inject AppRouter into OnboardingViewModel for centralized exit handling
+        onboardingViewModel?.setAppRouter(appRouter)
+
         profileViewModel = container.makeProfileViewModel()
 
         // PHASE 2: Inject AppState into ProfileViewModel for write consolidation
@@ -516,29 +540,22 @@ struct ContentView: View {
         // Subscribe to auth state changes
         setupAuthStateObserver()
 
-        // Check auth state on launch
+        // ✅ CENTRALIZED ROUTING: Let AppRouter determine initial destination
+        // This replaces scattered auth/subscription checks with a single orchestration point
         _Concurrency.Task {
-            // Small delay to ensure Firebase Auth is ready
-            try? await _Concurrency.Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+            // Resolve destination (handles auth check, subscription check, quiz progress)
+            await appRouter.resolveDestination()
 
-            await MainActor.run {
-                if authService?.isAuthenticated == true {
-                    // ✅ FIX: Mark onboarding complete for returning authenticated users
-                    // This ensures they go to PaywallGateView instead of OnboardingContainerView
-                    onboardingViewModel?.isComplete = true
+            // If user is authenticated, load their data
+            if authService?.isAuthenticated == true {
+                await appState.loadUserData()
 
-                    // Load all user data and setup real-time listeners
-                    _Concurrency.Task {
-                        await appState.loadUserData()
+                // Restore any missing photoURL references from Storage
+                await self.profileViewModel?.restoreMissingProfilePhotos()
 
-                        // Restore any missing photoURL references from Storage
-                        await self.profileViewModel?.restoreMissingProfilePhotos()
-
-                        // Re-populate the duplicate prevention Set AFTER data is loaded
-                        await MainActor.run {
-                            self.profileViewModel?.populateGalleryEventTrackingSet(from: appState.galleryEvents)
-                        }
-                    }
+                // Re-populate the duplicate prevention Set AFTER data is loaded
+                await MainActor.run {
+                    self.profileViewModel?.populateGalleryEventTrackingSet(from: appState.galleryEvents)
                 }
             }
         }
@@ -581,6 +598,9 @@ struct ContentView: View {
 
                         // Re-populate the duplicate prevention Set AFTER data is loaded
                         self.profileViewModel?.populateGalleryEventTrackingSet(from: self.appState.galleryEvents)
+
+                        // ✅ CENTRALIZED ROUTING: Re-resolve destination after auth change
+                        await self.appRouter.handleAuthStateChange(isAuthenticated: true)
                     }
 
                     // Keep existing ViewModel loads temporarily (Phase 2 will remove)
@@ -601,6 +621,9 @@ struct ContentView: View {
                     // Reset selected tab to home
                     self.selectedTab = 0
                     self.selectedProfileIndex = 0
+
+                    // ✅ CENTRALIZED ROUTING: Notify router of logout
+                    self.appRouter.handleLogout()
                 }
             }
             .store(in: &authCancellables)
