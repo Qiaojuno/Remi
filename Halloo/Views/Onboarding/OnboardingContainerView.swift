@@ -117,10 +117,13 @@ struct OnboardingContainerView: View {
 
             case .preferences:
                 // Profile creation happens in main app - complete onboarding
+                // ✅ CENTRALIZED ROUTING: Use completeOnboardingFlow for proper exit
                 Color(hex: "f9f9f9")
                     .ignoresSafeArea()
                     .onAppear {
-                        viewModel.isComplete = true
+                        _Concurrency.Task {
+                            await viewModel.completeOnboardingFlow()
+                        }
                     }
             }
         }

@@ -86,6 +86,19 @@ final class OnboardingViewModel: ObservableObject {
 
     /// UserDefaults key for persisted quiz answers
     private static let quizAnswersKey = "onboarding_quiz_answers"
+
+    /// UserDefaults key for quiz completion state
+    private static let quizFinishedKey = "onboarding_quiz_finished"
+
+    /// Whether user has completed the quiz funnel (reached personalizedPlan step)
+    ///
+    /// Persisted to UserDefaults so users who completed the quiz but didn't
+    /// finish authentication will resume at personalizedPlan (summary), not welcome.
+    @Published var quizFinished: Bool = false {
+        didSet {
+            UserDefaults.standard.set(quizFinished, forKey: Self.quizFinishedKey)
+        }
+    }
     
     /// Loading state for onboarding operations (account creation, data saving)
     /// 
@@ -218,15 +231,27 @@ final class OnboardingViewModel: ObservableObject {
     @Published var phoneError: String?
     
     // MARK: - Service Dependencies
-    
+
     /// Authentication service for family account creation and social sign-in
     private let authService: AuthenticationServiceProtocol
-    
+
     /// Database service for user profile creation and onboarding data persistence
     private let databaseService: DatabaseServiceProtocol
 
     /// Logger for onboarding flow tracking and error diagnosis
     private let logger = Logger(subsystem: "com.halloo.app", category: "Onboarding")
+
+    // MARK: - Centralized Routing
+
+    /// App router for centralized navigation decisions
+    /// Injected after init by ContentView to enable proper exit handling
+    private var appRouter: AppRouter?
+
+    /// Injects the AppRouter for centralized exit handling
+    /// Called by ContentView after ViewModel creation
+    func setAppRouter(_ router: AppRouter) {
+        self.appRouter = router
+    }
 
     // MARK: - Internal Onboarding Coordination Properties
     
@@ -452,6 +477,13 @@ final class OnboardingViewModel: ObservableObject {
         if let savedEmotional = UserDefaults.standard.string(forKey: Self.emotionalValueKey), !savedEmotional.isEmpty {
             emotionalValue = savedEmotional
         }
+
+        // Restore quiz completion state and resume at personalizedPlan if finished
+        if UserDefaults.standard.bool(forKey: Self.quizFinishedKey) {
+            quizFinished = true
+            currentStep = .personalizedPlan
+            logger.info("Quiz was previously completed - resuming at personalizedPlan")
+        }
     }
 
     /// Clears saved quiz progress (call after successful completion)
@@ -459,6 +491,8 @@ final class OnboardingViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.quizAnswersKey)
         UserDefaults.standard.removeObject(forKey: Self.selectedMomentsKey)
         UserDefaults.standard.removeObject(forKey: Self.emotionalValueKey)
+        UserDefaults.standard.removeObject(forKey: Self.quizFinishedKey)
+        quizFinished = false
         logger.info("Cleared saved quiz progress")
     }
     
@@ -600,6 +634,7 @@ final class OnboardingViewModel: ObservableObject {
             updateProgress()
         case .loadingPlan:
             currentStep = .personalizedPlan
+            quizFinished = true  // Persist quiz completion for app resume
             updateProgress()
         case .personalizedPlan:
             currentStep = .saveYourProgress
@@ -614,11 +649,21 @@ final class OnboardingViewModel: ObservableObject {
             currentStep = .step6Paywall
             updateProgress()
         case .step6Paywall:
-            isComplete = true
+            // ✅ CENTRALIZED ROUTING: Use router for proper exit handling
+            // Router will save quiz answers and clear progress before going to dashboard
+            _Concurrency.Task {
+                await completeOnboardingFlow()
+            }
         case .profileSetupConfirmation:
-            isComplete = true
+            // ✅ CENTRALIZED ROUTING: Use router for proper exit handling
+            _Concurrency.Task {
+                await completeOnboardingFlow()
+            }
         case .preferences:
-            isComplete = true
+            // ✅ CENTRALIZED ROUTING: Use router for proper exit handling
+            _Concurrency.Task {
+                await completeOnboardingFlow()
+            }
         case .step4bSatisfaction:
             // Deprecated step - skip to next
             currentStep = .step5aCurrentFrustration
@@ -744,10 +789,13 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     /// Skip profile setup and go to main app
-    /// ✅ ARCHITECTURE: isComplete triggers navigation to dashboard via ContentView
+    /// ✅ ARCHITECTURE: Uses AppRouter for centralized exit handling
     func skipProfileSetup() {
-        // Mark onboarding as complete (no need to change currentStep)
-        isComplete = true
+        // ✅ CENTRALIZED ROUTING: Use completeOnboardingFlow for proper exit
+        // This saves quiz answers and clears progress before going to dashboard
+        _Concurrency.Task {
+            await completeOnboardingFlow()
+        }
     }
     
     // MARK: - Family Account Creation & Trial Activation
@@ -803,14 +851,15 @@ final class OnboardingViewModel: ObservableObject {
             // Persist family profile for elderly care coordination
             try await databaseService.createUser(user)
 
-            // MVP: Skip onboarding, go straight to dashboard
-            isComplete = true
-            
+            // ✅ CENTRALIZED ROUTING: Use completeOnboardingFlow for proper exit
+            // This saves quiz answers and clears progress before going to dashboard
+            await completeOnboardingFlow()
+
         } catch {
             errorMessage = error.localizedDescription
             logger.error("Creating family account failed: \(error.localizedDescription)")
         }
-        
+
         isLoading = false
     }
     
@@ -879,19 +928,28 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     /// Complete the onboarding flow and navigate to dashboard
-    /// NEW ARCHITECTURE: No more "onboarding complete" flag - just go to dashboard
+    /// ✅ CENTRALIZED ROUTING: Uses AppRouter for proper exit handling
+    /// This is the ONLY sanctioned exit path from onboarding to dashboard
     func completeOnboardingFlow() async {
         // Save quiz answers if collected (optional personalization)
-        if !userAnswers.isEmpty {
-            await saveQuizAnswers()
-        }
+        let saveQuizAnswersClosure: (() async -> Void)? = !userAnswers.isEmpty ? { [weak self] in
+            await self?.saveQuizAnswers()
+        } : nil
 
-        // Clear local quiz progress now that it's saved to Firestore
-        clearSavedQuizProgress()
-
-        // Navigate to dashboard
-        await MainActor.run {
-            isComplete = true
+        // Use AppRouter if available, otherwise fall back to legacy behavior
+        if let router = appRouter {
+            // ✅ Router handles: save quiz answers → clear progress → route to dashboard
+            await router.completeOnboarding(saveQuizAnswers: saveQuizAnswersClosure)
+        } else {
+            // Legacy fallback (should not happen in normal flow)
+            logger.warning("AppRouter not set - using legacy exit path")
+            if !userAnswers.isEmpty {
+                await saveQuizAnswers()
+            }
+            clearSavedQuizProgress()
+            await MainActor.run {
+                isComplete = true
+            }
         }
     }
 

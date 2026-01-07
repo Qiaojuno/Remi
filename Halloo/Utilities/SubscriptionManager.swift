@@ -48,6 +48,11 @@ final class SubscriptionManager: ObservableObject {
     /// Entitlement identifier for premium features
     static let unlimitedEntitlementID = "Remi Unlimited"
 
+    // MARK: - Change Detection
+
+    /// Tracks last synced status to prevent redundant Firestore writes
+    private var lastSyncedSubscriptionStatus: Bool?
+
     // MARK: - Initialization
 
     private init() {}
@@ -73,6 +78,9 @@ final class SubscriptionManager: ObservableObject {
     ///
     /// - Important: This method checks RevenueCat entitlements.
     ///   Server-side validation also occurs in Cloud Functions for SMS operations.
+    ///
+    /// - Note: Prefer `hasActiveSubscriptionCached()` for UI checks to avoid API calls.
+    ///   Use this method only when fresh data from RevenueCat is required.
     func hasActiveSubscription() async -> Bool {
         // SECURITY: No client-side bypass allowed
         // All subscription checks must go through RevenueCat
@@ -87,6 +95,28 @@ final class SubscriptionManager: ObservableObject {
             print("❌ [SubscriptionManager] Failed to check active subscription: \(error.localizedDescription)")
             return false
         }
+    }
+
+    // MARK: - Cached Subscription Checks (No API Calls)
+
+    /// Check subscription using cached customer info (no API call)
+    ///
+    /// Use this for UI checks where instant response is needed and freshness isn't critical.
+    /// The cache is automatically updated by RevenueCat's customerInfoStream listener.
+    ///
+    /// - Returns: True if user has active subscription based on cached data
+    func hasActiveSubscriptionCached() -> Bool {
+        return RevenueCatSubscriptionService.shared.hasActiveSubscriptionCached
+    }
+
+    /// Check "Remi Unlimited" access using cached data (no API call)
+    ///
+    /// - Returns: True if user has unlimited entitlement based on cached data
+    func hasUnlimitedAccessCached() -> Bool {
+        guard let customerInfo = RevenueCatSubscriptionService.shared.currentCustomerInfo else {
+            return false
+        }
+        return customerInfo.entitlements[Self.unlimitedEntitlementID]?.isActive == true
     }
 
     // MARK: - Paywall Presentation (Superwall)
@@ -235,10 +265,34 @@ final class SubscriptionManager: ObservableObject {
 
     /// Called when RevenueCat customer info updates (e.g., after purchase, renewal, expiration)
     /// This should be set up as a listener in App.swift
+    ///
+    /// Only syncs to Firestore when subscription status actually changes to prevent
+    /// redundant writes and reduce costs.
     func handleCustomerInfoUpdate(_ customerInfo: RevenueCat.CustomerInfo) {
+        let currentStatus = !customerInfo.entitlements.active.isEmpty
+
+        // Only sync to Firestore if subscription status actually changed
+        guard lastSyncedSubscriptionStatus != currentStatus else {
+            #if DEBUG
+            print("ℹ️ [SubscriptionManager] Subscription status unchanged (\(currentStatus)), skipping Firestore sync")
+            #endif
+            return
+        }
+
+        #if DEBUG
+        print("🔄 [SubscriptionManager] Subscription status changed: \(lastSyncedSubscriptionStatus ?? false) → \(currentStatus)")
+        #endif
+
+        lastSyncedSubscriptionStatus = currentStatus
+
         _Concurrency.Task {
             await syncSubscriptionStatusToFirestore()
         }
+    }
+
+    /// Reset the sync state (call on logout)
+    func resetSyncState() {
+        lastSyncedSubscriptionStatus = nil
     }
 }
 

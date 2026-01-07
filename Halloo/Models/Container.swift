@@ -54,9 +54,10 @@ final class Container: ObservableObject {
             ImageCacheService()
         }
 
-        // Subscription Service - Singleton for RevenueCat subscription management
+        // Subscription Service - Use shared singleton for RevenueCat subscription management
+        // This ensures cache consistency across the app (single source of truth)
         registerSingleton(SubscriptionServiceProtocol.self) {
-            RevenueCatSubscriptionService()
+            RevenueCatSubscriptionService.shared
         }
     }
     
