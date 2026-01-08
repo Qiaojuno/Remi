@@ -704,6 +704,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     func observeIncomingSMSMessages(_ userId: String) -> AnyPublisher<SMSResponse, Error> {
         let subject = PassthroughSubject<SMSResponse, Error>()
 
+        // Track whether we've received the initial snapshot
+        // Firestore sends ALL matching documents as .added on first callback - we must skip these
+        var hasReceivedInitialSnapshot = false
+
         // Use collection group query to observe all messages across user's profiles
         // Only listen for NEW messages (direction: inbound, not yet processed)
         let listener = db.collectionGroup("messages")
@@ -726,6 +730,14 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                     return
                 }
 
+                // Skip the initial snapshot - it contains historical messages we've already processed
+                // Firestore marks ALL existing documents as .added on first callback
+                if !hasReceivedInitialSnapshot {
+                    hasReceivedInitialSnapshot = true
+                    print("📬 [FirebaseDatabaseService] SMS listener attached - skipping \(snapshot.documents.count) historical messages")
+                    return
+                }
+
                 // Process only NEW messages (documentChanges with type .added)
                 for change in snapshot.documentChanges {
                     guard change.type == .added else { continue }
@@ -734,6 +746,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                     do {
                         // Convert Firestore message to SMSResponse
                         let smsResponse = try self.convertMessageToSMSResponse(data, documentId: change.document.documentID)
+                        print("📬 [FirebaseDatabaseService] New SMS received for profile: \(smsResponse.profileId)")
                         subject.send(smsResponse)
                     } catch {
                         print("❌ [FirebaseDatabaseService] Failed to convert SMS message \(change.document.documentID): \(error.localizedDescription)")
