@@ -1,75 +1,80 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Helper functions
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
-    
+
     function isImageFile() {
       return request.resource.contentType.matches('image/.*');
     }
-    
+
     function isValidFileSize() {
       // Max 10MB for images
       return request.resource.size < 10 * 1024 * 1024;
     }
-    
-    // Response photos - users can upload/read photos for their own responses
-    match /responses/{responseId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && 
-                   isImageFile() && 
-                   isValidFileSize();
-      allow delete: if isAuthenticated();
-    }
-    
-    // Profile photos (legacy path - kept for backward compatibility)
-    match /profiles/{profileId}/{fileName} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() &&
-                   isImageFile() &&
-                   isValidFileSize();
-      allow delete: if isAuthenticated();
-    }
 
-    // Profile photos (user-scoped path - prevents cross-account conflicts)
-    match /users/{userId}/profiles/{profileId}/{fileName} {
+    // ============================================
+    // ALL USER DATA UNDER /users/{userId}/ PREFIX
+    // Ownership enforced via path structure
+    // ============================================
+
+    // User avatars: /users/{userId}/{fileName}
+    match /users/{userId}/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() &&
-                   isOwner(userId) &&
-                   isImageFile() &&
-                   isValidFileSize();
+      allow write: if isAuthenticated() && isOwner(userId) && isImageFile() && isValidFileSize();
       allow delete: if isAuthenticated() && isOwner(userId);
     }
 
-    // User avatars
-    match /users/{userId}/{fileName} {
+    // Profile photos: /users/{userId}/profiles/{profileId}/{fileName}
+    match /users/{userId}/profiles/{profileId}/{fileName} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() &&
-                   isOwner(userId) &&
-                   isImageFile() &&
-                   isValidFileSize();
+      allow write: if isAuthenticated() && isOwner(userId) && isImageFile() && isValidFileSize();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Response photos: /users/{userId}/responses/{responseId}/{fileName}
+    // SECURITY FIX: Previously at /responses/{responseId}/ without ownership check
+    match /users/{userId}/responses/{responseId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId) && isImageFile() && isValidFileSize();
       allow delete: if isAuthenticated() && isOwner(userId);
     }
 
     // Gallery archive - archived photos older than 90 days
     // Read-only for users (photos archived by Cloud Function)
     match /gallery-archive/{userId}/{profileId}/{year}/{month}/{photoId} {
-      // Users can only read their own archived photos
       allow read: if isAuthenticated() && isOwner(userId);
-
       // Only Cloud Functions can write (via service account)
-      // Users cannot upload/delete archived photos
       allow write: if false;
     }
 
-    // Deny all other access
+    // ============================================
+    // BLOCK LEGACY INSECURE PATHS
+    // ============================================
+
+    // Block legacy /responses/ path (was vulnerable - no ownership check)
+    match /responses/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Block legacy /profiles/ path (was vulnerable - no ownership check)
+    match /profiles/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // ============================================
+    // DENY ALL OTHER ACCESS (catch-all)
+    // ============================================
     match /{allPaths=**} {
       allow read, write: if false;
     }

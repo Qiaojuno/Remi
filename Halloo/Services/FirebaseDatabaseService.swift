@@ -87,7 +87,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
 
         if !existingProfiles.isEmpty {
             // Log details of duplicate
-            print("❌ [ProfileId] DUPLICATE PHONE NUMBER - BLOCKING CREATION - newProfileId: \(profile.id), phoneNumber: \(profile.phoneNumber), existingCount: \(existingProfiles.documents.count)")
+            print("❌ [ProfileId] DUPLICATE PHONE NUMBER - BLOCKING CREATION - newProfileId: \(profile.id), existingCount: \(existingProfiles.documents.count)")
 
             // Get existing profile details for error message
             let firstDoc = existingProfiles.documents.first!
@@ -527,9 +527,10 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     
     // MARK: - Photo Storage Operations
     
-    func uploadPhoto(_ photoData: Data, for responseId: String) async throws -> String {
+    func uploadPhoto(_ photoData: Data, for responseId: String, userId: String) async throws -> String {
         let storageRef = storage.reference()
-        let photoRef = storageRef.child("responses/\(responseId)/photo.jpg")
+        // SECURITY: User-scoped path enables ownership validation in storage.rules
+        let photoRef = storageRef.child("users/\(userId)/responses/\(responseId)/photo.jpg")
 
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"

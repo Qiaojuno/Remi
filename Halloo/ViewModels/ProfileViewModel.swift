@@ -670,7 +670,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         do {
             try await sendConfirmationSMS(for: profile)
         } catch {
-            print("❌ [AsyncTask] Failed to send SMS - profileId: \(profile.id), phoneNumber: \(profile.phoneNumber), error: \(error.localizedDescription)")
+            print("❌ [AsyncTask] Failed to send SMS - profileId: \(profile.id), error: \(error.localizedDescription)")
             // Don't throw - profile created, SMS failure is recoverable
         }
 
@@ -1204,7 +1204,7 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         confirmationStatus[profileId] = .declined
         confirmationMessages[profileId] = "⚠️ Opted out via STOP keyword. No SMS will be sent."
 
-        print("🛑 [ProfileViewModel] Profile opted out: \(updatedProfile.name) (\(updatedProfile.phoneNumber))")
+        print("🛑 [ProfileViewModel] Profile opted out: \(updatedProfile.name) (profileId: \(updatedProfile.id))")
 
         // Persist to Firestore
         _Concurrency.Task {

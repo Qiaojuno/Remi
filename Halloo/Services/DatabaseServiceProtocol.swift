@@ -423,9 +423,10 @@ protocol DatabaseServiceProtocol {
     ///
     /// - Parameter photoData: JPEG image data to upload
     /// - Parameter responseId: Unique identifier for the SMS response
+    /// - Parameter userId: User ID to scope storage path (security: enforces ownership)
     /// - Returns: Public download URL for the uploaded photo
     /// - Throws: DatabaseError if photo upload fails
-    func uploadPhoto(_ photoData: Data, for responseId: String) async throws -> String
+    func uploadPhoto(_ photoData: Data, for responseId: String, userId: String) async throws -> String
 
     /// Uploads profile photo and returns download URL
     ///

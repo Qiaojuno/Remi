@@ -286,6 +286,8 @@ struct ProfileCreationCard: View {
                     .font(.system(size: 16, weight: .regular))
                     .foregroundColor(.black)
                     .keyboardType(.phonePad)
+                    .textContentType(.none) // SECURITY: Prevent phone number caching
+                    .autocorrectionDisabled() // SECURITY: Disable keyboard suggestions (MASVS-STORAGE-2)
                     .focused($isTextFieldFocused)
                     .onChange(of: phoneNumber) { oldValue, newValue in
                         phoneNumber = formatPhoneNumber(newValue)

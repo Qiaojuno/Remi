@@ -139,7 +139,7 @@ class TwilioSMSService: SMSServiceProtocol {
                 try? await _Concurrency.Task.sleep(nanoseconds: 150_000_000)
 
             } catch {
-                print("❌ [Twilio] Failed to send batch SMS to \(phoneNumber): \(error.localizedDescription)")
+                print("❌ [Twilio] Failed to send batch SMS to profile \(profileId): \(error.localizedDescription)")
 
                 // Add failed result
                 results.append(SMSDeliveryResult(

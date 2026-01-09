@@ -741,6 +741,8 @@ struct AccountSetupView: View {
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .font(.system(size: 16, weight: .regular))
                             .keyboardType(.phonePad)
+                            .textContentType(.none) // SECURITY: Prevent phone number caching
+                            .autocorrectionDisabled() // SECURITY: Disable keyboard suggestions (MASVS-STORAGE-2)
                     }
                     .padding(.horizontal, 12)
                     
