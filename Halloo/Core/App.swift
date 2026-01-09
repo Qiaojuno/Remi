@@ -181,7 +181,8 @@ struct HalloApp: App {
 
         // Configure other services after container is initialized
         if !ProcessInfo.processInfo.environment.keys.contains("XCODE_RUNNING_FOR_PREVIEWS") {
-            configureNotifications()
+            // NOTE: Notification permissions are requested during onboarding (notificationPermission step)
+            // Not on app launch - this gives users context before asking
             configureRevenueCat()
             configureSuperwall()
             configureGoogleSignIn()
@@ -235,12 +236,6 @@ struct HalloApp: App {
     }
 
     // MARK: - Configuration
-
-    private func configureNotifications() {
-        _Concurrency.Task {
-            await requestNotificationPermissions()
-        }
-    }
 
     private func configureRevenueCat() {
         // RevenueCat Public SDK API Key (Apple App Store)
@@ -387,11 +382,6 @@ struct HalloApp: App {
             // ✅ FIX: Store any FCM token that arrived before auth was restored
             await AppDelegate.storePendingFCMTokenIfNeeded()
         }
-    }
-
-    private func requestNotificationPermissions() async {
-        let notificationService = container.resolve(NotificationServiceProtocol.self)
-        _ = await notificationService.requestPermissions()
     }
 
     /// Refreshes FCM token registration for the current user
