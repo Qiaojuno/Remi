@@ -109,18 +109,27 @@
 
 - [x] **Firestore Rules** — Ownership validation on all document paths ✅ Verified
 - [x] **Storage Rules** — User-scoped paths with `isOwner()` checks ✅ Fixed 2025-01-08
-- [ ] **Cloud Functions** — Validate caller identity via `context.auth`
-- [ ] **Cloud Functions** — Twilio credentials in Secret Manager (not environment variables)
+- [x] **Cloud Functions** — Validate caller identity via `request.auth` ✅ Line 177 in sendSMS
+- [x] **Cloud Functions** — Twilio credentials in Secret Manager ✅ `defineSecret()` used
 - [ ] **Firebase Auth** — Enable App Check for API abuse protection
 - [x] **Firebase Auth** — Review OAuth providers' token scopes ✅ Google, Apple minimal scopes
+
+### Cloud Functions Security (Audited 2025-01-08)
+
+- [x] **Input Validation** — Phone numbers validated with E.164 regex ✅ Prevents injection
+- [x] **SMS Rate Limiting** — Server-side quota system ✅ `smsQuotaUsed >= smsQuotaLimit`
+- [x] **Subscription Check** — SMS blocked for expired subscriptions ✅ `checkUserSubscription()`
+- [x] **Twilio Webhook** — HMAC-SHA1 signature validation ✅ `twilio.validateRequest()`
+- [x] **RevenueCat Webhook** — Authorization header validation ✅ Secret Manager
+- [x] **Message Sanitization** — Body trimmed and limited to 1000 chars ✅ Line 394
 
 ---
 
 ## RevenueCat/Superwall Checks
 
 - [x] **API Keys** — Public API key only in app (not secret key) ✅ Verified
-- [ ] **Entitlements** — Validate subscription status server-side for sensitive features
-- [ ] **Webhooks** — If using webhooks, verify signature in Cloud Functions
+- [x] **Entitlements** — Validate subscription status server-side ✅ `checkUserSubscription()` in CF
+- [x] **Webhooks** — RevenueCat webhook validates auth header ✅ Line 1956
 
 ---
 
@@ -170,6 +179,19 @@ grep -rn "print.*phone\|print.*password" --include="*.swift" Halloo/ | grep -v "
 # Verify Privacy Manifest exists
 ls -la Halloo/PrivacyInfo.xcprivacy
 ```
+
+---
+
+## Manual Penetration Testing
+
+See **[SECURITY-PENTEST.md](./SECURITY-PENTEST.md)** for manual access control testing procedures.
+
+Run before each App Store release to verify:
+- Cross-account Firestore access blocked
+- Cross-account Storage access blocked
+- Cloud Function abuse prevented
+- Webhook spoofing rejected
+- Input injection rejected
 
 ---
 
