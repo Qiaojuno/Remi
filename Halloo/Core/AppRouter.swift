@@ -189,8 +189,10 @@ final class AppRouter: ObservableObject {
     private func resolveAuthenticatedDestination(userId: String?) async {
         logger.info("User authenticated - checking subscription status")
 
-        // Check subscription status (RevenueCat + local trial check)
-        let hasSubscription = await subscriptionManager.hasActiveSubscription()
+        // Check subscription status using cached data (instant, no network call)
+        // RevenueCat SDK automatically refreshes cache on app launch and keeps it
+        // updated via customerInfoStream - this is the recommended approach
+        let hasSubscription = subscriptionManager.hasActiveSubscriptionCached()
 
         logger.info("Subscription status: hasSubscription=\(hasSubscription)")
 

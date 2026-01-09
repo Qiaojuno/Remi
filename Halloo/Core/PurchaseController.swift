@@ -38,6 +38,42 @@ import RevenueCat
 /// - RevenueCat SDK handles internal synchronization
 final class PurchaseController: SuperwallKit.PurchaseController {
 
+    // MARK: - Subscription Status Sync
+
+    /// Syncs subscription status from RevenueCat to Superwall
+    ///
+    /// This method listens to RevenueCat's customer info stream and updates
+    /// Superwall's subscriptionStatus whenever entitlements change.
+    /// MUST be called after both RevenueCat and Superwall are configured.
+    ///
+    /// Without this, Superwall will timeout waiting for subscription status
+    /// and fail to present paywalls properly.
+    func syncSubscriptionStatus() {
+        guard Purchases.isConfigured else {
+            print("⚠️ [PurchaseController] RevenueCat not configured yet, skipping subscription sync")
+            return
+        }
+
+        _Concurrency.Task {
+            for await customerInfo in Purchases.shared.customerInfoStream {
+                // Extract active entitlement IDs
+                let superwallEntitlements = customerInfo.entitlements.activeInCurrentEnvironment.keys.map {
+                    Entitlement(id: $0)
+                }
+
+                await MainActor.run { [superwallEntitlements] in
+                    if superwallEntitlements.isEmpty {
+                        Superwall.shared.subscriptionStatus = .inactive
+                        print("🔄 [PurchaseController] Superwall subscription status set to: inactive")
+                    } else {
+                        Superwall.shared.subscriptionStatus = .active(Set(superwallEntitlements))
+                        print("🔄 [PurchaseController] Superwall subscription status set to: active(\(superwallEntitlements.map { $0.id }))")
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - PurchaseController Protocol
 
     /// Handle purchase request from Superwall paywall

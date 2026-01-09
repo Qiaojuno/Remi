@@ -165,6 +165,9 @@ struct HalloApp: App {
     // MARK: - Dependencies
     private let container: Container
 
+    /// Shared PurchaseController for Superwall/RevenueCat integration
+    private let purchaseController = PurchaseController()
+
     // MARK: - App Lifecycle
     init() {
         // Skip heavy initialization during Canvas/Preview execution
@@ -182,6 +185,11 @@ struct HalloApp: App {
             configureRevenueCat()
             configureSuperwall()
             configureGoogleSignIn()
+
+            // CRITICAL: Start syncing subscription status to Superwall
+            // This must be called AFTER both RevenueCat and Superwall are configured
+            // Without this, Superwall will timeout waiting for subscription status
+            purchaseController.syncSubscriptionStatus()
         }
 
         configureAppearance()
@@ -272,9 +280,10 @@ struct HalloApp: App {
         options.logging.level = .debug  // Enable debug logging to diagnose product issues
         #endif
 
+        // Use the shared purchaseController instance so we can call syncSubscriptionStatus()
         Superwall.configure(
             apiKey: SUPERWALL_API_KEY,
-            purchaseController: PurchaseController(),
+            purchaseController: purchaseController,
             options: options
         )
 

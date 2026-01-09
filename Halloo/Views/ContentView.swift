@@ -81,9 +81,6 @@ struct ContentView: View {
     @State private var showRefreshLoadingScreen: Bool = false
     private let refreshThresholdSeconds: TimeInterval = 300 // 5 minutes
 
-    // MARK: - Privacy Protection (MASVS-PLATFORM-3)
-    /// Shows blur overlay when app enters background to protect sensitive data in app switcher
-    @State private var showPrivacyScreen: Bool = false
 
     // MARK: - Computed Properties
 
@@ -121,23 +118,6 @@ struct ContentView: View {
                     handleScenePhaseChange(from: oldPhase, to: newPhase)
                 }
 
-            // MARK: - Privacy Screen (MASVS-PLATFORM-3)
-            // Protects sensitive data (phone numbers, photos) from app switcher screenshots
-            if showPrivacyScreen {
-                Color(.systemBackground)
-                    .overlay(
-                        VStack(spacing: 16) {
-                            Image(systemName: "lock.shield.fill")
-                                .font(.system(size: 48))
-                                .foregroundColor(.secondary)
-                            Text("Halloo")
-                                .font(.title2.weight(.semibold))
-                                .foregroundColor(.primary)
-                        }
-                    )
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-            }
         }
     }
     
@@ -724,19 +704,11 @@ struct ContentView: View {
     /// Handle app backgrounding/foregrounding - refresh data if away 5+ minutes
     private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
         switch newPhase {
-        case .background, .inactive:
-            // SECURITY: Show privacy screen to protect sensitive data in app switcher
-            withAnimation(.easeIn(duration: 0.1)) {
-                showPrivacyScreen = true
-            }
-            if newPhase == .background {
-                backgroundedAt = Date()
-            }
+        case .background:
+            backgroundedAt = Date()
+        case .inactive:
+            break
         case .active:
-            // Hide privacy screen when app becomes active
-            withAnimation(.easeOut(duration: 0.2)) {
-                showPrivacyScreen = false
-            }
             defer { backgroundedAt = nil }
             guard authService?.isAuthenticated == true,
                   let backgrounded = backgroundedAt,
