@@ -960,11 +960,11 @@ final class TaskViewModel: ObservableObject, AppStateViewModel {
         let calendar = Calendar.current
 
         if frequency == .daily || frequency == .weekdays {
-            // For recurring tasks, just check if times are reasonable
+            // For recurring tasks, check TCPA-compliant hours (6 AM - 9 PM)
             for time in times {
                 let hour = calendar.component(.hour, from: time)
-                if hour < 6 || hour > 23 {
-                    timeError = "Please select times between 6 AM and 11 PM"
+                if hour < 6 || hour >= 21 {
+                    timeError = "Please select times between 6 AM and 9 PM"
                     return
                 }
             }

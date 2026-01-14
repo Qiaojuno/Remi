@@ -156,13 +156,14 @@ enum TaskCategory: String, CaseIterable, Codable {
 // MARK: - Quiet Hours Validation (TCPA Compliance)
 extension TaskCategory {
     /// Allowed hour range for SMS (TCPA quiet hours compliance)
-    /// Based on category sensitivity and typical user schedules
+    /// Hard limit: 6 AM - 9 PM per TCPA regulations
+    /// Category-specific start times vary based on typical schedules
     var allowedHourRange: ClosedRange<Int> {
         switch self {
         case .medication:
-            return 6...22  // 6 AM - 10 PM (critical reminders, wider window)
+            return 6...21  // 6 AM - 9 PM (critical reminders, earliest start)
         case .health, .safety:
-            return 7...22  // 7 AM - 10 PM (important but not as urgent as meds)
+            return 7...21  // 7 AM - 9 PM (important but not as urgent as meds)
         case .meal:
             return 6...21  // 6 AM - 9 PM (breakfast starts early, dinner ends by 9 PM)
         case .exercise:
