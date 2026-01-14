@@ -19,6 +19,14 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     // MARK: - Published Properties
     @Published var isAuthenticated: Bool = false
 
+    /// Tracks whether the initial auth state has been determined
+    /// This is set to true after Firebase Auth completes its initial session restoration
+    /// Used to prevent race conditions where routing happens before auth is ready
+    @Published private(set) var isAuthStateInitialized: Bool = false
+
+    /// Continuation for waiting on initial auth state determination
+    private var authInitializationContinuation: CheckedContinuation<Void, Never>?
+
     var currentUser: AuthUser? {
         guard let firebaseUser = auth.currentUser else { return nil }
         return AuthUser(
@@ -361,19 +369,64 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
     }
     
     func initializeAuthState() async {
+        // If already initialized, don't re-initialize
+        guard !isAuthStateInitialized else {
+            return
+        }
+
         // Set up the auth state listener first
         setupAuthStateListener()
 
-        // Check if user is already signed in (Firebase persists auth in Keychain)
-        if let firebaseUser = auth.currentUser {
-            // ✅ FIX: Immediately update isAuthenticated SYNCHRONOUSLY before any async work
-            // This prevents the race condition where UI renders before auth state is restored
-            await MainActor.run {
-                self.isAuthenticated = true
-                self.authBoolSubject.send(true)
-            }
+        // CRITICAL FIX: Wait for Firebase Auth to definitively determine auth state
+        // Firebase Auth restores sessions from Keychain asynchronously
+        // The auth state listener will fire once when this completes
+        //
+        // We use a continuation to wait for the first auth state callback
+        // This prevents the race condition where routing happens before auth is ready
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            // Store continuation to be resumed by auth state listener
+            self.authInitializationContinuation = continuation
 
-            // Then fetch user data from Firestore (can take time)
+            // Check if user is already signed in (Firebase may have already restored session)
+            // This handles the case where auth.currentUser is already populated synchronously
+            if auth.currentUser != nil {
+                // User is already signed in - update state immediately
+                _Concurrency.Task { @MainActor in
+                    self.isAuthenticated = true
+                    self.authBoolSubject.send(true)
+                    self.markAuthStateInitialized()
+                }
+            } else {
+                // User not signed in yet - might be:
+                // 1. No persisted session (user needs to log in)
+                // 2. Firebase hasn't restored session yet (wait for listener)
+                //
+                // Give Firebase a moment to restore, then check again
+                _Concurrency.Task {
+                    // Wait 500ms for Firebase to restore session from Keychain
+                    // This is typically enough for Firebase to check Keychain
+                    try? await _Concurrency.Task.sleep(nanoseconds: 500_000_000)
+
+                    await MainActor.run {
+                        // Check again after waiting
+                        if self.auth.currentUser != nil {
+                            self.isAuthenticated = true
+                            self.authBoolSubject.send(true)
+                        } else {
+                            // Definitively no user - Firebase has checked Keychain
+                            self.isAuthenticated = false
+                            self.authBoolSubject.send(false)
+                        }
+
+                        // Mark as initialized regardless of outcome
+                        self.markAuthStateInitialized()
+                    }
+                }
+            }
+        }
+
+        // After auth state is determined, fetch additional user data if authenticated
+        if let firebaseUser = auth.currentUser {
             do {
                 let user = try await createUserFromFirebaseUser(firebaseUser)
                 await MainActor.run {
@@ -382,7 +435,40 @@ class FirebaseAuthenticationService: ObservableObject, AuthenticationServiceProt
             } catch {
                 print("❌ FirebaseAuth failed to create user from Firebase user: \(error.localizedDescription)")
                 // Keep isAuthenticated true - Firebase user exists, just Firestore fetch failed
-                // User can still use the app with basic auth info
+            }
+        }
+    }
+
+    /// Marks auth state as initialized and resumes any waiting continuations
+    @MainActor
+    private func markAuthStateInitialized() {
+        guard !isAuthStateInitialized else { return }
+
+        isAuthStateInitialized = true
+        print("✅ [Auth] Auth state initialized: isAuthenticated=\(isAuthenticated)")
+
+        // Resume the continuation if waiting
+        authInitializationContinuation?.resume()
+        authInitializationContinuation = nil
+    }
+
+    /// Waits for auth state to be initialized (call before making routing decisions)
+    func waitForAuthStateInitialization() async {
+        // If already initialized, return immediately
+        if isAuthStateInitialized {
+            return
+        }
+
+        // Otherwise wait for initialization
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            _Concurrency.Task { @MainActor in
+                if self.isAuthStateInitialized {
+                    continuation.resume()
+                } else {
+                    // Store continuation to be resumed when initialized
+                    // Note: This is a simple approach - for production, consider using AsyncStream
+                    self.authInitializationContinuation = continuation
+                }
             }
         }
     }

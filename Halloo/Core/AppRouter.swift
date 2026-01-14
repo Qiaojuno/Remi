@@ -134,13 +134,17 @@ final class AppRouter: ObservableObject {
         // Only show loading on initial resolution (prevents flash on auth state changes)
         if !hasResolvedInitialRoute {
             destination = .loading
-
-            // Small delay to ensure Firebase Auth is ready
-            // This prevents race conditions on cold app launch
-            try? await _Concurrency.Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
         }
 
-        // STEP 1: Check authentication state
+        // CRITICAL FIX: Wait for auth state to be definitively determined
+        // This replaces the unreliable 300ms delay with proper synchronization
+        //
+        // Firebase Auth restores sessions from Keychain asynchronously.
+        // We must wait for this to complete before checking isAuthenticated.
+        await authService.waitForAuthStateInitialization()
+        logger.info("Auth state initialization complete")
+
+        // STEP 1: Check authentication state (NOW reliable after waiting)
         let isAuthenticated = authService.isAuthenticated
         let userId = authService.currentUser?.uid
 

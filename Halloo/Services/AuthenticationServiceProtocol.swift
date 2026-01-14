@@ -249,6 +249,18 @@ protocol AuthenticationServiceProtocol {
     /// Sets up authentication state monitoring and restores any existing
     /// user sessions for seamless family coordination access
     func initializeAuthState() async
+
+    /// Waits for auth state to be initialized before making routing decisions
+    ///
+    /// Firebase Auth restores sessions from Keychain asynchronously on app launch.
+    /// Call this method before checking `isAuthenticated` to ensure the auth state
+    /// has been definitively determined (either with a user or definitively no user).
+    ///
+    /// This prevents race conditions where routing happens before Firebase has
+    /// finished restoring the session from Keychain.
+    ///
+    /// - Note: Returns immediately if auth state is already initialized
+    func waitForAuthStateInitialization() async
 }
 
 // MARK: - Auth User Model
