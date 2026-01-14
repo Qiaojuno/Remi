@@ -11,6 +11,7 @@ struct AppFonts {
         registerFont(named: "Inter-VariableFont_opsz,wght", extension: "ttf")
         registerFont(named: "Poppins-Regular", extension: "ttf")
         registerFont(named: "Poppins-Medium", extension: "ttf")
+        registerFont(named: "Poppins-SemiBold", extension: "ttf")
     }
     
     private static func registerFont(named fontName: String, extension: String) {
@@ -38,7 +39,12 @@ struct AppFonts {
     static func poppinsMedium(size: CGFloat) -> Font {
         return .custom("Poppins-Medium", size: size)
     }
-    
+
+    /// Use Poppins SemiBold font when needed (600 weight - more visible than Medium)
+    static func poppinsSemiBold(size: CGFloat) -> Font {
+        return .custom("Poppins-SemiBold", size: size)
+    }
+
     /// Use Inter Variable font when needed  
     static func inter(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         return .custom("Inter-Variable", size: size).weight(weight)

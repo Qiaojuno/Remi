@@ -193,10 +193,11 @@ final class AppRouter: ObservableObject {
     private func resolveAuthenticatedDestination(userId: String?) async {
         logger.info("User authenticated - checking subscription status")
 
-        // Check subscription status using cached data (instant, no network call)
-        // RevenueCat SDK automatically refreshes cache on app launch and keeps it
-        // updated via customerInfoStream - this is the recommended approach
-        let hasSubscription = subscriptionManager.hasActiveSubscriptionCached()
+        // ✅ FIX: Use async API call instead of cached data
+        // After login, the cache may still contain stale data from the anonymous session.
+        // Making a fresh API call ensures we get the correct subscription status for the
+        // newly-identified user, preventing subscribed users from seeing the paywall.
+        let hasSubscription = await subscriptionManager.hasActiveSubscription()
 
         logger.info("Subscription status: hasSubscription=\(hasSubscription)")
 

@@ -411,11 +411,11 @@ struct WelcomeView: View {
                     VStack(spacing: 0) {
                         Text("Keep them reminded")
                             .foregroundColor(.black)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(AppFonts.poppinsSemiBold(size: 28))
                             .tracking(-1.0)
 
                         Text(rotatingWords[currentWordIndex].text)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(AppFonts.poppinsSemiBold(size: 28))
                             .tracking(-1.0)
                             .foregroundColor(rotatingWords[currentWordIndex].color)
                             .shadow(color: rotatingWords[currentWordIndex].color.opacity(0.3), radius: 8, x: 0, y: 2)
@@ -453,7 +453,7 @@ struct WelcomeView: View {
                         viewModel.startQuiz()
                     }) {
                         Text("Get Started")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(AppFonts.poppinsSemiBold(size: 16))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 20)
@@ -468,12 +468,12 @@ struct WelcomeView: View {
                     }) {
                         HStack(spacing: 4) {
                             Text("Already signed up?")
+                                .font(AppFonts.poppins(size: 15))
                                 .foregroundColor(.black)
                             Text("Log in")
+                                .font(AppFonts.poppinsSemiBold(size: 15))
                                 .foregroundColor(.black)
-                                .fontWeight(.semibold)
                         }
-                        .font(.system(size: 15))
                     }
                 }
                 .padding(.horizontal, 24)

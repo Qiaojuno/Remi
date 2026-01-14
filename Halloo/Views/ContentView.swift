@@ -626,6 +626,11 @@ struct ContentView: View {
                     self.selectedTab = 0
                     self.selectedProfileIndex = 0
 
+                    // ✅ FIX: Reset OnboardingViewModel to prevent paywall from appearing
+                    // Without this, currentStep may still be .step6Paywall from the previous
+                    // session, causing PaywallStepView to render and trigger Superwall
+                    self.onboardingViewModel?.currentStep = .welcome
+
                     // ✅ CENTRALIZED ROUTING: Notify router of logout
                     self.appRouter.handleLogout()
                 }
