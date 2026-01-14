@@ -118,6 +118,36 @@ service cloud.firestore {
       allow read, write: if false; // No access for now
     }
 
+    // ===================================================================
+    // PHONE NUMBER REGISTRY - ADMIN SDK ONLY (Cloud Functions)
+    // ===================================================================
+    // Stores hashed phone numbers for TCPA compliance tracking.
+    // Contains opt-out status that survives profile deletion.
+    // SECURITY: Locked to Cloud Functions only - no client access.
+    match /phoneNumberRegistry/{phoneHash} {
+      allow read, write: if false;  // Admin SDK only (Cloud Functions)
+    }
+
+    // Phone registry audit log - tracks consent/opt-out events
+    match /phoneRegistryAuditLog/{logId} {
+      allow read, write: if false;  // Admin SDK only (Cloud Functions)
+    }
+
+    // Reconciliation reports - system health tracking
+    match /reconciliationReports/{reportId} {
+      allow read, write: if false;  // Admin SDK only (Cloud Functions)
+    }
+
+    // Health metrics - system monitoring
+    match /healthMetrics/{metricId} {
+      allow read, write: if false;  // Admin SDK only (Cloud Functions)
+    }
+
+    // Errors collection - error tracking
+    match /errors/{errorId} {
+      allow read, write: if false;  // Admin SDK only (Cloud Functions)
+    }
+
     // Deny all other access
     match /{document=**} {
       allow read, write: if false;

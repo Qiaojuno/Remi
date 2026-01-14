@@ -49,7 +49,7 @@ struct CustomerCenterView: View {
 
                     // Restore Purchases
                     Button {
-                        Task {
+                        _Concurrency.Task {
                             isRestoring = true
                             do {
                                 let customerInfo = try await Purchases.shared.restorePurchases()

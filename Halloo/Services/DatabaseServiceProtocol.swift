@@ -101,7 +101,22 @@ protocol DatabaseServiceProtocol {
     /// - Throws: DatabaseError if deletion fails or user has active dependencies
     /// - Warning: Irreversible operation that removes all family care coordination data
     func deleteUser(_ userId: String) async throws
-    
+
+    // MARK: - Phone Registry Operations
+
+    /// Checks phone number opt-out and confirmation status in the global registry
+    ///
+    /// Should be called BEFORE creating a profile to:
+    /// 1. Block creation if phone number has previously opted out (STOP keyword)
+    /// 2. Auto-confirm if phone was recently confirmed (skip SMS confirmation)
+    ///
+    /// This ensures TCPA compliance by respecting opt-outs even after profile deletion.
+    ///
+    /// - Parameter phoneNumber: E.164 formatted phone number (e.g., +17788143739)
+    /// - Returns: PhoneRegistryStatus with optedOut, recentlyConfirmed, canAutoConfirm
+    /// - Throws: Error if Cloud Function call fails (returns safe default on error)
+    func checkPhoneOptOutStatus(phoneNumber: String) async throws -> PhoneRegistryStatus
+
     // MARK: - Elderly Profile Lifecycle Operations
     
     /// Creates a new elderly family member profile with SMS confirmation workflow initiation

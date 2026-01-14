@@ -2,6 +2,7 @@ import Foundation
 import Firebase
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseFunctions
 import FirebaseStorage
 import Combine
 
@@ -11,6 +12,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
     // MARK: - Properties
     private lazy var db: Firestore = Firestore.firestore()
     private lazy var storage: Storage = Storage.storage()
+    private lazy var functions: Functions = Functions.functions()
     private var listeners: [ListenerRegistration] = []
     
     // MARK: - Collection Paths (Nested Subcollections)
@@ -76,8 +78,43 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
         try await deleteUserRecursively(userId)
     }
     
+    // MARK: - Phone Registry Operations
+
+    /// Check if a phone number has opted out or was recently confirmed
+    ///
+    /// Calls the `checkPhoneOptOutStatus` Cloud Function to check the phone
+    /// number registry. This should be called BEFORE creating a profile to:
+    /// 1. Warn if the phone number has previously opted out (STOP keyword)
+    /// 2. Auto-confirm if recently confirmed (skip SMS confirmation)
+    ///
+    /// - Parameter phoneNumber: E.164 formatted phone number (e.g., +17788143739)
+    /// - Returns: PhoneRegistryStatus with optedOut, recentlyConfirmed, canAutoConfirm
+    /// - Throws: Error if Cloud Function call fails
+    func checkPhoneOptOutStatus(phoneNumber: String) async throws -> PhoneRegistryStatus {
+        let callable = functions.httpsCallable("checkPhoneOptOutStatus")
+
+        do {
+            let result = try await callable.call(["phoneNumber": phoneNumber])
+
+            guard let data = result.data as? [String: Any] else {
+                print("❌ [PhoneRegistry] Invalid response from checkPhoneOptOutStatus")
+                return .newNumber
+            }
+
+            let status = PhoneRegistryStatus(from: data)
+            print("📱 [PhoneRegistry] Phone status: optedOut=\(status.optedOut), recentlyConfirmed=\(status.recentlyConfirmed), canAutoConfirm=\(status.canAutoConfirm)")
+
+            return status
+
+        } catch {
+            print("❌ [PhoneRegistry] Failed to check phone status: \(error.localizedDescription)")
+            // Return safe default (treat as new number) on error
+            return .newNumber
+        }
+    }
+
     // MARK: - Profile Operations
-    
+
     func createElderlyProfile(_ profile: ElderlyProfile) async throws {
         // Check for existing profile with same phone number (DUPLICATE PREVENTION)
         let existingProfiles = try await CollectionPath.userProfiles(userId: profile.userId)
@@ -747,7 +784,7 @@ class FirebaseDatabaseService: DatabaseServiceProtocol {
                     do {
                         // Convert Firestore message to SMSResponse
                         let smsResponse = try self.convertMessageToSMSResponse(data, documentId: change.document.documentID)
-                        print("📬 [FirebaseDatabaseService] New SMS received for profile: \(smsResponse.profileId)")
+                        print("📬 [FirebaseDatabaseService] New SMS received for profile: \(smsResponse.profileId ?? "unknown")")
                         subject.send(smsResponse)
                     } catch {
                         print("❌ [FirebaseDatabaseService] Failed to convert SMS message \(change.document.documentID): \(error.localizedDescription)")

@@ -568,6 +568,21 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             }
             let profileId = IDGenerator.profileID(phoneNumber: e164Phone)
 
+            // Step 3.5: Check phone registry for opt-out status (TCPA compliance)
+            let phoneStatus = try await databaseService.checkPhoneOptOutStatus(phoneNumber: e164Phone)
+
+            if phoneStatus.optedOut {
+                // Phone number has previously opted out - cannot create profile
+                await MainActor.run {
+                    errorMessage = "This phone number has previously unsubscribed from Remi. The recipient must text START to our number to re-subscribe before you can add them."
+                    isLoading = false
+                }
+                return
+            }
+
+            // Store whether we can auto-confirm (skip SMS confirmation)
+            let canAutoConfirm = phoneStatus.canAutoConfirm
+
             // Step 4: Upload photo (if provided)
             let photoURL = await uploadProfilePhotoIfNeeded(profileId: profileId, userId: userId)
 
@@ -576,14 +591,15 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
                 profileId: profileId,
                 userId: userId,
                 phoneNumber: e164Phone,
-                photoURL: photoURL
+                photoURL: photoURL,
+                autoConfirm: canAutoConfirm
             )
 
             // Step 6: Persist to database
             try await persistProfile(profile)
 
-            // Step 7: Handle post-creation actions
-            await handleProfileCreationSuccess(profile)
+            // Step 7: Handle post-creation actions (skip SMS if auto-confirmed)
+            await handleProfileCreationSuccess(profile, skipSMSConfirmation: canAutoConfirm)
 
         } catch {
             await handleProfileCreationError(error)
@@ -636,7 +652,10 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         }
     }
 
-    private func buildProfile(profileId: String, userId: String, phoneNumber: String, photoURL: String?) -> ElderlyProfile {
+    private func buildProfile(profileId: String, userId: String, phoneNumber: String, photoURL: String?, autoConfirm: Bool = false) -> ElderlyProfile {
+        // If autoConfirm is true (recently confirmed in phone registry), skip SMS confirmation
+        let initialStatus: ProfileStatus = autoConfirm ? .confirmed : .pendingConfirmation
+
         return ElderlyProfile(
             id: profileId,
             userId: userId,
@@ -647,9 +666,10 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             timeZone: timeZone.identifier, // Critical for proper reminder timing
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
             photoURL: photoURL,
-            status: .pendingConfirmation, // Requires SMS confirmation before activation
+            status: initialStatus,
             createdAt: Date(),
-            lastActiveAt: Date()
+            lastActiveAt: Date(),
+            confirmedAt: autoConfirm ? Date() : nil  // Set confirmedAt if auto-confirmed
         )
     }
 
@@ -662,16 +682,20 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
         }
     }
 
-    private func handleProfileCreationSuccess(_ profile: ElderlyProfile) async {
+    private func handleProfileCreationSuccess(_ profile: ElderlyProfile, skipSMSConfirmation: Bool = false) async {
         // Broadcast profile creation to Dashboard and other family members
         dataSyncCoordinator.broadcastProfileUpdate(profile)
 
-        // Send SMS confirmation immediately (critical step)
-        do {
-            try await sendConfirmationSMS(for: profile)
-        } catch {
-            print("❌ [AsyncTask] Failed to send SMS - profileId: \(profile.id), error: \(error.localizedDescription)")
-            // Don't throw - profile created, SMS failure is recoverable
+        // Send SMS confirmation unless auto-confirmed (recently confirmed in phone registry)
+        if skipSMSConfirmation {
+            print("✅ [AutoConfirm] Skipping SMS confirmation - phone was recently confirmed in registry")
+        } else {
+            do {
+                try await sendConfirmationSMS(for: profile)
+            } catch {
+                print("❌ [AsyncTask] Failed to send SMS - profileId: \(profile.id), error: \(error.localizedDescription)")
+                // Don't throw - profile created, SMS failure is recoverable
+            }
         }
 
         await MainActor.run {
@@ -681,7 +705,13 @@ final class ProfileViewModel: ObservableObject, AppStateViewModel {
             }
 
             // Update confirmation status and reset form
-            self.confirmationStatus[profile.id] = .sent
+            if skipSMSConfirmation {
+                // Already confirmed - show as confirmed
+                self.confirmationStatus[profile.id] = .confirmed
+                self.confirmationMessages[profile.id] = "Auto-confirmed! This number was recently verified."
+            } else {
+                self.confirmationStatus[profile.id] = .sent
+            }
             self.resetForm()
             self.showingCreateProfile = false
         }

@@ -18,6 +18,174 @@ const twilioPhoneNumber = defineSecret('TWILIO_PHONE_NUMBER');
 // Define secret for RevenueCat webhook authentication
 const revenueCatWebhookAuthHeader = defineSecret('REVENUECAT_WEBHOOK_AUTH_HEADER');
 
+// Define secret for phone number hashing (GDPR/privacy protection)
+const phoneHashSecret = defineSecret('PHONE_HASH_SECRET');
+
+// =============================================================================
+// PHONE NUMBER REGISTRY - Secure consent tracking across profile deletions
+// =============================================================================
+// This registry tracks opt-out status and consent history using hashed phone
+// numbers. It ensures TCPA compliance even when profiles are deleted and
+// recreated with the same phone number.
+//
+// SECURITY:
+// - Phone numbers are HMAC-SHA256 hashed (not stored in plaintext)
+// - Collection is locked to Cloud Functions only (no client access)
+// - No userId stored to prevent cross-user correlation
+// =============================================================================
+
+const crypto = require('crypto');
+
+/**
+ * Hash a phone number using HMAC-SHA256 with secret salt
+ *
+ * @param {string} phoneNumber - E.164 formatted phone number
+ * @param {string} secret - Secret salt from Firebase Secret Manager
+ * @returns {string} - Hex-encoded hash (64 characters)
+ */
+function hashPhoneNumber(phoneNumber, secret) {
+  // Normalize: remove all non-digits
+  const normalized = phoneNumber.replace(/\D/g, '');
+
+  return crypto
+    .createHmac('sha256', secret)
+    .update(normalized)
+    .digest('hex');
+}
+
+/**
+ * Check if a phone number has an active opt-out in the registry
+ *
+ * @param {string} phoneNumber - E.164 formatted phone number
+ * @param {string} secret - Hash secret
+ * @returns {Promise<{optedOut: boolean, optOutAt: Date|null, lastConsentAt: Date|null}>}
+ */
+async function checkPhoneRegistryStatus(phoneNumber, secret) {
+  const phoneHash = hashPhoneNumber(phoneNumber, secret);
+
+  try {
+    const doc = await admin.firestore()
+      .collection('phoneNumberRegistry')
+      .doc(phoneHash)
+      .get();
+
+    if (!doc.exists) {
+      return { optedOut: false, optOutAt: null, lastConsentAt: null };
+    }
+
+    const data = doc.data();
+    return {
+      optedOut: data.optOutActive === true,
+      optOutAt: data.optOutAt?.toDate() || null,
+      lastConsentAt: data.lastConsentAt?.toDate() || null
+    };
+  } catch (error) {
+    console.error('❌ Failed to check phone registry:', error.message);
+    return { optedOut: false, optOutAt: null, lastConsentAt: null };
+  }
+}
+
+/**
+ * Record an opt-out (STOP keyword) in the phone registry
+ *
+ * @param {string} phoneNumber - E.164 formatted phone number
+ * @param {string} secret - Hash secret
+ * @param {string} method - How they opted out (e.g., 'STOP_keyword')
+ */
+async function recordPhoneOptOut(phoneNumber, secret, method = 'STOP_keyword') {
+  const phoneHash = hashPhoneNumber(phoneNumber, secret);
+
+  try {
+    await admin.firestore()
+      .collection('phoneNumberRegistry')
+      .doc(phoneHash)
+      .set({
+        optOutActive: true,
+        optOutAt: admin.firestore.FieldValue.serverTimestamp(),
+        optOutMethod: method,
+        // Preserve lastConsentAt if it exists
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+    // Audit log
+    await admin.firestore()
+      .collection('phoneRegistryAuditLog')
+      .add({
+        phoneHash: phoneHash,
+        action: 'OPT_OUT',
+        method: method,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+    console.log(`📋 Phone registry: recorded opt-out for hash ${phoneHash.substring(0, 8)}...`);
+  } catch (error) {
+    console.error('❌ Failed to record phone opt-out:', error.message);
+  }
+}
+
+/**
+ * Record consent (YES confirmation or START re-subscribe) in the phone registry
+ *
+ * @param {string} phoneNumber - E.164 formatted phone number
+ * @param {string} secret - Hash secret
+ * @param {string} method - How they consented (e.g., 'YES_keyword', 'START_keyword')
+ */
+async function recordPhoneConsent(phoneNumber, secret, method = 'YES_keyword') {
+  const phoneHash = hashPhoneNumber(phoneNumber, secret);
+
+  try {
+    await admin.firestore()
+      .collection('phoneNumberRegistry')
+      .doc(phoneHash)
+      .set({
+        optOutActive: false,
+        optOutAt: null,
+        optOutMethod: null,
+        lastConsentAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastConsentMethod: method,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+    // Audit log
+    await admin.firestore()
+      .collection('phoneRegistryAuditLog')
+      .add({
+        phoneHash: phoneHash,
+        action: 'CONSENT',
+        method: method,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+    console.log(`📋 Phone registry: recorded consent for hash ${phoneHash.substring(0, 8)}...`);
+  } catch (error) {
+    console.error('❌ Failed to record phone consent:', error.message);
+  }
+}
+
+/**
+ * Check if a phone number was recently confirmed (within last 30 days)
+ * Used for auto-confirmation when re-adding a profile with same phone
+ *
+ * @param {string} phoneNumber - E.164 formatted phone number
+ * @param {string} secret - Hash secret
+ * @returns {Promise<boolean>}
+ */
+async function wasRecentlyConfirmed(phoneNumber, secret) {
+  const status = await checkPhoneRegistryStatus(phoneNumber, secret);
+
+  if (status.optedOut) {
+    return false; // Opted out takes precedence
+  }
+
+  if (!status.lastConsentAt) {
+    return false; // Never confirmed
+  }
+
+  // Check if consent was within last 30 days
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  return status.lastConsentAt > thirtyDaysAgo;
+}
+
 // =============================================================================
 // SUBSCRIPTION VALIDATION HELPERS
 // =============================================================================
@@ -109,6 +277,9 @@ async function pauseUserHabits(userId) {
  * Reactivate habits for a user when subscription is renewed
  * Only reactivates habits that were paused due to subscription expiration
  *
+ * IMPORTANT: Also recalculates nextScheduledDate from NOW to ensure habits
+ * start sending immediately, not stuck with old dates from before the pause.
+ *
  * @param {string} userId - Firebase user ID
  * @returns {Promise<number>} - Number of habits reactivated
  */
@@ -126,27 +297,130 @@ async function reactivateUserHabits(userId) {
       return 0;
     }
 
-    // Batch update all habits to active status
+    // Batch update all habits to active status with FRESH nextScheduledDate
     const batch = admin.firestore().batch();
     let count = 0;
 
     for (const habitDoc of habitsSnapshot.docs) {
+      const habit = habitDoc.data();
+
+      // Calculate fresh nextScheduledDate from NOW (not from old stale date)
+      const freshNextScheduledDate = calculateNextOccurrenceFromNow(habit, habit.timeZone);
+
       batch.update(habitDoc.ref, {
         status: 'active',
         pausedReason: admin.firestore.FieldValue.delete(),
         pausedAt: admin.firestore.FieldValue.delete(),
-        reactivatedAt: admin.firestore.FieldValue.serverTimestamp()
+        reactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        // CRITICAL FIX: Update nextScheduledDate to future date
+        nextScheduledDate: admin.firestore.Timestamp.fromDate(freshNextScheduledDate),
+        // Track that this was recalculated during reactivation
+        nextScheduledDateRecalculatedAt: admin.firestore.FieldValue.serverTimestamp()
       });
       count++;
     }
 
     await batch.commit();
-    console.log(`▶️ Reactivated ${count} habits for user ${userId} after subscription renewal`);
+    console.log(`▶️ Reactivated ${count} habits for user ${userId} with fresh schedules`);
 
     return count;
 
   } catch (error) {
     console.error('❌ Failed to reactivate habits:', error.message);
+    return 0;
+  }
+}
+
+/**
+ * Pause all active habits for a specific profile when elderly user opts out (STOP keyword)
+ *
+ * @param {string} userId - Firebase user ID
+ * @param {string} profileId - Profile ID to pause habits for
+ * @returns {Promise<number>} - Number of habits paused
+ */
+async function pauseProfileHabits(userId, profileId) {
+  try {
+    const habitsSnapshot = await admin.firestore()
+      .collection(`users/${userId}/profiles/${profileId}/habits`)
+      .where('status', '==', 'active')
+      .get();
+
+    if (habitsSnapshot.empty) {
+      return 0;
+    }
+
+    const batch = admin.firestore().batch();
+    let count = 0;
+
+    for (const habitDoc of habitsSnapshot.docs) {
+      batch.update(habitDoc.ref, {
+        status: 'paused',
+        pausedReason: 'profile_opted_out',
+        pausedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      count++;
+    }
+
+    await batch.commit();
+    console.log(`⏸️ Paused ${count} habits for profile ${profileId} due to opt-out`);
+
+    return count;
+
+  } catch (error) {
+    console.error('❌ Failed to pause profile habits:', error.message);
+    return 0;
+  }
+}
+
+/**
+ * Reactivate habits for a specific profile when elderly user re-subscribes (START keyword)
+ * Recalculates nextScheduledDate from NOW for immediate resumption
+ *
+ * @param {string} userId - Firebase user ID
+ * @param {string} profileId - Profile ID to reactivate habits for
+ * @param {string} profileTimeZone - Profile's timezone for scheduling
+ * @returns {Promise<number>} - Number of habits reactivated
+ */
+async function reactivateProfileHabits(userId, profileId, profileTimeZone) {
+  try {
+    // Find habits paused due to profile opt-out
+    const habitsSnapshot = await admin.firestore()
+      .collection(`users/${userId}/profiles/${profileId}/habits`)
+      .where('status', '==', 'paused')
+      .where('pausedReason', '==', 'profile_opted_out')
+      .get();
+
+    if (habitsSnapshot.empty) {
+      return 0;
+    }
+
+    const batch = admin.firestore().batch();
+    let count = 0;
+
+    for (const habitDoc of habitsSnapshot.docs) {
+      const habit = habitDoc.data();
+
+      // Calculate fresh nextScheduledDate from NOW
+      const freshNextScheduledDate = calculateNextOccurrenceFromNow(habit, profileTimeZone);
+
+      batch.update(habitDoc.ref, {
+        status: 'active',
+        pausedReason: admin.firestore.FieldValue.delete(),
+        pausedAt: admin.firestore.FieldValue.delete(),
+        reactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        nextScheduledDate: admin.firestore.Timestamp.fromDate(freshNextScheduledDate),
+        reactivatedBy: 'START_keyword'
+      });
+      count++;
+    }
+
+    await batch.commit();
+    console.log(`▶️ Reactivated ${count} habits for profile ${profileId} with fresh schedules`);
+
+    return count;
+
+  } catch (error) {
+    console.error('❌ Failed to reactivate profile habits:', error.message);
     return 0;
   }
 }
@@ -170,6 +444,81 @@ async function reactivateUserHabits(userId) {
  *   "sentAt": "2025-10-09T..."
  * }
  */
+
+/**
+ * Callable function to check phone number opt-out status from registry
+ *
+ * Called by iOS app before creating a profile to check if the phone number
+ * has previously opted out (even if the old profile was deleted).
+ *
+ * Request:
+ * {
+ *   "phoneNumber": "+17788143739"
+ * }
+ *
+ * Response:
+ * {
+ *   "optedOut": true/false,
+ *   "recentlyConfirmed": true/false,  // Confirmed within last 30 days
+ *   "canAutoConfirm": true/false      // Can skip SMS confirmation
+ * }
+ *
+ * SECURITY: Phone number is hashed before lookup, never stored in logs
+ */
+exports.checkPhoneOptOutStatus = onCall({
+  secrets: [phoneHashSecret]
+}, async (request) => {
+  // Verify user is authenticated
+  if (!request.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'User must be authenticated to check phone status'
+    );
+  }
+
+  const { phoneNumber } = request.data;
+
+  if (!phoneNumber) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'phoneNumber is required'
+    );
+  }
+
+  // Normalize phone number
+  const normalizedPhone = phoneNumber.replace(/\D/g, '');
+  if (normalizedPhone.length < 10) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'Invalid phone number format'
+    );
+  }
+
+  try {
+    // Check registry status (uses hashed phone number)
+    const registryStatus = await checkPhoneRegistryStatus(phoneNumber, phoneHashSecret.value());
+    const recentlyConfirmed = await wasRecentlyConfirmed(phoneNumber, phoneHashSecret.value());
+
+    // Can auto-confirm if recently confirmed and NOT opted out
+    const canAutoConfirm = recentlyConfirmed && !registryStatus.optedOut;
+
+    console.log(`📱 Phone status check: optedOut=${registryStatus.optedOut}, recentlyConfirmed=${recentlyConfirmed}`);
+
+    return {
+      optedOut: registryStatus.optedOut,
+      recentlyConfirmed: recentlyConfirmed,
+      canAutoConfirm: canAutoConfirm
+    };
+
+  } catch (error) {
+    console.error('❌ Failed to check phone status:', error.message);
+    throw new functions.https.HttpsError(
+      'internal',
+      'Failed to check phone status'
+    );
+  }
+});
+
 exports.sendSMS = onCall({
   secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber]
 }, async (request) => {
@@ -341,7 +690,7 @@ exports.twilioWebhook = onRequest(
     memory: '256MiB',
     timeoutSeconds: 60,
     maxInstances: 10,  // Rate limiting via max concurrent instances
-    secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber]  // Access to credentials for signature validation, photo download, and sending replies
+    secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, phoneHashSecret]  // Access to credentials for signature validation, photo download, sending replies, and phone registry
   },
   async (req, res) => {
     // SECURITY CHECK #1: Verify request is from Twilio using HMAC-SHA1 signature
@@ -444,24 +793,122 @@ exports.twilioWebhook = onRequest(
       return;
     }
 
-    // Check for STOP keywords (opt-out) - matches Twilio Advanced Opt-Out config
     const upperMessage = messageBody.toUpperCase().trim();
-    const stopKeywords = ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'OPTOUT', 'REVOKE'];
+    const profileData = profileDoc.data();
 
-    if (stopKeywords.includes(upperMessage)) {
-      // Update profile to opt-out
+    // =========================================================================
+    // YES CONFIRMATION - Server-side profile confirmation (no longer client-only)
+    // =========================================================================
+    // Handles profile confirmation when elderly user replies YES to initial SMS
+    // This ensures confirmation works even if iOS app isn't running
+    // Also records consent in the global phone registry for TCPA compliance
+    const yesKeywords = ['YES', 'Y', 'CONFIRM', 'OK', 'OKAY'];
+
+    if (yesKeywords.includes(upperMessage) && profileData.status === 'pendingConfirmation') {
+      // Update profile to confirmed status
       await profileDoc.ref.update({
-        smsOptedOut: true,
-        optOutDate: admin.firestore.FieldValue.serverTimestamp(),
-        optOutMethod: 'STOP_KEYWORD'
+        status: 'confirmed',
+        confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
+        smsOptedOut: false  // Ensure opt-out is cleared
       });
 
-      console.log(`🛑 Profile ${profileDoc.id} opted out via ${upperMessage}`);
+      // Record consent in global phone registry (survives profile deletion)
+      await recordPhoneConsent(fromPhone, phoneHashSecret.value(), 'YES_keyword');
+
+      // Send welcome message
+      try {
+        const twilioClient = twilio(
+          twilioAccountSid.value(),
+          twilioAuthToken.value()
+        );
+
+        await twilioClient.messages.create({
+          body: `Welcome to Remi, ${profileData.name}! You'll now receive helpful daily reminders from your family. Reply STOP anytime to unsubscribe.`,
+          from: toPhone,
+          to: fromPhone
+        });
+      } catch (welcomeError) {
+        console.error('❌ Failed to send welcome SMS:', welcomeError.message);
+        // Continue - confirmation still succeeded
+      }
+
+      // Store the confirmation message
+      await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('profiles')
+        .doc(profileDoc.id)
+        .collection('messages')
+        .add({
+          userId: userId,
+          profileId: profileDoc.id,
+          fromPhone: fromPhone,
+          toPhone: toPhone,
+          messageBody: messageBody,
+          twilioSid: twilioSid,
+          status: status,
+          numMedia: parseInt(numMedia) || 0,
+          receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          isConfirmation: true,
+          direction: 'inbound'
+        });
+
+      console.log(`✅ Profile ${profileDoc.id} confirmed via ${upperMessage}`);
       res.status(200).send('OK');
       return;
     }
 
-    // Check for HELP keyword - send help message
+    // =========================================================================
+    // STOP KEYWORDS - Unsubscribe (opt-out)
+    // =========================================================================
+    // Pauses all habits and updates profile status to prevent SMS delivery
+    // Records opt-out in global registry (survives profile deletion for TCPA compliance)
+    const stopKeywords = ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'OPTOUT', 'REVOKE'];
+
+    if (stopKeywords.includes(upperMessage)) {
+      // Update profile: set opt-out AND update status to inactive
+      await profileDoc.ref.update({
+        smsOptedOut: true,
+        status: 'inactive',  // Sync status with opt-out state
+        optOutDate: admin.firestore.FieldValue.serverTimestamp(),
+        optOutMethod: 'STOP_KEYWORD'
+      });
+
+      // Record opt-out in global phone registry (survives profile deletion)
+      await recordPhoneOptOut(fromPhone, phoneHashSecret.value(), 'STOP_keyword');
+
+      // Pause all habits for this profile (they can be reactivated via START)
+      const pausedCount = await pauseProfileHabits(userId, profileDoc.id);
+
+      // Store the opt-out message
+      await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('profiles')
+        .doc(profileDoc.id)
+        .collection('messages')
+        .add({
+          userId: userId,
+          profileId: profileDoc.id,
+          fromPhone: fromPhone,
+          toPhone: toPhone,
+          messageBody: messageBody,
+          twilioSid: twilioSid,
+          status: status,
+          numMedia: 0,
+          receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          isOptOut: true,
+          direction: 'inbound'
+        });
+
+      console.log(`🛑 Profile ${profileDoc.id} opted out via ${upperMessage}, paused ${pausedCount} habits`);
+      res.status(200).send('OK');
+      return;
+    }
+
+    // =========================================================================
+    // HELP KEYWORD - Send help/info message
+    // =========================================================================
     if (upperMessage === 'HELP') {
       const twilioClient = twilio(
         twilioAccountSid.value(),
@@ -479,15 +926,70 @@ exports.twilioWebhook = onRequest(
       return;
     }
 
-    // Check for START keyword (re-subscribe after opt-out)
+    // =========================================================================
+    // START KEYWORDS - Re-subscribe after opt-out
+    // =========================================================================
+    // Reactivates profile and habits with fresh scheduled times
+    // Records consent in global registry (clears opt-out status)
     if (upperMessage === 'START' || upperMessage === 'UNSTOP') {
+      // Update profile: clear opt-out AND restore confirmed status
       await profileDoc.ref.update({
         smsOptedOut: false,
+        status: 'confirmed',  // Restore to confirmed (was set to inactive on STOP)
         optOutDate: null,
-        optOutMethod: null
+        optOutMethod: null,
+        resubscribedAt: admin.firestore.FieldValue.serverTimestamp(),
+        resubscribedVia: upperMessage
       });
 
-      console.log(`✅ Profile ${profileDoc.id} re-subscribed via ${upperMessage}`);
+      // Record consent in global phone registry (clears opt-out status)
+      await recordPhoneConsent(fromPhone, phoneHashSecret.value(), 'START_keyword');
+
+      // Reactivate habits with fresh nextScheduledDate from NOW
+      const reactivatedCount = await reactivateProfileHabits(
+        userId,
+        profileDoc.id,
+        profileData.timeZone || 'America/Los_Angeles'
+      );
+
+      // Send confirmation message
+      try {
+        const twilioClient = twilio(
+          twilioAccountSid.value(),
+          twilioAuthToken.value()
+        );
+
+        await twilioClient.messages.create({
+          body: `Welcome back, ${profileData.name}! You'll resume receiving daily reminders from your family. Reply STOP anytime to unsubscribe again.`,
+          from: toPhone,
+          to: fromPhone
+        });
+      } catch (resubError) {
+        console.error('❌ Failed to send resubscribe confirmation:', resubError.message);
+      }
+
+      // Store the resubscribe message
+      await admin.firestore()
+        .collection('users')
+        .doc(userId)
+        .collection('profiles')
+        .doc(profileDoc.id)
+        .collection('messages')
+        .add({
+          userId: userId,
+          profileId: profileDoc.id,
+          fromPhone: fromPhone,
+          toPhone: toPhone,
+          messageBody: messageBody,
+          twilioSid: twilioSid,
+          status: status,
+          numMedia: 0,
+          receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+          isResubscribe: true,
+          direction: 'inbound'
+        });
+
+      console.log(`✅ Profile ${profileDoc.id} re-subscribed via ${upperMessage}, reactivated ${reactivatedCount} habits`);
       res.status(200).send('OK');
       return;
     }
@@ -1325,6 +1827,313 @@ exports.healthCheckMonitor = onSchedule({
 });
 
 /**
+ * Daily Reconciliation Job: Comprehensive data consistency check
+ *
+ * Runs at 2 AM PST (low traffic) to catch and fix any data inconsistencies
+ * that may have slipped through real-time processes.
+ *
+ * Professional Standard: "Reconciliation Jobs"
+ * - Runs during low-traffic windows (2-4 AM)
+ * - Idempotent (safe to run multiple times)
+ * - Self-healing (fixes issues automatically where safe)
+ * - Logs anomalies for investigation
+ * - Tracks metrics for monitoring dashboards
+ *
+ * Checks performed:
+ * 1. Stale nextScheduledDate: Active habits with dates >24h in past
+ * 2. Subscription/Habit mismatch: Habits paused but subscription active (or vice versa)
+ * 3. Orphaned habits: Habits without valid profile or user
+ * 4. Invalid data: Missing required fields
+ */
+exports.dailyReconciliation = onSchedule({
+  schedule: 'every day 02:00',
+  timeZone: 'America/Los_Angeles'
+}, async (event) => {
+  const now = new Date();
+  const oneDayAgo = admin.firestore.Timestamp.fromDate(
+    new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  );
+
+  const reconciliationReport = {
+    timestamp: now.toISOString(),
+    checks: {},
+    fixes: {},
+    errors: []
+  };
+
+  try {
+    // =========================================================================
+    // CHECK 1: Active habits with stale nextScheduledDate (>24h in past)
+    // =========================================================================
+    const staleHabitsSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .where('status', '==', 'active')
+      .where('nextScheduledDate', '<', oneDayAgo)
+      .get();
+
+    reconciliationReport.checks.staleHabits = {
+      found: staleHabitsSnapshot.size,
+      fixed: 0
+    };
+
+    // Auto-fix: Recalculate nextScheduledDate from NOW
+    for (const habitDoc of staleHabitsSnapshot.docs) {
+      try {
+        const habit = habitDoc.data();
+        const freshDate = calculateNextOccurrenceFromNow(habit, habit.timeZone);
+
+        await habitDoc.ref.update({
+          nextScheduledDate: admin.firestore.Timestamp.fromDate(freshDate),
+          reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+          reconciledReason: 'stale_date_fix'
+        });
+
+        reconciliationReport.checks.staleHabits.fixed++;
+      } catch (err) {
+        reconciliationReport.errors.push({
+          type: 'stale_habit_fix_failed',
+          habitId: habitDoc.id,
+          error: err.message
+        });
+      }
+    }
+
+    // =========================================================================
+    // CHECK 2: Subscription/Habit status mismatch
+    // =========================================================================
+    // Find habits paused for subscription but user has active subscription
+    const pausedForSubSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .where('status', '==', 'paused')
+      .where('pausedReason', '==', 'subscription_expired')
+      .get();
+
+    reconciliationReport.checks.subscriptionMismatch = {
+      found: 0,
+      fixed: 0
+    };
+
+    for (const habitDoc of pausedForSubSnapshot.docs) {
+      try {
+        const habit = habitDoc.data();
+        const userId = habit.userId;
+
+        if (!userId) continue;
+
+        // Check if user actually has active subscription
+        const subscription = await checkUserSubscription(userId);
+
+        if (subscription.isActive) {
+          // Mismatch! Habit should be active
+          reconciliationReport.checks.subscriptionMismatch.found++;
+
+          const freshDate = calculateNextOccurrenceFromNow(habit, habit.timeZone);
+
+          await habitDoc.ref.update({
+            status: 'active',
+            pausedReason: admin.firestore.FieldValue.delete(),
+            pausedAt: admin.firestore.FieldValue.delete(),
+            nextScheduledDate: admin.firestore.Timestamp.fromDate(freshDate),
+            reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+            reconciledReason: 'subscription_mismatch_fix'
+          });
+
+          reconciliationReport.checks.subscriptionMismatch.fixed++;
+        }
+      } catch (err) {
+        reconciliationReport.errors.push({
+          type: 'subscription_mismatch_fix_failed',
+          habitId: habitDoc.id,
+          error: err.message
+        });
+      }
+    }
+
+    // =========================================================================
+    // CHECK 3: Active habits for expired subscriptions
+    // =========================================================================
+    const activeHabitsSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .where('status', '==', 'active')
+      .get();
+
+    reconciliationReport.checks.expiredSubActiveHabits = {
+      found: 0,
+      fixed: 0
+    };
+
+    // Group by userId to minimize subscription checks
+    const userHabitsMap = new Map();
+    for (const habitDoc of activeHabitsSnapshot.docs) {
+      const habit = habitDoc.data();
+      if (!habit.userId) continue;
+
+      if (!userHabitsMap.has(habit.userId)) {
+        userHabitsMap.set(habit.userId, []);
+      }
+      userHabitsMap.get(habit.userId).push(habitDoc);
+    }
+
+    for (const [userId, habitDocs] of userHabitsMap) {
+      try {
+        const subscription = await checkUserSubscription(userId);
+
+        if (!subscription.isActive) {
+          // User doesn't have active subscription but has active habits
+          for (const habitDoc of habitDocs) {
+            reconciliationReport.checks.expiredSubActiveHabits.found++;
+
+            await habitDoc.ref.update({
+              status: 'paused',
+              pausedReason: 'subscription_expired',
+              pausedAt: admin.firestore.FieldValue.serverTimestamp(),
+              reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+              reconciledReason: 'expired_subscription_pause'
+            });
+
+            reconciliationReport.checks.expiredSubActiveHabits.fixed++;
+          }
+        }
+      } catch (err) {
+        reconciliationReport.errors.push({
+          type: 'expired_sub_check_failed',
+          userId: userId,
+          error: err.message
+        });
+      }
+    }
+
+    // =========================================================================
+    // CHECK 4: Habits missing required fields
+    // =========================================================================
+    reconciliationReport.checks.invalidHabits = {
+      missingScheduledTime: 0,
+      missingUserId: 0,
+      missingFrequency: 0
+    };
+
+    const allHabitsSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .get();
+
+    for (const habitDoc of allHabitsSnapshot.docs) {
+      const habit = habitDoc.data();
+
+      if (!habit.scheduledTime) {
+        reconciliationReport.checks.invalidHabits.missingScheduledTime++;
+      }
+      if (!habit.userId) {
+        reconciliationReport.checks.invalidHabits.missingUserId++;
+      }
+      if (!habit.frequency) {
+        reconciliationReport.checks.invalidHabits.missingFrequency++;
+      }
+    }
+
+    // =========================================================================
+    // CHECK 5: Profile opt-out mismatch
+    // =========================================================================
+    // Find habits paused due to profile opt-out but profile is no longer opted out
+    const pausedForOptOutSnapshot = await admin.firestore()
+      .collectionGroup('habits')
+      .where('status', '==', 'paused')
+      .where('pausedReason', '==', 'profile_opted_out')
+      .get();
+
+    reconciliationReport.checks.profileOptOutMismatch = {
+      found: 0,
+      fixed: 0
+    };
+
+    for (const habitDoc of pausedForOptOutSnapshot.docs) {
+      try {
+        const habit = habitDoc.data();
+        const habitPath = habitDoc.ref.path;
+        // Path: users/{userId}/profiles/{profileId}/habits/{habitId}
+        const pathParts = habitPath.split('/');
+        const odUserId = pathParts[1];
+        const profileId = pathParts[3];
+
+        // Get the profile to check its current opt-out status
+        const profileDoc = await admin.firestore()
+          .doc(`users/${odUserId}/profiles/${profileId}`)
+          .get();
+
+        if (!profileDoc.exists) continue;
+
+        const profile = profileDoc.data();
+
+        // If profile is NOT opted out and is confirmed, reactivate the habit
+        if (profile.smsOptedOut !== true && profile.status === 'confirmed') {
+          reconciliationReport.checks.profileOptOutMismatch.found++;
+
+          const freshDate = calculateNextOccurrenceFromNow(habit, profile.timeZone);
+
+          await habitDoc.ref.update({
+            status: 'active',
+            pausedReason: admin.firestore.FieldValue.delete(),
+            pausedAt: admin.firestore.FieldValue.delete(),
+            nextScheduledDate: admin.firestore.Timestamp.fromDate(freshDate),
+            reconciledAt: admin.firestore.FieldValue.serverTimestamp(),
+            reconciledReason: 'profile_optout_mismatch_fix'
+          });
+
+          reconciliationReport.checks.profileOptOutMismatch.fixed++;
+        }
+      } catch (err) {
+        reconciliationReport.errors.push({
+          type: 'profile_optout_mismatch_fix_failed',
+          habitId: habitDoc.id,
+          error: err.message
+        });
+      }
+    }
+
+    // =========================================================================
+    // SAVE REPORT
+    // =========================================================================
+    reconciliationReport.summary = {
+      totalIssuesFound:
+        reconciliationReport.checks.staleHabits.found +
+        reconciliationReport.checks.subscriptionMismatch.found +
+        reconciliationReport.checks.expiredSubActiveHabits.found +
+        reconciliationReport.checks.profileOptOutMismatch.found,
+      totalIssuesFixed:
+        reconciliationReport.checks.staleHabits.fixed +
+        reconciliationReport.checks.subscriptionMismatch.fixed +
+        reconciliationReport.checks.expiredSubActiveHabits.fixed +
+        reconciliationReport.checks.profileOptOutMismatch.fixed,
+      totalErrors: reconciliationReport.errors.length,
+      status: reconciliationReport.errors.length === 0 ? 'success' : 'partial_success'
+    };
+
+    await admin.firestore()
+      .collection('reconciliationReports')
+      .add(reconciliationReport);
+
+    // Log summary
+    if (reconciliationReport.summary.totalIssuesFound > 0) {
+      console.log('🔧 Reconciliation:', JSON.stringify(reconciliationReport.summary));
+    }
+
+    return reconciliationReport;
+
+  } catch (error) {
+    console.error('❌ Daily reconciliation failed:', error);
+
+    // Still save partial report
+    reconciliationReport.status = 'failed';
+    reconciliationReport.fatalError = error.message;
+
+    await admin.firestore()
+      .collection('reconciliationReports')
+      .add(reconciliationReport);
+
+    throw error;
+  }
+});
+
+/**
  * No-Reply Push Notification Checker
  *
  * Monitors SMS reminders that haven't received a response within the timeout window
@@ -1728,6 +2537,119 @@ function calculateNextOccurrence(habit, profileTimeZone = 'America/Los_Angeles')
       // Fallback to daily
       const defaultNext = addDays(currentDateZoned, 1);
       return setTimeAndConvert(defaultNext);
+  }
+}
+
+/**
+ * Calculate the next scheduled occurrence starting from NOW (not from old nextScheduledDate)
+ *
+ * Used when reactivating habits after subscription renewal, where the old
+ * nextScheduledDate may be days/weeks in the past.
+ *
+ * @param {Object} habit - Habit document data with frequency, customDays, scheduledTime, timeZone
+ * @param {string} profileTimeZone - Profile's timezone identifier (e.g., "America/New_York")
+ * @returns {Date} - Next scheduled date in UTC (Firestore stores as UTC)
+ */
+function calculateNextOccurrenceFromNow(habit, profileTimeZone = 'America/Los_Angeles') {
+  const tz = habit.timeZone || profileTimeZone || 'America/Los_Angeles';
+
+  // Start from NOW, not from the old nextScheduledDate
+  const now = new Date();
+  const nowZoned = toZonedTime(now, tz);
+
+  // Extract scheduled time components
+  const scheduledTimeUTC = habit.scheduledTime.toDate();
+  const scheduledTimeZoned = toZonedTime(scheduledTimeUTC, tz);
+  const targetHours = getHours(scheduledTimeZoned);
+  const targetMinutes = getMinutes(scheduledTimeZoned);
+  const targetSeconds = getSeconds(scheduledTimeZoned);
+
+  // Helper to set time and convert back to UTC
+  const setTimeAndConvert = (date) => {
+    let result = setHours(date, targetHours);
+    result = setMinutes(result, targetMinutes);
+    result = setSeconds(result, targetSeconds);
+    result = setMilliseconds(result, 0);
+    return fromZonedTime(result, tz);
+  };
+
+  // Get today with the scheduled time
+  const todayAtScheduledTime = setTimeAndConvert(nowZoned);
+
+  // Check if today's scheduled time is still in the future
+  const todayScheduledTimeUTC = todayAtScheduledTime;
+  const isTodayStillValid = todayScheduledTimeUTC > now;
+
+  switch (habit.frequency) {
+    case 'daily':
+      // If today's time hasn't passed, use today; otherwise tomorrow
+      if (isTodayStillValid) {
+        return todayScheduledTimeUTC;
+      }
+      return setTimeAndConvert(addDays(nowZoned, 1));
+
+    case 'weekdays':
+      // Find next weekday (Mon-Fri)
+      let checkDate = isTodayStillValid ? nowZoned : addDays(nowZoned, 1);
+
+      // Find next weekday
+      for (let i = 0; i < 7; i++) {
+        const dayOfWeek = getDay(checkDate);
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Monday=1 to Friday=5
+          return setTimeAndConvert(checkDate);
+        }
+        checkDate = addDays(checkDate, 1);
+      }
+      return setTimeAndConvert(checkDate);
+
+    case 'weekly':
+      // Find next occurrence of the same day of week
+      const originalDayOfWeek = habit.nextScheduledDate
+        ? getDay(toZonedTime(habit.nextScheduledDate.toDate(), tz))
+        : getDay(nowZoned);
+
+      let weeklyCheck = isTodayStillValid ? nowZoned : addDays(nowZoned, 1);
+
+      for (let i = 0; i < 7; i++) {
+        if (getDay(weeklyCheck) === originalDayOfWeek) {
+          return setTimeAndConvert(weeklyCheck);
+        }
+        weeklyCheck = addDays(weeklyCheck, 1);
+      }
+      return setTimeAndConvert(weeklyCheck);
+
+    case 'custom':
+      const customDays = habit.customDays || [];
+      if (customDays.length === 0) {
+        // Fallback to daily
+        return isTodayStillValid ? todayScheduledTimeUTC : setTimeAndConvert(addDays(nowZoned, 1));
+      }
+
+      const dayMap = {
+        'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+        'thursday': 4, 'friday': 5, 'saturday': 6
+      };
+      const targetDays = new Set(customDays.map(day => dayMap[day.toLowerCase()]));
+
+      let customCheck = isTodayStillValid ? nowZoned : addDays(nowZoned, 1);
+
+      for (let i = 0; i < 14; i++) {
+        if (targetDays.has(getDay(customCheck))) {
+          return setTimeAndConvert(customCheck);
+        }
+        customCheck = addDays(customCheck, 1);
+      }
+      return setTimeAndConvert(customCheck);
+
+    case 'once':
+      // One-time habits - if in past, don't reschedule (return far future to effectively disable)
+      if (habit.nextScheduledDate && habit.nextScheduledDate.toDate() > now) {
+        return habit.nextScheduledDate.toDate();
+      }
+      return addYears(now, 100); // Effectively disabled
+
+    default:
+      return isTodayStillValid ? todayScheduledTimeUTC : setTimeAndConvert(addDays(nowZoned, 1));
   }
 }
 
