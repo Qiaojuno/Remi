@@ -38,7 +38,6 @@ struct HabitsView: View {
 
     // MARK: - UI State Management
     @State private var selectedProfileIndex: Int = 0
-    @State private var selectedDays: Set<Int> = Set(0...6) // Default to all days selected
 
     /// Controls TaskCreationView conditional presentation with profile preselection
     @State private var showingTaskCreation = false
@@ -71,10 +70,6 @@ struct HabitsView: View {
     /// Controls image picker for profile photo update
     @State private var showingImagePicker = false
     @State private var selectedImage: UIImage?
-
-    // Days of the week for display
-    private let weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    private let weekDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
     // MARK: - Initialization
     init(selectedTab: Binding<Int>, showingCreateActionSheet: Binding<Bool>, showHeader: Bool = true) {
@@ -157,33 +152,23 @@ struct HabitsView: View {
                                     .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
                             }
 
-                            // 📋 HABITS MANAGEMENT: Separated week filter and habits list
-                            // Spacing above week selector card
-                            Spacer()
-                                .frame(height: 16)
-
-                            // Week selector card (separated)
-                            weekSelectorCard
-                                .padding(.horizontal, geometry.size.width * 0.04)
-
-                            // Spacing before habits section (matches spacing above)
+                            // 📋 HABITS LIST
                             Spacer()
                                 .frame(height: 16)
 
                             // Individual habit cards
-                            if filteredHabits.isEmpty {
+                            if profileHabits.isEmpty {
                                 // Empty state
                                 emptyStateNoHabits
                                     .padding(.horizontal, geometry.size.width * 0.04)
                             } else {
-                                ForEach(filteredHabits, id: \.id) { habit in
+                                ForEach(profileHabits, id: \.id) { habit in
                                     HabitCardView(
                                         habit: habit,
                                         profile: getProfileForHabit(habit),
-                                        selectedDays: selectedDays,
                                         onTap: {
                                             HapticFeedback.light()
-                                            deleteHabitFromSelectedDays(habit: habit)
+                                            deleteHabit(habit: habit)
                                         }
                                     )
                                     .padding(.horizontal, geometry.size.width * 0.04)
@@ -262,7 +247,7 @@ struct HabitsView: View {
                 confirmDeleteHabit()
             }
         } message: { habit in
-            Text("Are you sure you want to delete '\(habit.title)' scheduled \(formatHabitSchedule(habit: habit))?")
+            Text("Are you sure you want to delete '\(habit.title)'?")
         }
     }
     
@@ -384,17 +369,11 @@ struct HabitsView: View {
         .frame(height: 500)
     }
 
-    // MARK: - 📋 Week Selector Card (Pill Design)
-    /// Compact pill-based week selector with merging highlights
-    private var weekSelectorCard: some View {
-        weekSelectorSection
-    }
-
     // MARK: - 📋 Empty State - No Habits
-    /// Displayed when no habits match the selected day filters
+    /// Displayed when no habits exist for the selected profile
     private var emptyStateNoHabits: some View {
         VStack(spacing: 12) {
-            Text("No habits scheduled for selected days")
+            Text("No habits created yet")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(Color(hex: "9f9f9f"))
                 .padding(.vertical, 40)
@@ -431,104 +410,10 @@ struct HabitsView: View {
             }
         } message: {
             if let profile = selectedProfile {
-                let habitCount = filteredHabits.count
+                let habitCount = profileHabits.count
                 Text("Are you sure you want to delete '\(profile.name)' and all \(habitCount) associated habit\(habitCount == 1 ? "" : "s")? This action cannot be undone.")
             } else {
                 Text("No profile selected.")
-            }
-        }
-    }
-    
-    // MARK: - Week Selector Component (Mon-Sun pill design with merging highlights)
-
-    /// Days ordered Monday-first (ISO week style)
-    private let weekDaysMonFirst = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    /// Maps Mon-first index to Sun-first index (for selectedDays compatibility)
-    private let monFirstToSunFirst = [1, 2, 3, 4, 5, 6, 0] // Mon=1, Tue=2, ..., Sun=0
-
-    private var weekSelectorSection: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<7, id: \.self) { monFirstIndex in
-                let sunFirstIndex = monFirstToSunFirst[monFirstIndex]
-                let isSelected = selectedDays.contains(sunFirstIndex)
-
-                // Check adjacent days for corner merging (in Mon-first order)
-                let prevMonFirstIndex = monFirstIndex - 1
-                let nextMonFirstIndex = monFirstIndex + 1
-                let prevSelected = prevMonFirstIndex >= 0 && selectedDays.contains(monFirstToSunFirst[prevMonFirstIndex])
-                let nextSelected = nextMonFirstIndex < 7 && selectedDays.contains(monFirstToSunFirst[nextMonFirstIndex])
-
-                // Edge padding for first/last items
-                let isFirstDay = monFirstIndex == 0
-                let isLastDay = monFirstIndex == 6
-
-                Button(action: {
-                    HapticFeedback.light()
-                    if selectedDays.contains(sunFirstIndex) {
-                        selectedDays.remove(sunFirstIndex)
-                    } else {
-                        selectedDays.insert(sunFirstIndex)
-                    }
-                }) {
-                    Text(weekDaysMonFirst[monFirstIndex])
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .padding(.leading, isFirstDay ? 12 : 0)
-                        .padding(.trailing, isLastDay ? 12 : 0)
-                        .background(
-                            MergingPillBackground(
-                                isFirst: !prevSelected,
-                                isLast: !nextSelected
-                            )
-                            .fill(Color.white)
-                            .opacity(isSelected ? 1 : 0)
-                        )
-                }
-            }
-        }
-        .frame(height: 44)
-        .background(Color(hex: "f0f0f0"))
-        .clipShape(Capsule())
-        .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
-        .animation(.easeInOut(duration: 0.2), value: selectedDays)
-    }
-
-    // MARK: - Habits List Section
-    private var habitsListSection: some View {
-        Group {
-            if filteredHabits.isEmpty {
-                // Empty state
-                HStack {
-                    Spacer()
-                    Text("No habits scheduled for selected days")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(Color(hex: "9f9f9f"))
-                        .padding(.vertical, 40)
-                    Spacer()
-                }
-            } else {
-                List {
-                    ForEach(filteredHabits, id: \.id) { habit in
-                        HabitRowViewSimple(
-                            habit: habit,
-                            profile: getProfileForHabit(habit),
-                            selectedDays: selectedDays
-                        )
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.white)
-                        .onTapGesture {
-                            HapticFeedback.light()
-                            deleteHabitFromSelectedDays(habit: habit)
-                        }
-                    }
-                }
-                .listStyle(.plain)
-                .scrollDisabled(true)
-                .frame(height: CGFloat(filteredHabits.count) * 72) // Accounts for rounded backgrounds + spacing
-                .animation(.easeInOut(duration: 0.3), value: selectedDays)
             }
         }
     }
@@ -541,24 +426,17 @@ struct HabitsView: View {
         return appState.profiles[selectedProfileIndex]
     }
     
-    /// Filtered habits based on selected profile and days
-    private var filteredHabits: [Task] {
-        // PHASE 4: Read directly from AppState (single source of truth)
+    /// All habits for the selected profile
+    private var profileHabits: [Task] {
         let allTasks = appState.tasks
 
         return allTasks.filter { habit in
             // Exclude locally deleted habits for optimistic UI
             guard !locallyDeletedHabitIds.contains(habit.id) else { return false }
 
-            // Filter by selected profile (match DashboardView behavior)
+            // Filter by selected profile
             guard let selectedProfileId = viewModel.selectedProfileId else { return false }
-            guard habit.profileId == selectedProfileId else { return false }
-
-            // Check if habit is scheduled for any of the selected days
-            return selectedDays.contains { dayIndex in
-                let weekday = Weekday.fromIndex(dayIndex)
-                return habit.frequency == .daily || habit.customDays.contains(weekday)
-            }
+            return habit.profileId == selectedProfileId
         }
     }
     
@@ -611,7 +489,7 @@ struct HabitsView: View {
         return appState.profiles.first { $0.id == habit.profileId }
     }
     
-    private func deleteHabitFromSelectedDays(habit: Task) {
+    private func deleteHabit(habit: Task) {
         // Mark as pending deletion (prevents List from auto-animating)
         habitsPendingDeletion.insert(habit.id)
 
@@ -663,36 +541,6 @@ struct HabitsView: View {
         habitToDelete = nil
     }
 
-    private func formatHabitSchedule(habit: Task) -> String {
-        let timeFormatter = DateFormatter()
-        timeFormatter.timeStyle = .short
-
-        let time = timeFormatter.string(from: habit.scheduledTime)
-
-        let days: String
-        switch habit.frequency {
-        case .daily:
-            days = "Every day"
-        case .weekdays:
-            days = "Weekdays (Mon-Fri)"
-        case .weekly:
-            let weekday = Calendar.current.component(.weekday, from: habit.scheduledTime)
-            let dayName = weekDayNames[weekday - 1]
-            days = "Every \(dayName)"
-        case .custom:
-            if habit.customDays.isEmpty {
-                days = "No days selected"
-            } else {
-                let dayNames = habit.customDays.map { $0.displayName }
-                days = dayNames.joined(separator: ", ")
-            }
-        case .once:
-            days = "One time"
-        }
-
-        return "at \(time) on \(days)"
-    }
-    
     // MARK: - ✨ Unified Create Button
     /**
      * FLOATING UNIFIED CREATE BUTTON: Bottom center call-to-action
@@ -770,7 +618,7 @@ struct HabitsView: View {
             }
         } message: {
             if let profile = selectedProfile {
-                let habitCount = filteredHabits.count
+                let habitCount = profileHabits.count
                 Text("Are you sure you want to delete '\(profile.name)' and all \(habitCount) associated habit\(habitCount == 1 ? "" : "s")? This action cannot be undone.")
             } else {
                 Text("No profile selected.")
@@ -802,7 +650,6 @@ struct HabitsView: View {
 struct HabitRowWithCustomSwipe: View {
     let habit: Task
     let profile: ElderlyProfile?
-    let selectedDays: Set<Int>
     let isLastItem: Bool
     let onDelete: () -> Void
 
@@ -840,8 +687,7 @@ struct HabitRowWithCustomSwipe: View {
             VStack(spacing: 0) {
                 HabitRowViewSimple(
                     habit: habit,
-                    profile: profile,
-                    selectedDays: selectedDays
+                    profile: profile
                 )
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -904,7 +750,6 @@ struct HabitRowWithCustomSwipe: View {
 struct HabitCardView: View {
     let habit: Task
     let profile: ElderlyProfile?
-    let selectedDays: Set<Int>
     let onTap: () -> Void
 
     @EnvironmentObject private var appState: AppState
@@ -1032,7 +877,6 @@ struct HabitCardView: View {
 struct HabitRowViewSimple: View {
     let habit: Task
     let profile: ElderlyProfile?
-    let selectedDays: Set<Int>
 
     // PHASE 3: Need appState for profile slot calculation
     @EnvironmentObject private var appState: AppState
@@ -1201,81 +1045,3 @@ extension Weekday {
     }
 }
 
-// MARK: - Merging Pill Background Shape
-/// Custom shape that rounds corners based on adjacency for merged selection effect
-struct MergingPillBackground: Shape {
-    let isFirst: Bool  // Round left corners
-    let isLast: Bool   // Round right corners
-
-    func path(in rect: CGRect) -> Path {
-        // Use half the height for capsule-matching radius
-        let radius: CGFloat = min(rect.height / 2, 22)
-
-        let topLeft: CGFloat = isFirst ? radius : 0
-        let bottomLeft: CGFloat = isFirst ? radius : 0
-        let topRight: CGFloat = isLast ? radius : 0
-        let bottomRight: CGFloat = isLast ? radius : 0
-
-        return Path { path in
-            path.move(to: CGPoint(x: rect.minX + topLeft, y: rect.minY))
-
-            // Top edge
-            path.addLine(to: CGPoint(x: rect.maxX - topRight, y: rect.minY))
-
-            // Top right corner
-            if topRight > 0 {
-                path.addArc(
-                    center: CGPoint(x: rect.maxX - topRight, y: rect.minY + topRight),
-                    radius: topRight,
-                    startAngle: .degrees(-90),
-                    endAngle: .degrees(0),
-                    clockwise: false
-                )
-            }
-
-            // Right edge
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
-
-            // Bottom right corner
-            if bottomRight > 0 {
-                path.addArc(
-                    center: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY - bottomRight),
-                    radius: bottomRight,
-                    startAngle: .degrees(0),
-                    endAngle: .degrees(90),
-                    clockwise: false
-                )
-            }
-
-            // Bottom edge
-            path.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
-
-            // Bottom left corner
-            if bottomLeft > 0 {
-                path.addArc(
-                    center: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY - bottomLeft),
-                    radius: bottomLeft,
-                    startAngle: .degrees(90),
-                    endAngle: .degrees(180),
-                    clockwise: false
-                )
-            }
-
-            // Left edge
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeft))
-
-            // Top left corner
-            if topLeft > 0 {
-                path.addArc(
-                    center: CGPoint(x: rect.minX + topLeft, y: rect.minY + topLeft),
-                    radius: topLeft,
-                    startAngle: .degrees(180),
-                    endAngle: .degrees(270),
-                    clockwise: false
-                )
-            }
-
-            path.closeSubpath()
-        }
-    }
-}

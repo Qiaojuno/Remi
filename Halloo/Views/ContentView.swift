@@ -60,19 +60,13 @@ struct ContentView: View {
     @State private var galleryViewModel: GalleryViewModel?
     @State private var authService: FirebaseAuthenticationService?
     @State private var selectedTab = 0
-    @State private var previousTab = 0  // Track previous tab for Habits (middle) transition direction
-    @State private var transitionDirection: Int = 1  // Unused - kept for backward compatibility with bindings
     @State private var selectedProfileIndex = 0  // Shared profile selection for header
-    @State private var isTransitioning = false  // Lock to prevent animation overlap during rapid tab switches
-    @GestureState private var dragOffset: CGFloat = 0  // Real-time drag tracking for interactive swipe
-    @State private var isHorizontalDragging = false  // Track if user is actively horizontal swiping
-    @State private var horizontalGestureMomentum = false  // Prioritize horizontal after recent tab switch
 
     // Create action state (lifted from DashboardView for proper presentation context)
     @State private var showingCreateActionSheet = false
     @State private var showingDirectOnboarding = false
-    @State private var showingTaskCreation = false // NEW: For habit creation card
-    @State private var isCreateExpanded = false // Track create button toggle state
+    @State private var showingTaskCreation = false
+    @State private var isCreateExpanded = false
 
     @State private var authCancellables = Set<AnyCancellable>()
 
@@ -80,23 +74,6 @@ struct ContentView: View {
     @State private var backgroundedAt: Date?
     @State private var showRefreshLoadingScreen: Bool = false
     private let refreshThresholdSeconds: TimeInterval = 300 // 5 minutes
-
-
-    // MARK: - Computed Properties
-
-    /// Controls whether tab swiping is enabled
-    /// Enabled on all tabs for full swipe navigation
-    private var allowsTabSwiping: Bool {
-        true  // Enable swiping on all tabs
-    }
-
-    /// Controls which tab transitions are allowed
-    /// Allows swiping between all 3 tabs (Dashboard, Gallery, Habits)
-    private func isValidTabTransition(from currentTab: Int, to newTab: Int) -> Bool {
-        // Allow transitions between all tabs (0, 1, 2)
-        let validTabs = Set([0, 1, 2])
-        return validTabs.contains(currentTab) && validTabs.contains(newTab)
-    }
 
     // MARK: - Initialization
     init() {
@@ -188,161 +165,29 @@ struct ContentView: View {
     
     // MARK: - Main App Flow
     private var mainAppFlow: some View {
-        // Layered architecture: static chrome + animated content
         ZStack {
-            // LAYER 0: Background (static, never animates)
+            // Background
             Color(hex: "f9f9f9")
                 .ignoresSafeArea()
 
-            // LAYER 1-10: Transitioning content (animated with asymmetric slide)
             if let dashboardVM = dashboardViewModel,
                let profileVM = profileViewModel {
 
-                ZStack {
-                    // Dashboard Tab - LEFTMOST
-                    dashboardTabView(dashboardVM: dashboardVM, profileVM: profileVM)
-
-                    // Gallery Tab - MIDDLE
-                    galleryTabView(profileVM: profileVM, dashboardVM: dashboardVM)
-
-                    // Habits Tab - RIGHTMOST
-                    habitsTabView(dashboardVM: dashboardVM, profileVM: profileVM)
-}
-                .onChange(of: selectedTab) { oldValue, newValue in
-                    // Lock transitions
-                    isTransitioning = true
-
-                    // Enable horizontal gesture momentum for next 0.8 seconds (increased from 0.6s)
-                    horizontalGestureMomentum = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                        horizontalGestureMomentum = false
-                    }
-
-                    // Update previousTab for Habits transition direction
-                    previousTab = oldValue
-
-                    // Unlock quickly - just enough to prevent double-taps (150ms)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        isTransitioning = false
+                // Tab content - simple switch, no animations
+                Group {
+                    switch selectedTab {
+                    case 0:
+                        dashboardTabView(dashboardVM: dashboardVM, profileVM: profileVM)
+                    case 1:
+                        galleryTabView(profileVM: profileVM, dashboardVM: dashboardVM)
+                    case 2:
+                        habitsTabView(dashboardVM: dashboardVM, profileVM: profileVM)
+                    default:
+                        dashboardTabView(dashboardVM: dashboardVM, profileVM: profileVM)
                     }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedTab)
-                .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.85), value: dragOffset)
-                .gesture(
-                    allowsTabSwiping ? DragGesture(minimumDistance: 20)
-                        .updating($dragOffset) { value, state, _ in
-                            // Prevent drag during animation
-                            guard !isTransitioning else { return }
 
-                            // Only enable horizontal swipe if gesture is more horizontal than vertical
-                            let horizontalDistance = abs(value.translation.width)
-                            let verticalDistance = abs(value.translation.height)
-
-                            // GESTURE PRIORITY SYSTEM:
-                            // - Momentum mode (0.8s after tab switch): Horizontal EXTREMELY favored (vertical must be 6x more)
-                            // - Normal mode: Horizontal very strongly favored (vertical must be 3.5x more)
-                            let verticalThreshold: CGFloat = horizontalGestureMomentum ? 6.0 : 3.5
-
-                            // Horizontal wins unless vertical is significantly more
-                            guard verticalDistance < horizontalDistance * verticalThreshold else { return }
-
-                            // Prevent swiping beyond boundaries
-                            let swipeDirection = value.translation.width > 0 ? "right" : "left"
-                            if selectedTab == 0 && swipeDirection == "right" {
-                                // Can't swipe right from Dashboard (leftmost)
-                                return
-                            }
-                            if selectedTab == 2 && swipeDirection == "left" {
-                                // Can't swipe left from Habits (rightmost)
-                                return
-                            }
-
-                            // Mark that horizontal dragging is active (disables vertical scroll)
-                            if !isHorizontalDragging {
-                                isHorizontalDragging = true
-                            }
-
-                            // Update drag offset in real-time for interactive scrubbing
-                            state = value.translation.width
-                        }
-                        .onEnded { value in
-                            // Prevent tab change during animation
-                            guard !isTransitioning else {
-                                // Re-enable vertical scrolling if blocked during animation
-                                isHorizontalDragging = false
-                                return
-                            }
-
-                            let horizontalDistance = value.translation.width
-                            let verticalDistance = abs(value.translation.height)
-                            let velocity = value.predictedEndTranslation.width - value.translation.width
-
-                            // Use same momentum-aware threshold as .updating
-                            let verticalThreshold: CGFloat = horizontalGestureMomentum ? 6.0 : 3.5
-                            guard verticalDistance < abs(horizontalDistance) * verticalThreshold else { return }
-
-                            // Calculate if swipe should trigger tab change
-                            // Fast swipe: Very low threshold - even moderate-speed swipes trigger
-                            // Slow swipe: Only truly lazy swipes need to drag the full distance
-                            let fastVelocityThreshold: CGFloat = 100  // Super low - most swipes are "fast"
-                            let slowDistanceThreshold: CGFloat = 120  // Only lazy swipes hit this
-
-                            let isFastSwipe = abs(velocity) > fastVelocityThreshold
-                            let isSlowDrag = abs(horizontalDistance) > slowDistanceThreshold
-
-                            let shouldChangeTab = isFastSwipe || isSlowDrag
-
-                            // Swipe left = move forward (next tab)
-                            if horizontalDistance < 0 && shouldChangeTab {
-                                if selectedTab < 2 {
-                                    let newTab = selectedTab + 1
-                                    if isValidTabTransition(from: selectedTab, to: newTab) {
-                                        previousTab = selectedTab
-                                        selectedTab = newTab
-
-                                        // Delay re-enabling vertical scroll briefly (200ms)
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                                            isHorizontalDragging = false
-                                        }
-                                    } else {
-                                        // Invalid transition, re-enable immediately
-                                        isHorizontalDragging = false
-                                    }
-                                } else {
-                                    // No tab change, re-enable immediately
-                                    isHorizontalDragging = false
-                                }
-                            }
-                            // Swipe right = move backward (previous tab)
-                            else if horizontalDistance > 0 && shouldChangeTab {
-                                if selectedTab > 0 {
-                                    let newTab = selectedTab - 1
-                                    if isValidTabTransition(from: selectedTab, to: newTab) {
-                                        previousTab = selectedTab
-                                        selectedTab = newTab
-
-                                        // Delay re-enabling vertical scroll briefly (200ms)
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                                            isHorizontalDragging = false
-                                        }
-                                    } else {
-                                        // Invalid transition, re-enable immediately
-                                        isHorizontalDragging = false
-                                    }
-                                } else {
-                                    // No tab change, re-enable immediately
-                                    isHorizontalDragging = false
-                                }
-                            }
-                            // If didn't meet threshold, snap back - re-enable scroll immediately
-                            else {
-                                isHorizontalDragging = false
-                            }
-                        }
-                    : nil
-                )
-
-                // LAYER 100: Static chrome (header + nav, never animates)
+                // Static chrome (header + nav)
                 VStack(spacing: 0) {
                     // Header at top (profile circles + Remi logo + settings)
                     SharedHeaderSection(selectedProfileIndex: $selectedProfileIndex)
@@ -359,8 +204,7 @@ struct ContentView: View {
                         onCreateTapped: { showingCreateActionSheet = true }
                     )
                 }
-                .ignoresSafeArea(.all, edges: .bottom) // Extend VStack to screen bottom
-                .zIndex(100) // Always on top
+                .ignoresSafeArea(.all, edges: .bottom)
 
             } else {
                 // Loading state while ViewModel is being created
@@ -460,10 +304,6 @@ struct ContentView: View {
         .environmentObject(dashboardVM)
         .environmentObject(profileVM)
         .environmentObject(appState)
-        .environment(\.isScrollDisabled, isHorizontalDragging)
-        .environment(\.isDragging, dragOffset != 0)
-        .offset(x: tabOffset(for: 0))
-        .zIndex(selectedTab == 0 ? 1 : 0)
         .id("dashboard-\(appState.currentUser?.uid ?? "no-user")")
     }
 
@@ -474,10 +314,6 @@ struct ContentView: View {
             .environmentObject(profileVM)
             .environmentObject(dashboardVM)
             .environmentObject(appState)
-            .environment(\.isScrollDisabled, isHorizontalDragging)
-            .environment(\.isDragging, dragOffset != 0)
-            .offset(x: tabOffset(for: 1))
-            .zIndex(selectedTab == 1 ? 1 : 0)
             .id("gallery-\(appState.currentUser?.uid ?? "no-user")")
     }
 
@@ -488,24 +324,7 @@ struct ContentView: View {
             .environmentObject(dashboardVM)
             .environmentObject(profileVM)
             .environmentObject(appState)
-            .environment(\.isScrollDisabled, isHorizontalDragging)
-            .environment(\.isDragging, dragOffset != 0)
-            .offset(x: tabOffset(for: 2))
-            .zIndex(selectedTab == 2 ? 1 : 0)
             .id("habits-\(appState.currentUser?.uid ?? "no-user")")
-    }
-
-    // MARK: - Offset Helper
-    /// Calculates horizontal offset for each tab based on position and drag state
-    /// Dashboard (0) = LEFT, Habits (1) = MIDDLE, Gallery (2) = RIGHT
-    private func tabOffset(for tab: Int) -> CGFloat {
-        let screenWidth = UIScreen.main.bounds.width
-
-        // Base position offset (where tab lives when selected)
-        let baseOffset = CGFloat(tab - selectedTab) * screenWidth
-
-        // Add interactive drag offset
-        return baseOffset + dragOffset
     }
     
     // MARK: - Initialization Methods
