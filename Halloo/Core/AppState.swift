@@ -359,6 +359,31 @@ final class AppState: ObservableObject {
         tasks.removeAll { $0.id == taskId }
     }
 
+    /// Sync tasks array with Firebase snapshot
+    ///
+    /// **Flow:**
+    /// 1. Update existing tasks that match by ID
+    /// 2. Add new tasks that don't exist locally
+    /// 3. Remove local tasks that no longer exist in Firebase
+    ///
+    /// - Parameter remoteTasks: Complete array of tasks from Firebase snapshot
+    /// - Note: This properly handles deletions by comparing local vs remote
+    func syncTasks(_ remoteTasks: [Task]) {
+        let remoteIds = Set(remoteTasks.map { $0.id })
+
+        // Remove tasks that no longer exist in Firebase
+        tasks.removeAll { !remoteIds.contains($0.id) }
+
+        // Update or add tasks from remote
+        for remoteTask in remoteTasks {
+            if let index = tasks.firstIndex(where: { $0.id == remoteTask.id }) {
+                tasks[index] = remoteTask
+            } else {
+                tasks.append(remoteTask)
+            }
+        }
+    }
+
     // MARK: - Photo URL Refresh
 
     /// Refresh expired profile photo URLs with fresh download tokens

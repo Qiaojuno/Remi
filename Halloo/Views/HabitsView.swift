@@ -152,9 +152,16 @@ struct HabitsView: View {
                                     .padding(.top, showHeader ? 0 : 100) // Add top padding when header is hidden (static header height)
                             }
 
-                            // 📋 HABITS LIST
+                            // 📅 WEEK OVERVIEW: Visual day-by-day habit slots
                             Spacer()
                                 .frame(height: 16)
+
+                            weekOverviewSection
+                                .padding(.horizontal, geometry.size.width * 0.04)
+
+                            // 📋 HABITS LIST
+                            Spacer()
+                                .frame(height: 24)
 
                             // Individual habit cards
                             if profileHabits.isEmpty {
@@ -299,7 +306,7 @@ struct HabitsView: View {
         }
         .padding(16)
         .background(Color.white)
-        .cornerRadius(10)
+        .cornerRadius(20)
         .shadow(color: Color(hex: "6f6f6f").opacity(0.075), radius: 4, x: 0, y: 2)
         .sheet(isPresented: $showingImagePicker) {
             ImagePicker(image: $selectedImage, sourceType: .photoLibrary)
@@ -367,6 +374,83 @@ struct HabitsView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 500)
+    }
+
+    // MARK: - 📅 Week Overview Section
+    /// Visual day-by-day view showing habit slots for each day of the week
+    /// Features vertical connecting line with circles at each habit
+    private var weekOverviewSection: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Left column: Vertical line (circles will be overlaid)
+            Rectangle()
+                .fill(Color(hex: "D0D0D0"))
+                .frame(width: 2)
+                .frame(maxWidth: 30)
+
+            // Right column: Day cards
+            VStack(spacing: 12) {
+                ForEach(Array(weekDaysOrdered.enumerated()), id: \.element) { index, weekday in
+                    DayOverviewCardWithPositionReporting(
+                        weekday: weekday,
+                        habits: habitsForDay(weekday),
+                        colorScheme: dayColorSchemes[index],
+                        maxSlots: 3
+                    )
+                }
+            }
+        }
+        .coordinateSpace(name: "weekOverview")
+        .overlayPreferenceValue(HabitSlotPositionKey.self) { positions in
+            GeometryReader { geo in
+                // Position circles at exact Y positions of habits
+                ForEach(positions, id: \.id) { position in
+                    HabitTypeCircle(isPhoto: position.isPhoto)
+                        .position(x: 15, y: position.yCenter)
+                }
+            }
+        }
+    }
+
+    /// Days of the week ordered Monday-first
+    private var weekDaysOrdered: [Weekday] {
+        [.monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday]
+    }
+
+    /// Color schemes for each day (vibrant palettes)
+    private var dayColorSchemes: [DayColorScheme] {
+        [
+            DayColorScheme(background: Color(hex: "E85B5B"), text: Color(hex: "8B1A1A"), slot: Color(hex: "D44A4A")),  // Monday - Red
+            DayColorScheme(background: Color(hex: "5BBF5B"), text: Color(hex: "1A5C1A"), slot: Color(hex: "4AAE4A")),  // Tuesday - Green
+            DayColorScheme(background: Color(hex: "F5D662"), text: Color(hex: "8B7A1A"), slot: Color(hex: "E0C350")),  // Wednesday - Yellow
+            DayColorScheme(background: Color(hex: "7BC9E8"), text: Color(hex: "1A5A7A"), slot: Color(hex: "6AB8D7")),  // Thursday - Light Blue
+            DayColorScheme(background: Color(hex: "F5A055"), text: Color(hex: "8B4A1A"), slot: Color(hex: "E08F44")),  // Friday - Orange
+            DayColorScheme(background: Color(hex: "4A6BE8"), text: Color(hex: "1A2A6B"), slot: Color(hex: "3A5AD5")),  // Saturday - Dark Blue
+            DayColorScheme(background: Color(hex: "A57EE8"), text: Color(hex: "4A2D6B"), slot: Color(hex: "946DD5"))   // Sunday - Purple
+        ]
+    }
+
+    /// Get habits scheduled for a specific day
+    private func habitsForDay(_ weekday: Weekday) -> [Task] {
+        profileHabits.filter { habit in
+            switch habit.frequency {
+            case .daily:
+                return true
+            case .weekdays:
+                return weekday != .saturday && weekday != .sunday
+            case .custom:
+                return habit.customDays.contains(weekday)
+            case .weekly:
+                // Check if the scheduled day matches
+                let calendar = Calendar.current
+                let scheduledWeekday = calendar.component(.weekday, from: habit.scheduledTime)
+                return Weekday.from(weekday: scheduledWeekday) == weekday
+            case .once:
+                // Check if the one-time task is on this day
+                let calendar = Calendar.current
+                let taskWeekday = calendar.component(.weekday, from: habit.nextScheduledDate)
+                return Weekday.from(weekday: taskWeekday) == weekday
+            }
+        }
     }
 
     // MARK: - 📋 Empty State - No Habits
@@ -519,8 +603,9 @@ struct HabitsView: View {
                 try await container.resolve(DatabaseServiceProtocol.self)
                     .deleteTask(habit.id, userId: habit.userId, profileId: habit.profileId)
 
-                // Reload data to sync with server (without animation since UI already updated)
+                // Update AppState to remove the deleted task (fixes reappearing habit bug)
                 await MainActor.run {
+                    appState.deleteTask(habit.id)
                     viewModel.loadDashboardData()
                 }
 
@@ -1031,7 +1116,7 @@ extension Weekday {
         default: return .sunday
         }
     }
-    
+
     func toIndex() -> Int {
         switch self {
         case .sunday: return 0
@@ -1044,4 +1129,190 @@ extension Weekday {
         }
     }
 }
+
+// MARK: - Day Color Scheme
+/// Monochromatic color palette for a day card
+struct DayColorScheme {
+    let background: Color  // Main card background
+    let text: Color        // Day label text (darker shade)
+    let slot: Color        // Slot background (slightly darker than background)
+}
+
+// MARK: - Habit Slot Position Preference
+/// Preference key for collecting habit slot Y positions
+struct HabitSlotPositionKey: PreferenceKey {
+    static var defaultValue: [HabitSlotPosition] = []
+
+    static func reduce(value: inout [HabitSlotPosition], nextValue: () -> [HabitSlotPosition]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+struct HabitSlotPosition: Equatable, Identifiable {
+    let id: String      // Unique position ID (habitId + dayIndex + slotIndex)
+    let yCenter: CGFloat
+    let isPhoto: Bool
+}
+
+// MARK: - Habit Type Circle
+/// Circle with emoji indicating habit type (photo or text)
+struct HabitTypeCircle: View {
+    let isPhoto: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.white)
+                .frame(width: 30, height: 30)
+                .overlay(
+                    Circle()
+                        .stroke(Color(hex: "D0D0D0"), lineWidth: 2)
+                )
+
+            Text(isPhoto ? "📷" : "💬")
+                .font(.system(size: 14))
+        }
+    }
+}
+
+// MARK: - Day Overview Card
+/// A card representing a single day of the week with habit slots
+struct DayOverviewCard: View {
+    let weekday: Weekday
+    let habits: [Task]
+    let colorScheme: DayColorScheme
+    let maxSlots: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Day label in top-left
+            Text(weekday.displayName)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+            // Habit slots (3 slots per day) - vertical for more room
+            VStack(spacing: 8) {
+                ForEach(0..<maxSlots, id: \.self) { slotIndex in
+                    if slotIndex < habits.count {
+                        // Filled slot - show habit info
+                        FilledHabitSlot(
+                            habit: habits[slotIndex],
+                            colorScheme: colorScheme
+                        )
+                    } else {
+                        // Empty slot - show placeholder
+                        EmptyHabitSlot(colorScheme: colorScheme)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(colorScheme.background)
+                .shadow(color: colorScheme.background.opacity(0.5), radius: 12, x: 0, y: 4)
+        )
+    }
+}
+
+// MARK: - Day Overview Card With Position Reporting
+/// A card that reports the Y positions of its habit slots for circle alignment
+struct DayOverviewCardWithPositionReporting: View {
+    let weekday: Weekday
+    let habits: [Task]
+    let colorScheme: DayColorScheme
+    let maxSlots: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Day label in top-left
+            Text(weekday.displayName)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+            // Habit slots (3 slots per day) - vertical for more room
+            VStack(spacing: 8) {
+                ForEach(0..<maxSlots, id: \.self) { slotIndex in
+                    if slotIndex < habits.count {
+                        let habit = habits[slotIndex]
+                        // Filled slot with position reporting
+                        FilledHabitSlot(
+                            habit: habit,
+                            colorScheme: colorScheme
+                        )
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: HabitSlotPositionKey.self,
+                                    value: [HabitSlotPosition(
+                                        id: "\(weekday.rawValue)_\(slotIndex)_\(habit.id)",
+                                        yCenter: geo.frame(in: .named("weekOverview")).midY,
+                                        isPhoto: habit.requiresPhoto
+                                    )]
+                                )
+                            }
+                        )
+                    } else {
+                        // Empty slot - show placeholder
+                        EmptyHabitSlot(colorScheme: colorScheme)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(colorScheme.background)
+                .shadow(color: colorScheme.background.opacity(0.5), radius: 12, x: 0, y: 4)
+        )
+    }
+}
+
+
+// MARK: - Filled Habit Slot
+/// A slot showing an existing habit
+struct FilledHabitSlot: View {
+    let habit: Task
+    let colorScheme: DayColorScheme
+
+    var body: some View {
+        HStack {
+            // Habit title
+            Text(habit.title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.black)
+                .lineLimit(1)
+
+            Spacer()
+
+            // Time
+            Text(DateFormatters.formatTime(habit.scheduledTime))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Color(hex: "666666"))
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(hex: "f9f9f9"))
+        )
+    }
+}
+
+// MARK: - Empty Habit Slot
+/// An empty slot indicating room for a habit
+struct EmptyHabitSlot: View {
+    let colorScheme: DayColorScheme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(colorScheme.slot)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+    }
+}
+
 
